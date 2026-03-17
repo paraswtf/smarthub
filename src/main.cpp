@@ -6,6 +6,7 @@
 #include "StatusLed.h"
 #include "CaptivePortal.h"
 #include "RelayManager.h"
+#include "DetectorManager.h"
 #include "HubClient.h"
 
 enum State
@@ -19,8 +20,20 @@ enum State
 static State state = S_PORTAL;
 static DeviceConfig cfg;
 static RelayManager relays;
+static DetectorManager detectors;
 static HubClient hub;
 static CaptivePortal portal;
+
+// ─── Detector callback ────────────────────────────────────────
+// Called by DetectorManager when an input pin changes state.
+// Sends detector_trigger to the server — which finds the linked relay
+// (potentially on a different device) and issues relay_cmd to it.
+void onDetectorTriggered(const String &relayId, bool newState, bool isToggle)
+{
+    DBG_RELAY("Detector triggered: relay=%s → %s (%s)",
+              relayId.c_str(), newState ? "ON" : "OFF", isToggle ? "toggle" : "follow");
+    hub.sendDetectorTrigger(relayId, newState, isToggle);
+}
 
 // ─── WiFi connection ──────────────────────────────────────────
 bool connectWiFi()
@@ -28,7 +41,6 @@ bool connectWiFi()
     DBG_WIFI("Connecting to \"%s\"…", cfg.wifiSSID.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.begin(cfg.wifiSSID.c_str(), cfg.wifiPassword.c_str());
-
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED)
     {
@@ -36,7 +48,7 @@ bool connectWiFi()
         delay(100);
         if (millis() - start > WIFI_CONNECT_TIMEOUT_MS)
         {
-            DBG_ERR("WiFi connect timeout after %d ms", WIFI_CONNECT_TIMEOUT_MS);
+            DBG_ERR("WiFi connect timeout");
             return false;
         }
     }
@@ -59,7 +71,7 @@ void setup()
 
     StatusLed::begin();
 
-    // Hold BOOT button (GPIO 0) during power-on for 3 seconds to factory reset
+    // Hold BOOT button (GPIO 0) during power-on for 3s to factory reset
     pinMode(0, INPUT_PULLUP);
     if (digitalRead(0) == LOW)
     {
@@ -76,28 +88,28 @@ void setup()
                 StatusLed::set(LED_SOLID);
                 Storage::clear();
                 delay(500);
-                DBG_MAIN("Rebooting…");
                 ESP.restart();
             }
         }
-        DBG_MAIN("BOOT button released early — continuing normal boot");
+        DBG_MAIN("BOOT released early — continuing normal boot");
     }
 
     bool hasConfig = Storage::load(cfg);
 
     if (hasConfig)
     {
-        DBG_MAIN("Stored config found — device: \"%s\"  server: %s:%d",
+        DBG_MAIN("Stored config — device: \"%s\"  server: %s:%d",
                  cfg.deviceName.c_str(), cfg.serverHost.c_str(), cfg.serverPort);
         state = S_CONNECT;
     }
     else
     {
-        DBG_MAIN("No config in NVS — starting captive portal");
+        DBG_MAIN("No config — starting captive portal");
         state = S_PORTAL;
     }
 
     relays.begin();
+    detectors.begin(onDetectorTriggered);
     DBG_HEAP();
 }
 
@@ -140,7 +152,7 @@ void loop()
     case S_REGISTER:
         DBG_BANNER("State: REGISTER");
         StatusLed::set(LED_BLINK_SLOW);
-        hub.begin(cfg, relays);
+        hub.begin(cfg, relays, detectors);
         if (hub.registerDevice())
         {
             hub.connectWebSocket();
@@ -164,6 +176,20 @@ void loop()
     case S_RUN:
         hub.loop();
         StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
+
+        // Poll detectors (input pins) — fires callback on state change
+        if (hub.authenticated)
+        {
+            // Build relay state arrays for DetectorManager::loop()
+            static bool relayStates[MAX_RELAYS];
+            static String relayIds[MAX_RELAYS];
+            for (uint8_t i = 0; i < relays.count; i++)
+            {
+                relayStates[i] = relays.relays[i].state;
+                relayIds[i] = relays.relays[i].id;
+            }
+            detectors.loop(relayStates, relayIds, relays.count);
+        }
 
         // Hold BOOT button for 3s while running to factory reset
         if (digitalRead(0) == LOW)

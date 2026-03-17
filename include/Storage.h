@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "Config.h"
 #include "Debug.h"
+#include "DetectorTypes.h"
 
 struct DeviceConfig
 {
@@ -147,5 +148,48 @@ public:
             prefs.remove("factory_rst");
         prefs.end();
         return flag;
+    }
+
+    // ── Detector storage ──────────────────────────────────────
+    // Forward-declare DetectorConfig (defined in DetectorManager.h)
+    // Storage only needs the raw fields — no mode enum needed here
+
+    static void saveDetectors(const struct DetectorConfig detectors[], uint8_t count)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        prefs.putUChar("det_cnt", count);
+        for (uint8_t i = 0; i < count && i < 8; i++)
+        {
+            String p = "d" + String(i) + "_";
+            prefs.putString((p + "id").c_str(), detectors[i].id);
+            prefs.putUChar((p + "pin").c_str(), detectors[i].pin);
+            prefs.putString((p + "lbl").c_str(), detectors[i].label);
+            prefs.putUChar((p + "mode").c_str(), (uint8_t)detectors[i].mode);
+            prefs.putUChar((p + "pull").c_str(), (uint8_t)detectors[i].pullMode);
+            prefs.putString((p + "rid").c_str(), detectors[i].linkedRelayId);
+        }
+        prefs.end();
+        DBG_STORAGE("saveDetectors() — %d detector(s)", count);
+    }
+
+    static uint8_t loadDetectors(struct DetectorConfig detectors[])
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, true);
+        uint8_t count = prefs.getUChar("det_cnt", 0);
+        for (uint8_t i = 0; i < count && i < 8; i++)
+        {
+            String p = "d" + String(i) + "_";
+            detectors[i].id = prefs.getString((p + "id").c_str(), "");
+            detectors[i].pin = prefs.getUChar((p + "pin").c_str(), 0);
+            detectors[i].label = prefs.getString((p + "lbl").c_str(), "Switch");
+            detectors[i].mode = (DetectorMode)prefs.getUChar((p + "mode").c_str(), 0);
+            detectors[i].pullMode = (DetectorPull)prefs.getUChar((p + "pull").c_str(), 0);
+            detectors[i].linkedRelayId = prefs.getString((p + "rid").c_str(), "");
+            DBG_STORAGE("  det[%d] pin=%d mode=%d label=%s", i, detectors[i].pin, detectors[i].mode, detectors[i].label.c_str());
+        }
+        prefs.end();
+        return count;
     }
 };

@@ -5,6 +5,8 @@
 #include <ArduinoJson.h>
 #include "Storage.h"
 #include "RelayManager.h"
+#include "DetectorTypes.h"
+#include "DetectorManager.h"
 #include "Debug.h"
 #include "Config.h"
 
@@ -14,10 +16,11 @@ public:
     bool connected = false;
     bool authenticated = false;
 
-    void begin(DeviceConfig &cfg, RelayManager &relays)
+    void begin(DeviceConfig &cfg, RelayManager &relays, DetectorManager &detectors)
     {
         _cfg = &cfg;
         _relays = &relays;
+        _detectors = &detectors;
     }
 
     // ── REST registration ─────────────────────────────────────
@@ -159,14 +162,38 @@ public:
         _resetState();
     }
 
+    // Public so main.cpp detector callback can send acks directly
+    void sendRelayAck(const String &relayId, bool state)
+    {
+        _sendRelayAck(relayId, state);
+    }
+
+    // Send detector trigger to server — server resolves cross-device relay
+    void sendDetectorTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
+    {
+        if (!authenticated)
+        {
+            DBG_WARN("detector_trigger: not authenticated — ignored");
+            return;
+        }
+        JsonDocument doc;
+        doc["type"] = "detector_trigger";
+        doc["linkedRelayId"] = linkedRelayId;
+        doc["desiredState"] = desiredState;
+        doc["isToggle"] = isToggle;
+        DBG_WS("→ detector_trigger relay=%s toggle=%d", linkedRelayId.c_str(), isToggle);
+        _send(doc);
+    }
+
 private:
     static constexpr uint16_t WS_PORT_OVERRIDE = 4001;
-    static constexpr const char *FIRMWARE_VERSION = "1.0.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.1.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
     DeviceConfig *_cfg = nullptr;
     RelayManager *_relays = nullptr;
+    DetectorManager *_detectors = nullptr;
     uint32_t _lastHeartbeat = 0;
     uint32_t _lastActivity = 0;
 
@@ -290,10 +317,11 @@ private:
         if (strcmp(type, "auth_ok") == 0)
         {
             authenticated = true;
-            _lastHeartbeat = 0; // fire first heartbeat promptly
+            _lastHeartbeat = 0;
             _cfg->deviceId = doc["deviceId"].as<String>();
             Storage::saveDeviceId(_cfg->deviceId);
 
+            // Apply relays
             JsonArray arr = doc["relays"].as<JsonArray>();
             RelayConfig rBuf[MAX_RELAYS];
             uint8_t rCount = 0;
@@ -305,7 +333,25 @@ private:
             }
             _relays->applyServerConfig(rBuf, rCount);
             _relays->printAll();
-            DBG_WS("auth_ok — %d relay(s)", rCount);
+
+            // Apply detectors
+            JsonArray darr = doc["detectors"].as<JsonArray>();
+            DetectorConfig dBuf[MAX_DETECTORS];
+            uint8_t dCount = 0;
+            for (JsonObject d : darr)
+            {
+                if (dCount >= MAX_DETECTORS)
+                    break;
+                dBuf[dCount].id = d["id"].as<String>();
+                dBuf[dCount].pin = d["pin"].as<uint8_t>();
+                dBuf[dCount].label = d["label"].as<String>();
+                dBuf[dCount].mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
+                dBuf[dCount].pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
+                dBuf[dCount].linkedRelayId = d["linkedRelayId"].as<String>();
+                dCount++;
+            }
+            _detectors->applyServerConfig(dBuf, dCount);
+            DBG_WS("auth_ok — %d relay(s)  %d detector(s)", rCount, dCount);
         }
 
         else if (strcmp(type, "auth_fail") == 0)
@@ -423,6 +469,56 @@ private:
         else if (strcmp(type, "ping") == 0)
         {
             // WebSocketsClient handles PONG automatically
+        }
+
+        else if (strcmp(type, "detector_add") == 0)
+        {
+            if (!authenticated)
+            {
+                DBG_WARN("detector_add before auth — ignored");
+                return;
+            }
+            JsonObject d = doc["detector"].as<JsonObject>();
+            DetectorConfig nd;
+            nd.id = d["id"].as<String>();
+            nd.pin = d["pin"].as<uint8_t>();
+            nd.label = d["label"].as<String>();
+            nd.mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
+            nd.pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
+            nd.linkedRelayId = d["linkedRelayId"].as<String>();
+            _detectors->add(nd);
+            DBG_WS("detector_add: id=%s pin=%d", nd.id.c_str(), nd.pin);
+        }
+
+        else if (strcmp(type, "detector_update_config") == 0)
+        {
+            if (!authenticated)
+            {
+                DBG_WARN("detector_update_config before auth — ignored");
+                return;
+            }
+            JsonObject d = doc["detector"].as<JsonObject>();
+            DetectorConfig updated;
+            updated.id = d["id"].as<String>();
+            updated.pin = d["pin"].as<uint8_t>();
+            updated.label = d["label"].as<String>();
+            updated.mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
+            updated.pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
+            updated.linkedRelayId = d["linkedRelayId"].as<String>();
+            _detectors->updateById(updated.id, updated);
+            DBG_WS("detector_update_config: id=%s pin=%d", updated.id.c_str(), updated.pin);
+        }
+
+        else if (strcmp(type, "detector_delete") == 0)
+        {
+            if (!authenticated)
+            {
+                DBG_WARN("detector_delete before auth — ignored");
+                return;
+            }
+            String detectorId = doc["detectorId"].as<String>();
+            _detectors->deleteById(detectorId);
+            DBG_WS("detector_delete: id=%s", detectorId.c_str());
         }
 
         else
