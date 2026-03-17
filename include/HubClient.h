@@ -37,6 +37,7 @@ public:
         doc["name"] = _cfg->deviceName;
         doc["ssid"] = WiFi.SSID();
         doc["firmwareVersion"] = FIRMWARE_VERSION;
+        doc["factoryReset"] = Storage::consumeFactoryResetFlag();
 
         String body;
         serializeJson(doc, body);
@@ -88,8 +89,6 @@ public:
         uint16_t wsPort = WS_PORT_OVERRIDE > 0 ? WS_PORT_OVERRIDE : _cfg->serverPort;
         DBG_WS("Connecting to %s:%d", _cfg->serverHost.c_str(), wsPort);
 
-        // Always disconnect first to reset the library state machine
-        _ws.disconnect();
         _resetState();
 
         if (_cfg->serverSecure)
@@ -180,11 +179,10 @@ private:
 
     void _forceReconnect()
     {
-        DBG_WS("Force reconnect");
+        DBG_WS("Force reconnect triggered");
         _relays->flush();
-        _ws.disconnect();
         _resetState();
-        // WebSocketsClient auto-reconnects via setReconnectInterval after disconnect()
+        _ws.disconnect(); // triggers auto-reconnect via setReconnectInterval
     }
 
     // ── WebSocket events ──────────────────────────────────────
@@ -193,6 +191,9 @@ private:
         switch (type)
         {
         case WStype_DISCONNECTED:
+            // Ignore stale DISCONNECTED events that fire before we've ever connected
+            if (!connected && !authenticated)
+                break;
             DBG_WS("Disconnected");
             _relays->flush();
             _resetState();
@@ -379,6 +380,44 @@ private:
             _relays->count++;
             _relays->applyServerConfig(_relays->relays, _relays->count);
             DBG_WS("relay_add: id=%s pin=%d", nr.id.c_str(), nr.pin);
+        }
+
+        else if (strcmp(type, "relay_update_config") == 0)
+        {
+            if (!authenticated)
+            {
+                DBG_WARN("relay_update_config before auth — ignored");
+                return;
+            }
+            JsonObject r = doc["relay"].as<JsonObject>();
+            String id = r["id"].as<String>();
+            uint8_t newPin = r["pin"].as<uint8_t>();
+            String newLabel = r["label"].as<String>();
+            bool newState = r["state"].as<bool>();
+
+            for (uint8_t i = 0; i < _relays->count; i++)
+            {
+                if (_relays->relays[i].id == id)
+                {
+                    uint8_t oldPin = _relays->relays[i].pin;
+                    // If pin changed: set old pin HIGH (off) before reassigning
+                    if (oldPin != newPin && oldPin != 0)
+                    {
+                        pinMode(oldPin, INPUT); // release old pin
+                        DBG_RELAY("relay_update_config: released GPIO%d", oldPin);
+                    }
+                    _relays->relays[i].pin = newPin;
+                    _relays->relays[i].label = newLabel;
+                    _relays->relays[i].state = newState;
+                    // Re-init with new pin
+                    _relays->reinitPin(i);
+                    Storage::saveRelays(_relays->relays, _relays->count);
+                    DBG_WS("relay_update_config: id=%s pin=%d→%d label=%s",
+                           id.c_str(), oldPin, newPin, newLabel.c_str());
+                    return;
+                }
+            }
+            DBG_WARN("relay_update_config: id=%s not found", id.c_str());
         }
 
         else if (strcmp(type, "ping") == 0)

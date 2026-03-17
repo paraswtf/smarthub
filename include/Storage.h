@@ -96,6 +96,18 @@ public:
         DBG_STORAGE("saveRelays() — %d relay(s)", count);
     }
 
+    // Write only the state of a single relay by index — much lower flash wear
+    // than saveRelays() since only one bool is written instead of the full array.
+    static void saveRelayState(uint8_t index, bool state)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        String key = "r" + String(index) + "_st";
+        prefs.putBool(key.c_str(), state);
+        prefs.end();
+        DBG_STORAGE("saveRelayState(%d) → %d", index, state);
+    }
+
     static uint8_t loadRelays(RelayConfig relays[])
     {
         Preferences prefs;
@@ -119,8 +131,21 @@ public:
     {
         Preferences prefs;
         prefs.begin(NVS_NAMESPACE, false);
-        prefs.clear();
+        prefs.clear();                      // wipes everything
+        prefs.putBool("factory_rst", true); // write flag AFTER clear so it survives
         prefs.end();
-        DBG_STORAGE("clear() — NVS wiped");
+        DBG_STORAGE("clear() — NVS wiped, factory reset flag set");
+    }
+
+    // Returns true once after a factory reset, then clears the flag
+    static bool consumeFactoryResetFlag()
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        bool flag = prefs.getBool("factory_rst", false);
+        if (flag)
+            prefs.remove("factory_rst");
+        prefs.end();
+        return flag;
     }
 };

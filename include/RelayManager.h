@@ -45,8 +45,9 @@ public:
                 relays[i].state = state;
                 _lastChanged[i] = millis();
                 _applyState(i);
-                // Don't write NVS on every toggle — flash has limited write cycles.
-                // State is persisted via applyServerConfig on reconnect instead.
+                // Write only this relay's state to NVS — survives power cuts,
+                // minimal flash wear (one bool per toggle vs full array).
+                Storage::saveRelayState(i, state);
                 return true;
             }
         }
@@ -65,11 +66,21 @@ public:
                 relays[i].state = state;
                 _lastChanged[i] = millis();
                 _applyState(i);
+                Storage::saveRelayState(i, state);
                 return true;
             }
         }
         DBG_WARN("setByPin: pin %d not found", pin);
         return false;
+    }
+
+    // Re-initialise a single relay's GPIO — call after changing pin/state
+    void reinitPin(uint8_t i)
+    {
+        if (i >= count)
+            return;
+        _initPin(i);
+        DBG_RELAY("reinitPin[%d] GPIO%d → %s", i, relays[i].pin, relays[i].state ? "ON" : "OFF");
     }
 
     // Explicitly flush current states to NVS — call before reboot or on disconnect

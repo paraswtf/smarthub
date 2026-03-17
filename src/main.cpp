@@ -59,6 +59,30 @@ void setup()
 
     StatusLed::begin();
 
+    // Hold BOOT button (GPIO 0) during power-on for 3 seconds to factory reset
+    pinMode(0, INPUT_PULLUP);
+    if (digitalRead(0) == LOW)
+    {
+        DBG_MAIN("BOOT button held — waiting 3s to confirm factory reset…");
+        StatusLed::set(LED_BLINK_FAST);
+        uint32_t held = millis();
+        while (digitalRead(0) == LOW)
+        {
+            StatusLed::tick();
+            delay(10);
+            if (millis() - held > 3000)
+            {
+                DBG_MAIN("Factory reset confirmed — clearing NVS");
+                StatusLed::set(LED_SOLID);
+                Storage::clear();
+                delay(500);
+                DBG_MAIN("Rebooting…");
+                ESP.restart();
+            }
+        }
+        DBG_MAIN("BOOT button released early — continuing normal boot");
+    }
+
     bool hasConfig = Storage::load(cfg);
 
     if (hasConfig)
@@ -139,8 +163,31 @@ void loop()
 
     case S_RUN:
         hub.loop();
-        // Update LED to reflect actual connection state
         StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
+
+        // Hold BOOT button for 3s while running to factory reset
+        if (digitalRead(0) == LOW)
+        {
+            DBG_MAIN("BOOT held — hold 3s for factory reset");
+            StatusLed::set(LED_BLINK_FAST);
+            uint32_t held = millis();
+            while (digitalRead(0) == LOW)
+            {
+                StatusLed::tick();
+                delay(10);
+                if (millis() - held > 3000)
+                {
+                    DBG_MAIN("Factory reset!");
+                    hub.disconnect();
+                    Storage::clear();
+                    delay(500);
+                    ESP.restart();
+                }
+            }
+            DBG_MAIN("BOOT released early — ignoring");
+            StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
+        }
+
         if (WiFi.status() != WL_CONNECTED)
         {
             DBG_WARN("WiFi connection lost — reconnecting");
