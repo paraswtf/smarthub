@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle } from "lucide-react";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -60,13 +60,15 @@ export default function DeviceDetailPage() {
 		});
 	}, [onDeviceUpdate, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+	type DeviceGetOutput = RouterOutputs["device"]["get"];
+
 	useEffect(() => {
 		return onRelayUpdate((update) => {
-			utilsRef.current.device.get.setData({ id }, (old) => {
+			utilsRef.current.device.get.setData({ id }, (old: DeviceGetOutput | undefined) => {
 				if (!old) return old;
 				return {
 					...old,
-					relays: old.relays.map((r) => (r.id === update.relayId ? { ...r, state: update.state } : r))
+					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === update.relayId ? { ...r, state: update.state } : r))
 				};
 			});
 			setRelayStatus((s) => ({ ...s, [update.relayId]: "confirmed" }));
@@ -131,11 +133,11 @@ export default function DeviceDetailPage() {
 		onMutate: async ({ relayId, state }) => {
 			await utils.device.get.cancel({ id });
 			const prev = utils.device.get.getData({ id });
-			utils.device.get.setData({ id }, (old) => {
+			utils.device.get.setData({ id }, (old: DeviceGetOutput | undefined) => {
 				if (!old) return old;
 				return {
 					...old,
-					relays: old.relays.map((r) => (r.id === relayId ? { ...r, state } : r))
+					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === relayId ? { ...r, state } : r))
 				};
 			});
 			return { prev };
@@ -336,7 +338,7 @@ export default function DeviceDetailPage() {
 					className="mt-4"
 				>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-						{device.relays.map((relay) => {
+						{device.relays.map((relay: DeviceGetOutput["relays"][number]) => {
 							const IconComp = RELAY_ICONS[relay.icon] ?? Plug;
 							const isEditing = editingRelayId === relay.id;
 

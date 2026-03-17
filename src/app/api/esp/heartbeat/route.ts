@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 		});
 
 		return NextResponse.json({
-			relays: freshRelays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })),
+			relays: freshRelays.map((r: { id: string; pin: number; state: boolean }) => ({ id: r.id, pin: r.pin, state: r.state })),
 			ok: true
 		});
 	} catch (err) {

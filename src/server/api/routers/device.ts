@@ -33,7 +33,7 @@ export const deviceRouter = createTRPCRouter({
 				}
 			}
 		});
-		return apiKeys.flatMap((k) => k.devices.map(withOnline));
+		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices.map(withOnline));
 	}),
 
 	/** Get a single device (must belong to current user) */

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Cpu, Plus, Search, Wifi, WifiOff, ChevronRight, ToggleRight } from "lucide-react";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -28,8 +28,9 @@ export default function DevicesPage() {
 	const [liveLastSeen, setLiveLastSeen] = useState<Record<string, Date>>({});
 
 	useEffect(() => {
+		console.log("[DevicesPage] subscribing to onDeviceUpdate");
 		const unsub = onDeviceUpdate((msg) => {
-			// Heartbeat: update last seen + bulk relay states
+			console.log("[DevicesPage] device_update:", msg.deviceId, "relays:", msg.relays);
 			setLiveLastSeen((p) => ({ ...p, [msg.deviceId]: new Date(msg.lastSeenAt) }));
 			setLiveRelayStates((p) => {
 				const next = { ...p };
@@ -55,18 +56,21 @@ export default function DevicesPage() {
 		refetchInterval: wsConnected ? false : 30_000
 	});
 
+	type DeviceListItem = RouterOutputs["device"]["list"][number];
+	type RelayItem = DeviceListItem["relays"][number];
+
 	// Merge tRPC base data with live WS overrides
-	const mergedDevices = (devices ?? []).map((d) => ({
+	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
 		...d,
 		lastSeenAt: liveLastSeen[d.id] ?? d.lastSeenAt,
 		online: liveLastSeen[d.id] ? Date.now() - liveLastSeen[d.id]!.getTime() < 150_000 : d.online,
-		relays: d.relays.map((r) => ({
+		relays: d.relays.map((r: RelayItem) => ({
 			...r,
 			state: liveRelayStates[r.id] ?? r.state
 		}))
 	}));
 
-	const filtered = mergedDevices.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()) || d.macAddress.toLowerCase().includes(search.toLowerCase()));
+	const filtered = mergedDevices.filter((d: DeviceListItem) => d.name.toLowerCase().includes(search.toLowerCase()) || d.macAddress.toLowerCase().includes(search.toLowerCase()));
 
 	return (
 		<div className="p-6 lg:p-8 space-y-6 animate-fade-in">
@@ -120,8 +124,8 @@ export default function DevicesPage() {
 				</Card>
 			) : (
 				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-					{filtered.map((device) => {
-						const activeRelays = device.relays.filter((r) => r.state).length;
+					{filtered.map((device: DeviceListItem) => {
+						const activeRelays = device.relays.filter((r: DeviceListItem["relays"][number]) => r.state).length;
 						return (
 							<Link
 								key={device.id}
@@ -153,7 +157,7 @@ export default function DevicesPage() {
 
 										{device.relays.length > 0 && (
 											<div className="flex flex-wrap gap-1.5">
-												{device.relays.slice(0, 4).map((relay) => (
+												{device.relays.slice(0, 4).map((relay: DeviceListItem["relays"][number]) => (
 													<span
 														key={relay.id}
 														className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight } from "lucide-react";
 import Link from "next/link";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -57,20 +57,23 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 		return "Good evening";
 	};
 
+	type DeviceListItem = RouterOutputs["device"]["list"][number];
+	type RelayItem = DeviceListItem["relays"][number];
+
 	// Merge tRPC base data with live WS overrides (flat relay state map — instant updates)
-	const mergedDevices = (devices ?? []).map((d) => ({
+	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
 		...d,
 		lastSeenAt: liveLastSeen[d.id] ?? d.lastSeenAt,
 		online: liveLastSeen[d.id] ? Date.now() - liveLastSeen[d.id]!.getTime() < 150_000 : d.online,
-		relays: d.relays.map((r) => ({
+		relays: d.relays.map((r: RelayItem) => ({
 			...r,
 			state: liveRelayStates[r.id] ?? r.state
 		}))
 	}));
 
-	const onlineCount = mergedDevices.filter((d) => d.online).length;
-	const relayCount = mergedDevices.reduce((n, d) => n + d.relays.length, 0);
-	const activeRelays = mergedDevices.reduce((n, d) => n + d.relays.filter((r) => r.state).length, 0);
+	const onlineCount = mergedDevices.filter((d: DeviceListItem) => d.online).length;
+	const relayCount = mergedDevices.reduce((n: number, d: DeviceListItem) => n + d.relays.length, 0);
+	const activeRelays = mergedDevices.reduce((n: number, d: DeviceListItem) => n + d.relays.filter((r: RelayItem) => r.state).length, 0);
 	const deviceCount = mergedDevices.length;
 	const apiKeyCount = (apiKeys ?? []).length;
 
@@ -162,7 +165,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 					</div>
 
 					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-						{mergedDevices.slice(0, 6).map((device) => (
+						{mergedDevices.slice(0, 6).map((device: DeviceListItem) => (
 							<Link
 								key={device.id}
 								href={`/dashboard/devices/${device.id}`}
@@ -185,7 +188,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 											<p className="text-xs text-muted-foreground">No relays configured</p>
 										) : (
 											<div className="flex flex-wrap gap-1.5">
-												{device.relays.map((relay) => (
+												{device.relays.map((relay: DeviceListItem["relays"][number]) => (
 													<span
 														key={relay.id}
 														className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
