@@ -15,6 +15,12 @@ enum DetectorPull : uint8_t
     DETECTOR_PULLDOWN = 1,
 };
 
+enum DetectorSwitch : uint8_t
+{
+    SWITCH_LATCHING = 0,  // always between VCC and GND — toggle on any stable change
+    SWITCH_MOMENTARY = 1, // floats when released, VCC when pressed — toggle on rising edge only
+};
+
 struct DetectorConfig
 {
     String id;
@@ -22,5 +28,6 @@ struct DetectorConfig
     String label;
     DetectorMode mode;
     DetectorPull pullMode;
+    DetectorSwitch switchType;
     String linkedRelayId;
 };
