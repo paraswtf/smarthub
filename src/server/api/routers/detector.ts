@@ -43,6 +43,7 @@ export const detectorRouter = createTRPCRouter({
 				pin: z.number().int().min(0).max(39),
 				label: z.string().min(1).max(40).default("Switch"),
 				mode: z.enum(["toggle", "follow"]).default("toggle"),
+				switchType: z.enum(["latching", "momentary"]).default("latching"),
 				pullMode: z.enum(["pullup", "pulldown"]).default("pullup"),
 				linkedRelayId: z.string()
 			})
@@ -74,7 +75,7 @@ export const detectorRouter = createTRPCRouter({
 				await fetch(wsUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-					body: JSON.stringify({ deviceId: input.deviceId, detector: { id: detector.id, pin: detector.pin, label: detector.label, mode: detector.mode, pullMode: detector.pullMode, linkedRelayId: detector.linkedRelayId } }),
+					body: JSON.stringify({ deviceId: input.deviceId, detector: { id: detector.id, pin: detector.pin, label: detector.label, mode: detector.mode, pullMode: detector.pullMode, switchType: detector.switchType, linkedRelayId: detector.linkedRelayId } }),
 					signal: AbortSignal.timeout(2000)
 				});
 			} catch {
@@ -92,6 +93,7 @@ export const detectorRouter = createTRPCRouter({
 				pin: z.number().int().min(0).max(39).optional(),
 				label: z.string().min(1).max(40).optional(),
 				mode: z.enum(["toggle", "follow"]).optional(),
+				switchType: z.enum(["latching", "momentary"]).optional(),
 				pullMode: z.enum(["pullup", "pulldown"]).optional(),
 				linkedRelayId: z.string().optional()
 			})
@@ -110,7 +112,7 @@ export const detectorRouter = createTRPCRouter({
 				await fetch(wsUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-					body: JSON.stringify({ deviceId: updated.deviceId, detector: { id: updated.id, pin: updated.pin, label: updated.label, mode: updated.mode, pullMode: updated.pullMode, linkedRelayId: updated.linkedRelayId } }),
+					body: JSON.stringify({ deviceId: updated.deviceId, detector: { id: updated.id, pin: updated.pin, label: updated.label, mode: updated.mode, pullMode: updated.pullMode, switchType: updated.switchType, linkedRelayId: updated.linkedRelayId } }),
 					signal: AbortSignal.timeout(2000)
 				});
 			} catch {

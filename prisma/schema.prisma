@@ -104,14 +104,15 @@ model Relay {
 // mode "toggle"  — any change on the input pin flips the relay state
 // mode "follow"  — relay mirrors the pin state (HIGH=ON, LOW=OFF)
 model Detector {
-    id            String   @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
-    pin           Int
-    label         String   @default("Switch")
-    mode          String   @default("toggle") // "toggle" | "follow"
+    id           String   @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+    pin          Int
+    label        String   @default("Switch")
+    mode         String   @default("toggle")      // "toggle" | "follow"
+    switchType   String   @default("latching")    // "latching" | "momentary"
     linkedRelayId String   @db.ObjectId
-    pullMode      String   @default("pullup") // "pullup" | "pulldown" | "none"
-    deviceId      String   @db.ObjectId
-    device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+    pullMode     String   @default("pullup")      // "pullup" | "pulldown" — only used for follow mode
+    deviceId     String   @db.ObjectId
+    device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }

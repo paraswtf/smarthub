@@ -185,16 +185,16 @@ export default function DeviceDetailPage() {
 	const { data: detectorList = [] } = api.detector.list.useQuery({ deviceId: id });
 	const { data: allRelays = [] } = api.detector.listAllRelays.useQuery();
 	const [addingDetector, setAddingDetector] = useState(false);
-	const [newDetector, setNewDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
+	const [newDetector, setNewDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", switchType: "latching" as "latching" | "momentary", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
 	const [editingDetectorId, setEditingDetectorId] = useState<string | null>(null);
-	const [editDetector, setEditDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
+	const [editDetector, setEditDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", switchType: "latching" as "latching" | "momentary", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
 
 	const addDetector = api.detector.add.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.detector.list.invalidate({ deviceId: id });
 			setAddingDetector(false);
-			setNewDetector({ pin: 36, label: "Switch", mode: "toggle", pullMode: "pullup", linkedRelayId: "" });
+			setNewDetector({ pin: 36, label: "Switch", mode: "toggle", switchType: "latching", pullMode: "pullup", linkedRelayId: "" });
 		}
 	});
 	const updateDetector = api.detector.update.useMutation({
@@ -635,6 +635,19 @@ export default function DeviceDetailPage() {
 											</select>
 										</div>
 									</div>
+									{editDetector.mode === "toggle" && (
+										<div>
+											<Label className="text-[10px]">Switch Type</Label>
+											<select
+												value={editDetector.switchType}
+												onChange={(e) => setEditDetector((d) => ({ ...d, switchType: e.target.value as "latching" | "momentary" }))}
+												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+											>
+												<option value="latching">Latching — toggles on both VCC↔GND changes</option>
+												<option value="momentary">Momentary — toggles only on press (VCC)</option>
+											</select>
+										</div>
+									)}
 									<div className="flex gap-2">
 										{editDetector.mode === "follow" && (
 											<div className="flex-1">
@@ -717,7 +730,7 @@ export default function DeviceDetailPage() {
 									<button
 										onClick={() => {
 											setEditingDetectorId(det.id);
-											setEditDetector({ pin: det.pin, label: det.label, mode: det.mode as "toggle" | "follow", pullMode: det.pullMode as "pullup" | "pulldown", linkedRelayId: det.linkedRelayId });
+											setEditDetector({ pin: det.pin, label: det.label, mode: det.mode as "toggle" | "follow", switchType: (det.switchType ?? "latching") as "latching" | "momentary", pullMode: det.pullMode as "pullup" | "pulldown", linkedRelayId: det.linkedRelayId });
 										}}
 										className="text-muted-foreground hover:text-foreground"
 									>
@@ -762,6 +775,19 @@ export default function DeviceDetailPage() {
 									</select>
 								</div>
 							</div>
+							{newDetector.mode === "toggle" && (
+								<div>
+									<Label className="text-[10px]">Switch Type</Label>
+									<select
+										value={newDetector.switchType}
+										onChange={(e) => setNewDetector((d) => ({ ...d, switchType: e.target.value as "latching" | "momentary" }))}
+										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+									>
+										<option value="latching">Latching — toggles on both VCC↔GND changes</option>
+										<option value="momentary">Momentary — toggles only on press (VCC)</option>
+									</select>
+								</div>
+							)}
 							<div className="flex gap-2">
 								{newDetector.mode === "follow" && (
 									<div className="flex-1">

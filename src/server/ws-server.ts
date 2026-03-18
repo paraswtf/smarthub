@@ -364,7 +364,7 @@ function handleDeviceConnection(ws: WebSocket) {
 					type: "auth_ok",
 					deviceId: device.id,
 					relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
-					detectors: device.detectors.map((d) => ({ id: d.id, pin: d.pin, label: d.label, mode: d.mode, pullMode: d.pullMode, linkedRelayId: d.linkedRelayId }))
+					detectors: device.detectors.map((d) => ({ id: d.id, pin: d.pin, label: d.label, mode: d.mode, pullMode: d.pullMode, switchType: d.switchType ?? "latching", linkedRelayId: d.linkedRelayId }))
 				})
 			);
 
