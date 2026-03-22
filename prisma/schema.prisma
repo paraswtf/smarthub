@@ -79,7 +79,6 @@ model Device {
     macAddress      String     @unique
     firmwareVersion String?
     ssid            String?
-    lastSeenAt      DateTime?
     notes           String?
     apiKeyId        String     @db.ObjectId
     apiKey          ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)

@@ -6,7 +6,6 @@ import { appConfig } from "../../globals.config";
 export interface DeviceUpdate {
 	type: "device_update";
 	deviceId: string;
-	lastSeenAt: string;
 	relays: { id: string; state: boolean }[];
 }
 

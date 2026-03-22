@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
 		const device = await db.device.upsert({
 			where: { macAddress },
 			update: {
-				lastSeenAt: new Date(),
 				...(ssid && { ssid }),
 				...(firmwareVersion && { firmwareVersion }),
 				apiKeyId: key.id
@@ -54,7 +53,6 @@ export async function POST(req: NextRequest) {
 				name: name ?? `ESP32 ${macAddress.slice(-5)}`,
 				ssid: ssid ?? null,
 				firmwareVersion: firmwareVersion ?? null,
-				lastSeenAt: new Date(),
 				apiKeyId: key.id
 			},
 			include: {

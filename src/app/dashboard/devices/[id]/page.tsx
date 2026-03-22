@@ -14,7 +14,6 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "~/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
-import { useRelativeTime } from "~/hooks/useRelativeTime";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../../../globals.config";
 
@@ -30,12 +29,6 @@ const RELAY_ICONS: Record<string, React.ElementType> = {
 };
 
 const ICON_OPTIONS = Object.keys(RELAY_ICONS);
-
-// Live-ticking last-seen display
-function LastSeen({ date }: { date: Date | null }) {
-	const text = useRelativeTime(date);
-	return <>{text}</>;
-}
 
 export default function DeviceDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -54,8 +47,24 @@ export default function DeviceDetailPage() {
 
 	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
+	// Online status — determined by on-demand ping, not DB field
+	const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = checking
+	const pingDevice = api.device.pingDevice.useMutation();
+
+	// Ping device on load to determine online status
+	useEffect(() => {
+		if (!device) return;
+		setIsOnline(null);
+		pingDevice.mutateAsync({ deviceId: id }).then(
+			(r) => setIsOnline(r.online),
+			() => setIsOnline(false)
+		);
+	}, [device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// device_update from WS = device just authenticated → it's online
 	useEffect(() => {
 		return onDeviceUpdate(() => {
+			setIsOnline(true);
 			void utilsRef.current.device.get.invalidate({ id });
 		});
 	}, [onDeviceUpdate, id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -73,8 +82,12 @@ export default function DeviceDetailPage() {
 					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === update.relayId ? { ...r, state: update.state } : r))
 				};
 			});
-			setRelayStatus((s) => ({ ...s, [update.relayId]: "confirmed" }));
-			setTimeout(() => clearRelayStatus(update.relayId), 1500);
+			setRelayStatus((s) => {
+				// Only show "confirmed" if this client initiated the toggle
+				if (s[update.relayId] !== "pending") return s;
+				setTimeout(() => clearRelayStatus(update.relayId), 1500);
+				return { ...s, [update.relayId]: "confirmed" };
+			});
 		});
 	}, [onRelayUpdate, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -305,7 +318,7 @@ export default function DeviceDetailPage() {
 						<div>
 							<div className="flex items-center gap-3 flex-wrap">
 								<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">{device.name}</h1>
-								<Badge variant={device.online ? "online" : "offline"}>{device.online ? "Online" : "Offline"}</Badge>
+								<Badge variant={isOnline ? "online" : "offline"}>{isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline"}</Badge>
 							</div>
 							<p className="text-sm text-muted-foreground mono mt-1">{device.macAddress}</p>
 							{device.notes && <p className="text-sm text-muted-foreground mt-1">{device.notes}</p>}
@@ -332,18 +345,17 @@ export default function DeviceDetailPage() {
 			</div>
 
 			{/* Info cards */}
-			<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+			<div className="grid grid-cols-3 gap-3">
 				{[
-					{ label: "Status", value: device.online ? "Online" : "Offline", icon: device.online ? Wifi : WifiOff, colored: device.online },
-					{ label: "Last Seen", value: <LastSeen date={device.lastSeenAt} />, icon: Radio, colored: false, raw: true },
+					{ label: "Status", value: isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline", icon: isOnline ? Wifi : WifiOff, colored: !!isOnline },
 					{ label: "Firmware", value: device.firmwareVersion ?? "Unknown", icon: Radio, colored: false },
 					{ label: "Network", value: device.ssid ?? "Unknown", icon: Wifi, colored: false }
-				].map(({ label, value, icon: Icon, colored, raw }) => (
+				].map(({ label, value, icon: Icon, colored }) => (
 					<Card key={label}>
 						<CardContent className="p-4">
 							<Icon className={cn("w-4 h-4 mb-2", colored ? "text-primary" : "text-muted-foreground")} />
 							<p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">{label}</p>
-							{raw ? <div className="mt-0.5">{value}</div> : <p className={cn("text-sm font-semibold mt-0.5", colored ? "text-primary" : "text-foreground")}>{value}</p>}
+							<p className={cn("text-sm font-semibold mt-0.5", colored ? "text-primary" : "text-foreground")}>{value}</p>
 						</CardContent>
 					</Card>
 				))}
@@ -448,7 +460,7 @@ export default function DeviceDetailPage() {
 												<Switch
 													checked={relay.state}
 													onCheckedChange={(checked) => toggleRelay.mutate({ relayId: relay.id, state: checked })}
-													disabled={!device.online || relayStatus[relay.id] === "pending"}
+													disabled={!isOnline || relayStatus[relay.id] === "pending"}
 												/>
 											</div>
 											<p className="font-semibold text-sm text-foreground leading-tight">{relay.label}</p>
@@ -576,7 +588,7 @@ export default function DeviceDetailPage() {
 						)}
 					</div>
 
-					{!device.online && device.relays.length > 0 && (
+					{!isOnline && device.relays.length > 0 && (
 						<p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5 bg-muted/50 rounded-lg px-3 py-2 w-fit">
 							<WifiOff className="w-3.5 h-3.5" />
 							Device is offline — relay toggles will sync when it reconnects.

@@ -3,26 +3,25 @@
  *
  * Usage: npm run ws
  *
- * Port (WS_PORT, default 4001) handles:
- *   - WebSocket connections from ESP32 devices  →  ws://host:PORT/
- *   - WebSocket connections from browsers       →  ws://host:PORT/browser
- *   - Internal HTTP POST /push-relay            →  called by tRPC toggleRelay
- *
  * ─── ESP32 protocol ──────────────────────────────────────────
  *   ESP32 → Server
- *     { type: "auth",      apiKey, macAddress, deviceId? }
- *     { type: "heartbeat", deviceId, relayStates: [{id,state}] }
- *     { type: "relay_ack", relayId, state }
+ *     { type: "auth",             apiKey, macAddress }
+ *     { type: "ping_ack" }
+ *     { type: "relay_ack",        relayId, state }
+ *     { type: "detector_trigger", linkedRelayId, desiredState, isToggle }
  *
  *   Server → ESP32
- *     { type: "auth_ok",   deviceId, relays: [{id,pin,label,state}] }
- *     { type: "auth_fail", reason }
- *     { type: "relay_cmd", relayId, pin, state }
- *     { type: "ping" }
+ *     { type: "auth_ok",            deviceId, relays, detectors }
+ *     { type: "auth_fail",          reason }
+ *     { type: "ping",               relays: [{id, pin, state}] }
+ *     { type: "relay_cmd",          relayId, pin, state }
+ *     { type: "relay_add",          relay }
+ *     { type: "relay_update_config", relay }
+ *     { type: "detector_add" | "detector_update_config" | "detector_delete", ... }
  *
  * ─── Browser protocol ────────────────────────────────────────
  *   Browser → Server: { type: "subscribe", userId }
- *   Server → Browser: { type: "device_update", deviceId, lastSeenAt, relays: [{id,state}] }
+ *   Server → Browser: { type: "device_update", deviceId, relays }
  *                     { type: "relay_update",  deviceId, relayId, state }
  */
 
@@ -39,6 +38,8 @@ const WS_SECRET = process.env.WS_SECRET ?? "";
 const deviceSockets = new Map<string, WebSocket>();
 // Map: userId   → Set of browser WebSocket connections
 const browserSockets = new Map<string, Set<WebSocket>>();
+// Map: deviceId → pending on-demand ping resolve/timer
+const pendingPings = new Map<string, { resolve: (online: boolean) => void; timer: ReturnType<typeof setTimeout> }>();
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -56,7 +57,6 @@ function broadcastToUser(userId: string, payload: object) {
 			dead.push(ws);
 		}
 	}
-	// Prune sockets that closed without firing the close event
 	for (const ws of dead) sockets.delete(ws);
 	if (sockets.size === 0) browserSockets.delete(userId);
 	if ((payload as { type: string }).type === "relay_update") {
@@ -78,6 +78,48 @@ function pushRelayCommand(deviceId: string, relayId: string, pin: number, state:
 	return true;
 }
 
+function pushToDevice(deviceId: string, payload: object): boolean {
+	const ws = deviceSockets.get(deviceId);
+	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+	ws.send(JSON.stringify(payload));
+	return true;
+}
+
+/** Send a ping carrying authoritative relay states to a device */
+async function sendPingWithState(deviceId: string): Promise<boolean> {
+	const ws = deviceSockets.get(deviceId);
+	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+	const relays = await db.relay.findMany({
+		where: { deviceId },
+		orderBy: { order: "asc" }
+	});
+	ws.send(
+		JSON.stringify({
+			type: "ping",
+			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state }))
+		})
+	);
+	return true;
+}
+
+/** Resolve a pending on-demand ping */
+function resolvePendingPing(deviceId: string) {
+	const pending = pendingPings.get(deviceId);
+	if (!pending) return;
+	clearTimeout(pending.timer);
+	pending.resolve(true);
+	pendingPings.delete(deviceId);
+}
+
+/** Fail a pending on-demand ping */
+function failPendingPing(deviceId: string) {
+	const pending = pendingPings.get(deviceId);
+	if (!pending) return;
+	clearTimeout(pending.timer);
+	pending.resolve(false);
+	pendingPings.delete(deviceId);
+}
+
 // ─── Types ────────────────────────────────────────────────────
 
 interface AuthMsg {
@@ -86,15 +128,13 @@ interface AuthMsg {
 	macAddress: string;
 	deviceId?: string;
 }
-interface HeartbeatMsg {
-	type: "heartbeat";
-	deviceId: string;
-	relayStates?: { id: string; state: boolean }[];
-}
 interface RelayAckMsg {
 	type: "relay_ack";
 	relayId: string;
 	state: boolean;
+}
+interface PingAckMsg {
+	type: "ping_ack";
 }
 interface DetectorTriggerMsg {
 	type: "detector_trigger";
@@ -102,7 +142,7 @@ interface DetectorTriggerMsg {
 	desiredState: boolean;
 	isToggle: boolean;
 }
-type EspMessage = AuthMsg | HeartbeatMsg | RelayAckMsg | DetectorTriggerMsg;
+type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | DetectorTriggerMsg;
 
 interface BrowserSubscribeMsg {
 	type: "subscribe";
@@ -110,120 +150,93 @@ interface BrowserSubscribeMsg {
 }
 
 // ─── HTTP server ──────────────────────────────────────────────
-// Serves both WebSocket upgrades and the internal /push-relay endpoint.
 
 const httpServer = createServer((req, res) => {
+	const secret = req.headers["x-internal-secret"] ?? "";
+	const authorized = !WS_SECRET || secret === WS_SECRET;
+
+	// ── /push-relay ───────────────────────────────────────────
 	if (req.method === "POST" && req.url === "/push-relay") {
-		const secret = req.headers["x-internal-secret"] ?? "";
-		if (WS_SECRET && secret !== WS_SECRET) {
-			res.writeHead(403, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ error: "Forbidden" }));
+		if (!authorized) {
+			res.writeHead(403).end();
 			return;
 		}
 		let body = "";
-		req.on("data", (chunk: Buffer) => {
-			body += chunk.toString();
+		req.on("data", (c: Buffer) => {
+			body += c.toString();
 		});
 		req.on("end", () => {
 			try {
-				const { deviceId, relayId, pin, state } = JSON.parse(body) as {
-					deviceId: string;
-					relayId: string;
-					pin: number;
-					state: boolean;
-				};
+				const { deviceId, relayId, pin, state } = JSON.parse(body);
 				const pushed = pushRelayCommand(deviceId, relayId, pin, state);
 				res.writeHead(200, { "Content-Type": "application/json" });
 				res.end(JSON.stringify({ ok: true, pushed }));
-				console.log(`[HTTP] /push-relay → deviceId=${deviceId} relayId=${relayId} state=${state} pushed=${pushed} connectedDevices=[${[...deviceSockets.keys()].join(",")}]`);
+				console.log(`[HTTP] /push-relay → device=${deviceId} relay=${relayId} state=${state} pushed=${pushed}`);
 			} catch {
-				res.writeHead(400, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ error: "Bad request" }));
+				res.writeHead(400).end();
 			}
 		});
 		return;
 	}
 
-	// Internal endpoint: POST /push-relay-update
-	// Called by tRPC updateRelay to notify a connected ESP32 of a changed relay
+	// ── /push-relay-update ────────────────────────────────────
 	if (req.method === "POST" && req.url === "/push-relay-update") {
-		const secret = req.headers["x-internal-secret"] ?? "";
-		if (WS_SECRET && secret !== WS_SECRET) {
-			res.writeHead(403, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ error: "Forbidden" }));
+		if (!authorized) {
+			res.writeHead(403).end();
 			return;
 		}
 		let body = "";
-		req.on("data", (chunk: Buffer) => {
-			body += chunk.toString();
+		req.on("data", (c: Buffer) => {
+			body += c.toString();
 		});
 		req.on("end", () => {
 			try {
-				const { deviceId, relay } = JSON.parse(body) as {
-					deviceId: string;
-					relay: { id: string; pin: number; label: string; state: boolean; icon: string };
-				};
-				const ws = deviceSockets.get(deviceId);
-				let pushed = false;
-				if (ws && ws.readyState === WebSocket.OPEN) {
-					ws.send(JSON.stringify({ type: "relay_update_config", relay }));
-					pushed = true;
-				}
+				const { deviceId, relay } = JSON.parse(body);
+				const pushed = pushToDevice(deviceId, { type: "relay_update_config", relay });
 				res.writeHead(200, { "Content-Type": "application/json" });
 				res.end(JSON.stringify({ ok: true, pushed }));
-				console.log(`[HTTP] /push-relay-update → deviceId=${deviceId} relayId=${relay.id} pin=${relay.pin} pushed=${pushed}`);
+				console.log(`[HTTP] /push-relay-update → device=${deviceId} relay=${relay.id} pushed=${pushed}`);
 			} catch {
-				res.writeHead(400, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ error: "Bad request" }));
+				res.writeHead(400).end();
 			}
 		});
 		return;
 	}
-	// Called by tRPC addRelay to notify a connected ESP32 of a new relay
+
+	// ── /push-relay-add ───────────────────────────────────────
 	if (req.method === "POST" && req.url === "/push-relay-add") {
-		const secret = req.headers["x-internal-secret"] ?? "";
-		if (WS_SECRET && secret !== WS_SECRET) {
-			res.writeHead(403, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ error: "Forbidden" }));
+		if (!authorized) {
+			res.writeHead(403).end();
 			return;
 		}
 		let body = "";
-		req.on("data", (chunk: Buffer) => {
-			body += chunk.toString();
+		req.on("data", (c: Buffer) => {
+			body += c.toString();
 		});
 		req.on("end", () => {
 			try {
-				const { deviceId, relay } = JSON.parse(body) as {
-					deviceId: string;
-					relay: { id: string; pin: number; label: string; state: boolean; icon: string };
-				};
-				const ws = deviceSockets.get(deviceId);
-				let pushed = false;
-				if (ws && ws.readyState === WebSocket.OPEN) {
-					ws.send(JSON.stringify({ type: "relay_add", relay }));
-					pushed = true;
-				}
+				const { deviceId, relay } = JSON.parse(body);
+				const pushed = pushToDevice(deviceId, { type: "relay_add", relay });
 				res.writeHead(200, { "Content-Type": "application/json" });
 				res.end(JSON.stringify({ ok: true, pushed }));
-				console.log(`[HTTP] /push-relay-add → deviceId=${deviceId} relayId=${relay.id} pin=${relay.pin} pushed=${pushed}`);
+				console.log(`[HTTP] /push-relay-add → device=${deviceId} relay=${relay.id} pushed=${pushed}`);
 			} catch {
-				res.writeHead(400, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ error: "Bad request" }));
+				res.writeHead(400).end();
 			}
 		});
 		return;
 	}
+
 	// ── Detector push endpoints ───────────────────────────────
 	for (const url of ["/push-detector-add", "/push-detector-update", "/push-detector-delete"]) {
 		if (req.method === "POST" && req.url === url) {
-			const secret = req.headers["x-internal-secret"] ?? "";
-			if (WS_SECRET && secret !== WS_SECRET) {
+			if (!authorized) {
 				res.writeHead(403).end();
 				return;
 			}
 			let body = "";
-			req.on("data", (chunk: Buffer) => {
-				body += chunk.toString();
+			req.on("data", (c: Buffer) => {
+				body += c.toString();
 			});
 			req.on("end", () => {
 				try {
@@ -236,7 +249,7 @@ const httpServer = createServer((req, res) => {
 					const pushed = pushToDevice(data.deviceId, { type: typeMap[url], ...data });
 					res.writeHead(200, { "Content-Type": "application/json" });
 					res.end(JSON.stringify({ ok: true, pushed }));
-					console.log(`[HTTP] ${url} → deviceId=${data.deviceId} pushed=${pushed}`);
+					console.log(`[HTTP] ${url} → device=${data.deviceId} pushed=${pushed}`);
 				} catch {
 					res.writeHead(400).end();
 				}
@@ -245,17 +258,56 @@ const httpServer = createServer((req, res) => {
 		}
 	}
 
+	// ── /ping-device — on-demand ping from tRPC ───────────────
+	if (req.method === "POST" && req.url === "/ping-device") {
+		if (!authorized) {
+			res.writeHead(403).end();
+			return;
+		}
+		let body = "";
+		req.on("data", (c: Buffer) => {
+			body += c.toString();
+		});
+		req.on("end", async () => {
+			try {
+				const { deviceId, timeoutMs } = JSON.parse(body) as { deviceId: string; timeoutMs?: number };
+				const ws = deviceSockets.get(deviceId);
+
+				// Not connected — fail fast
+				if (!ws || ws.readyState !== WebSocket.OPEN) {
+					res.writeHead(200, { "Content-Type": "application/json" });
+					res.end(JSON.stringify({ online: false }));
+					return;
+				}
+
+				// Cancel existing pending ping for this device
+				failPendingPing(deviceId);
+
+				// Send ping with authoritative relay states
+				await sendPingWithState(deviceId);
+
+				// Wait for ping_ack or timeout
+				const timeout = timeoutMs ?? 3000;
+				const online = await new Promise<boolean>((resolve) => {
+					const timer = setTimeout(() => {
+						pendingPings.delete(deviceId);
+						resolve(false);
+					}, timeout);
+					pendingPings.set(deviceId, { resolve, timer });
+				});
+
+				res.writeHead(200, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({ online }));
+				console.log(`[HTTP] /ping-device → device=${deviceId} online=${online}`);
+			} catch {
+				res.writeHead(400).end();
+			}
+		});
+		return;
+	}
+
 	res.writeHead(404).end();
 });
-
-// ─── Helper to push a message to a device ────────────────────
-
-function pushToDevice(deviceId: string, payload: object): boolean {
-	const ws = deviceSockets.get(deviceId);
-	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-	ws.send(JSON.stringify(payload));
-	return true;
-}
 
 const wss = new WebSocketServer({ server: httpServer });
 
@@ -267,11 +319,8 @@ httpServer.listen(PORT, () => {
 
 wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
 	const path = parseUrl(req.url ?? "/").pathname ?? "/";
-	if (path === "/browser") {
-		handleBrowserConnection(ws);
-	} else {
-		handleDeviceConnection(ws);
-	}
+	if (path === "/browser") handleBrowserConnection(ws);
+	else handleDeviceConnection(ws);
 });
 
 // ─── Browser connection handler ───────────────────────────────
@@ -296,8 +345,7 @@ function handleBrowserConnection(ws: WebSocket) {
 			subscribedUserId = user.id;
 			if (!browserSockets.has(user.id)) browserSockets.set(user.id, new Set());
 			browserSockets.get(user.id)!.add(ws);
-			const count = browserSockets.get(user.id)!.size;
-			console.log(`[WS] Browser subscribed: userId=${user.id} — total browser sockets for user: ${count}`);
+			console.log(`[WS] Browser subscribed: userId=${user.id} — total: ${browserSockets.get(user.id)!.size}`);
 		}
 	});
 
@@ -317,8 +365,11 @@ function handleDeviceConnection(ws: WebSocket) {
 	let authenticatedDeviceId: string | null = null;
 	let deviceUserId: string | null = null;
 
-	const pingInterval = setInterval(() => {
-		if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
+	// Periodic ping: sends authoritative relay states, keeps TCP alive
+	const pingInterval = setInterval(async () => {
+		if (ws.readyState === WebSocket.OPEN && authenticatedDeviceId) {
+			await sendPingWithState(authenticatedDeviceId);
+		}
 	}, 30_000);
 
 	ws.on("message", async (raw) => {
@@ -342,11 +393,10 @@ function handleDeviceConnection(ws: WebSocket) {
 				return;
 			}
 
-			const now = new Date();
 			const device = await db.device.upsert({
 				where: { macAddress },
-				update: { lastSeenAt: now, apiKeyId: key.id },
-				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, lastSeenAt: now, apiKeyId: key.id },
+				update: { apiKeyId: key.id },
+				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id },
 				include: {
 					relays: { orderBy: { order: "asc" } },
 					detectors: { orderBy: { createdAt: "asc" } }
@@ -357,7 +407,7 @@ function handleDeviceConnection(ws: WebSocket) {
 			deviceUserId = key.userId;
 			deviceSockets.set(device.id, ws);
 
-			await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: now } });
+			await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
 
 			ws.send(
 				JSON.stringify({
@@ -371,7 +421,6 @@ function handleDeviceConnection(ws: WebSocket) {
 			broadcastToUser(key.userId, {
 				type: "device_update",
 				deviceId: device.id,
-				lastSeenAt: now.toISOString(),
 				relays: device.relays.map((r) => ({ id: r.id, state: r.state }))
 			});
 
@@ -379,39 +428,9 @@ function handleDeviceConnection(ws: WebSocket) {
 			return;
 		}
 
-		// ── HEARTBEAT ──────────────────────────────────────────
-		if (msg.type === "heartbeat" && authenticatedDeviceId) {
-			const now = new Date();
-
-			// Update lastSeenAt only — do NOT overwrite relay states from ESP32.
-			// The DB is the source of truth for desired state. The ESP32 syncs
-			// to the DB via heartbeat_ack, not the other way around.
-			await db.device.update({
-				where: { id: authenticatedDeviceId },
-				data: { lastSeenAt: now }
-			});
-
-			// Fetch authoritative relay states from DB and send back to ESP32
-			const relays = await db.relay.findMany({
-				where: { deviceId: authenticatedDeviceId },
-				orderBy: { order: "asc" }
-			});
-
-			ws.send(
-				JSON.stringify({
-					type: "heartbeat_ack",
-					relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state }))
-				})
-			);
-
-			if (deviceUserId) {
-				broadcastToUser(deviceUserId, {
-					type: "device_update",
-					deviceId: authenticatedDeviceId,
-					lastSeenAt: now.toISOString(),
-					relays: relays.map((r) => ({ id: r.id, state: r.state }))
-				});
-			}
+		// ── PING ACK ──────────────────────────────────────────
+		if (msg.type === "ping_ack" && authenticatedDeviceId) {
+			resolvePendingPing(authenticatedDeviceId);
 			return;
 		}
 
@@ -419,18 +438,15 @@ function handleDeviceConnection(ws: WebSocket) {
 		if (msg.type === "detector_trigger" && authenticatedDeviceId) {
 			const { linkedRelayId, desiredState, isToggle } = msg;
 
-			// Find the relay — may be on a different device
 			const relay = await db.relay.findFirst({
 				where: { id: linkedRelayId },
 				include: { device: { include: { apiKey: true } } }
 			});
-
 			if (!relay) {
 				console.log(`[WS] detector_trigger: relay ${linkedRelayId} not found`);
 				return;
 			}
 
-			// Security: relay must belong to same user as the triggering device
 			const triggeringDevice = await db.device.findUnique({
 				where: { id: authenticatedDeviceId },
 				include: { apiKey: true }
@@ -442,27 +458,25 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			const newState = isToggle ? !relay.state : desiredState;
 
-			// Write DB
 			await db.relay.update({
 				where: { id: linkedRelayId },
 				data: { state: newState, updatedAt: new Date() }
 			});
 
-			// Push relay_cmd to the relay's device (may be a different ESP32)
 			const targetWs = deviceSockets.get(relay.deviceId);
 			if (targetWs && targetWs.readyState === WebSocket.OPEN) {
 				targetWs.send(JSON.stringify({ type: "relay_cmd", relayId: relay.id, pin: relay.pin, state: newState }));
 				console.log(`[WS] detector_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
 			}
 
-			// Broadcast to browser
 			if (deviceUserId) {
 				broadcastToUser(deviceUserId, { type: "relay_update", deviceId: relay.deviceId, relayId: relay.id, state: newState });
 			}
 			return;
 		}
+
+		// ── RELAY ACK ──────────────────────────────────────────
 		if (msg.type === "relay_ack" && authenticatedDeviceId) {
-			// Confirm the actual GPIO state the ESP32 applied
 			await db.relay.updateMany({
 				where: { id: msg.relayId, deviceId: authenticatedDeviceId },
 				data: { state: msg.state, updatedAt: new Date() }
@@ -480,18 +494,16 @@ function handleDeviceConnection(ws: WebSocket) {
 		}
 	});
 
-	ws.on("close", async () => {
+	ws.on("close", () => {
 		clearInterval(pingInterval);
 		if (authenticatedDeviceId) {
-			// Only remove from map if THIS socket is still the active one.
-			// If the device reconnected before this close event fired, a new socket
-			// has already replaced this one in the map — don't delete it.
 			if (deviceSockets.get(authenticatedDeviceId) === ws) {
 				deviceSockets.delete(authenticatedDeviceId);
 				console.log(`[WS] Device disconnected: ${authenticatedDeviceId} — sockets: ${deviceSockets.size}`);
 			} else {
-				console.log(`[WS] Stale close for ${authenticatedDeviceId} — new socket already registered, ignoring`);
+				console.log(`[WS] Stale close for ${authenticatedDeviceId} — ignoring`);
 			}
+			failPendingPing(authenticatedDeviceId);
 		}
 	});
 

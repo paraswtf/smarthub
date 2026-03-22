@@ -2,14 +2,6 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 
-// Device is online if lastSeenAt is within 2× the heartbeat interval (30s → 60s threshold).
-const ONLINE_THRESHOLD_MS = 150_000;
-
-function withOnline<T extends { lastSeenAt: Date | null }>(device: T) {
-	const online = device.lastSeenAt ? Date.now() - device.lastSeenAt.getTime() < ONLINE_THRESHOLD_MS : false;
-	return { ...device, online };
-}
-
 // GPIO 34–39 are input-only on ESP32 — cannot be used as relay outputs
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
 function validateRelayPin(pin: number | undefined) {
@@ -33,7 +25,7 @@ export const deviceRouter = createTRPCRouter({
 				}
 			}
 		});
-		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices.map(withOnline));
+		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices);
 	}),
 
 	/** Get a single device (must belong to current user) */
@@ -46,7 +38,30 @@ export const deviceRouter = createTRPCRouter({
 			include: { relays: { orderBy: { order: "asc" } } }
 		});
 		if (!device) throw new TRPCError({ code: "NOT_FOUND" });
-		return withOnline(device);
+		return device;
+	}),
+
+	/** Ping a device to check if it's online (sends authoritative state, waits for ack) */
+	pingDevice: protectedProcedure.input(z.object({ deviceId: z.string() })).mutation(async ({ ctx, input }) => {
+		// Verify ownership
+		const device = await ctx.db.device.findFirst({
+			where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } }
+		});
+		if (!device) throw new TRPCError({ code: "NOT_FOUND" });
+
+		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/ping-device`;
+		try {
+			const res = await fetch(wsUrl, {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
+				body: JSON.stringify({ deviceId: input.deviceId, timeoutMs: 3000 }),
+				signal: AbortSignal.timeout(5000) // outer timeout > inner ping timeout
+			});
+			const data = (await res.json()) as { online?: boolean };
+			return { online: data.online === true };
+		} catch {
+			return { online: false };
+		}
 	}),
 
 	/** Update device name / notes */
@@ -82,47 +97,40 @@ export const deviceRouter = createTRPCRouter({
 			where: {
 				id: input.relayId,
 				device: { apiKey: { userId: ctx.session.user.id } }
-			},
-			include: { device: true }
+			}
 		});
 		if (!relay) throw new TRPCError({ code: "FORBIDDEN" });
 
-		const ONLINE_MS = 150_000;
-		const deviceOnline = relay.device.lastSeenAt ? Date.now() - relay.device.lastSeenAt.getTime() < ONLINE_MS : false;
-
-		if (deviceOnline) {
-			// Try to push command to connected ESP32
-			const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-relay`;
-			let pushed = false;
-			try {
-				const res = await fetch(wsUrl, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"x-internal-secret": process.env.WS_SECRET ?? ""
-					},
-					body: JSON.stringify({
-						deviceId: relay.deviceId,
-						relayId: input.relayId,
-						pin: relay.pin,
-						state: input.state
-					}),
-					signal: AbortSignal.timeout(2000)
-				});
-				const data = (await res.json()) as { pushed?: boolean };
-				pushed = data.pushed === true;
-			} catch {
-				// WS server unreachable
-			}
-
-			if (pushed) {
-				// ESP32 received the command — relay_ack will write the DB
-				return { ...relay, state: relay.state };
-			}
-			// ESP32 not connected to WS (device map stale) — fall through to DB write
+		// Always try to push to connected ESP32 first
+		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-relay`;
+		let pushed = false;
+		try {
+			const res = await fetch(wsUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-internal-secret": process.env.WS_SECRET ?? ""
+				},
+				body: JSON.stringify({
+					deviceId: relay.deviceId,
+					relayId: input.relayId,
+					pin: relay.pin,
+					state: input.state
+				}),
+				signal: AbortSignal.timeout(2000)
+			});
+			const data = (await res.json()) as { pushed?: boolean };
+			pushed = data.pushed === true;
+		} catch {
+			// WS server unreachable
 		}
 
-		// Device offline OR not in WS device map — write DB so it syncs on reconnect
+		if (pushed) {
+			// ESP32 received the command — relay_ack will confirm in DB
+			return { ...relay, state: relay.state };
+		}
+
+		// Not connected — write DB so it syncs on next ping
 		return ctx.db.relay.update({
 			where: { id: input.relayId },
 			data: { state: input.state, updatedAt: new Date() }

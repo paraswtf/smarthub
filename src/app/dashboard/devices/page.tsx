@@ -1,37 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Cpu, Plus, Search, Wifi, WifiOff, ChevronRight, ToggleRight } from "lucide-react";
+import { Cpu, Plus, Search, Wifi, WifiOff, ChevronRight, ToggleRight, Loader2 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useRelativeTime } from "~/hooks/useRelativeTime";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
-
-function LastSeen({ date }: { date: Date | null }) {
-	const text = useRelativeTime(date);
-	return <>{text}</>;
-}
 
 export default function DevicesPage() {
 	const [search, setSearch] = useState("");
 
 	const { connected: wsConnected, onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
-	// Local state: relay states overlaid on top of tRPC data
-	// Updated by both device_update (heartbeat) and relay_update (instant)
+	// Live relay states from WS
 	const [liveRelayStates, setLiveRelayStates] = useState<Record<string, boolean>>({});
-	const [liveLastSeen, setLiveLastSeen] = useState<Record<string, Date>>({});
+	// Online status per device: true/false/undefined (undefined = not yet pinged)
+	const [onlineStatus, setOnlineStatus] = useState<Record<string, boolean>>({});
+	const [pinging, setPinging] = useState<Record<string, boolean>>({});
 
+	// device_update = device just authenticated → it's online
 	useEffect(() => {
-		console.log("[DevicesPage] subscribing to onDeviceUpdate");
-		const unsub = onDeviceUpdate((msg) => {
-			console.log("[DevicesPage] device_update:", msg.deviceId, "relays:", msg.relays);
-			setLiveLastSeen((p) => ({ ...p, [msg.deviceId]: new Date(msg.lastSeenAt) }));
+		return onDeviceUpdate((msg) => {
+			setOnlineStatus((p) => ({ ...p, [msg.deviceId]: true }));
 			setLiveRelayStates((p) => {
 				const next = { ...p };
 				msg.relays.forEach((r) => {
@@ -40,37 +34,60 @@ export default function DevicesPage() {
 				return next;
 			});
 		});
-		return unsub;
 	}, [onDeviceUpdate]);
 
 	useEffect(() => {
-		console.log("[DevicesPage] subscribing to onRelayUpdate");
-		const unsub = onRelayUpdate((msg) => {
-			console.log("[DevicesPage] relay_update:", msg.relayId, "→", msg.state);
+		return onRelayUpdate((msg) => {
 			setLiveRelayStates((p) => ({ ...p, [msg.relayId]: msg.state }));
 		});
-		return unsub;
 	}, [onRelayUpdate]);
 
 	const { data: devices, isLoading } = api.device.list.useQuery(undefined, {
 		refetchInterval: wsConnected ? false : 30_000
 	});
 
+	const pingMutation = api.device.pingDevice.useMutation();
+
+	// Ping all devices on initial load
+	const pingAll = useCallback(async (deviceList: { id: string }[]) => {
+		const batch: Record<string, boolean> = {};
+		for (const d of deviceList) batch[d.id] = true;
+		setPinging(batch);
+
+		await Promise.all(
+			deviceList.map(async (d) => {
+				try {
+					const result = await pingMutation.mutateAsync({ deviceId: d.id });
+					setOnlineStatus((p) => ({ ...p, [d.id]: result.online }));
+				} catch {
+					setOnlineStatus((p) => ({ ...p, [d.id]: false }));
+				}
+				setPinging((p) => ({ ...p, [d.id]: false }));
+			})
+		);
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// Ping all devices when list first loads
+	useEffect(() => {
+		if (devices?.length) {
+			void pingAll(devices);
+		}
+	}, [devices?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
 	type DeviceListItem = RouterOutputs["device"]["list"][number];
-	type RelayItem = DeviceListItem["relays"][number];
 
 	// Merge tRPC base data with live WS overrides
 	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
 		...d,
-		lastSeenAt: liveLastSeen[d.id] ?? d.lastSeenAt,
-		online: liveLastSeen[d.id] ? Date.now() - liveLastSeen[d.id]!.getTime() < 150_000 : d.online,
-		relays: d.relays.map((r: RelayItem) => ({
+		online: onlineStatus[d.id] ?? false,
+		checking: pinging[d.id] === true && onlineStatus[d.id] === undefined,
+		relays: d.relays.map((r: DeviceListItem["relays"][number]) => ({
 			...r,
 			state: liveRelayStates[r.id] ?? r.state
 		}))
 	}));
 
-	const filtered = mergedDevices.filter((d: DeviceListItem) => d.name.toLowerCase().includes(search.toLowerCase()) || d.macAddress.toLowerCase().includes(search.toLowerCase()));
+	const filtered = mergedDevices.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()) || d.macAddress.toLowerCase().includes(search.toLowerCase()));
 
 	return (
 		<div className="p-6 lg:p-8 space-y-6 animate-fade-in">
@@ -124,8 +141,8 @@ export default function DevicesPage() {
 				</Card>
 			) : (
 				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-					{filtered.map((device: DeviceListItem) => {
-						const activeRelays = device.relays.filter((r: DeviceListItem["relays"][number]) => r.state).length;
+					{filtered.map((device) => {
+						const activeRelays = device.relays.filter((r) => r.state).length;
 						return (
 							<Link
 								key={device.id}
@@ -136,15 +153,24 @@ export default function DevicesPage() {
 									<CardHeader className="pb-3">
 										<div className="flex items-start justify-between gap-2">
 											<div className="flex items-center gap-2.5 min-w-0">
-												<span className={`status-dot flex-shrink-0 ${device.online ? "online" : "offline"}`} />
+												<span className={`status-dot flex-shrink-0 ${device.checking ? "checking" : device.online ? "online" : "offline"}`} />
 												<CardTitle className="text-base font-semibold truncate">{device.name}</CardTitle>
 											</div>
-											<Badge
-												variant={device.online ? "online" : "offline"}
-												className="flex-shrink-0"
-											>
-												{device.online ? "Online" : "Offline"}
-											</Badge>
+											{device.checking ? (
+												<Badge
+													variant="outline"
+													className="flex-shrink-0 gap-1"
+												>
+													<Loader2 className="w-3 h-3 animate-spin" /> Pinging
+												</Badge>
+											) : (
+												<Badge
+													variant={device.online ? "online" : "offline"}
+													className="flex-shrink-0"
+												>
+													{device.online ? "Online" : "Offline"}
+												</Badge>
+											)}
 										</div>
 										<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
 									</CardHeader>
@@ -157,7 +183,7 @@ export default function DevicesPage() {
 
 										{device.relays.length > 0 && (
 											<div className="flex flex-wrap gap-1.5">
-												{device.relays.slice(0, 4).map((relay: DeviceListItem["relays"][number]) => (
+												{device.relays.slice(0, 4).map((relay) => (
 													<span
 														key={relay.id}
 														className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
@@ -183,7 +209,7 @@ export default function DevicesPage() {
 													</>
 												) : (
 													<>
-														<WifiOff className="w-3 h-3" /> <LastSeen date={device.lastSeenAt} />
+														<WifiOff className="w-3 h-3" /> Offline
 													</>
 												)}
 											</p>
