@@ -1,0 +1,263 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--background: 0 0% 100%;
+	--foreground: 222 47% 11%;
+	--card: 0 0% 100%;
+	--card-foreground: 222 47% 11%;
+	--popover: 0 0% 100%;
+	--popover-foreground: 222 47% 11%;
+	--primary: 161 94% 30%;
+	--primary-foreground: 0 0% 100%;
+	--secondary: 210 40% 96%;
+	--secondary-foreground: 222 47% 11%;
+	--muted: 210 40% 96%;
+	--muted-foreground: 215 20% 47%;
+	--accent: 161 94% 96%;
+	--accent-foreground: 161 94% 20%;
+	--destructive: 0 84% 60%;
+	--destructive-foreground: 0 0% 100%;
+	--border: 214 32% 91%;
+	--input: 214 32% 91%;
+	--ring: 161 94% 30%;
+	--radius: 0.5rem;
+	--sidebar: 210 40% 98%;
+	--sidebar-foreground: 222 47% 11%;
+	--sidebar-border: 214 32% 91%;
+	--sidebar-primary: 161 94% 30%;
+	--sidebar-primary-fg: 0 0% 100%;
+	--sidebar-accent: 210 40% 94%;
+	--sidebar-accent-fg: 222 47% 11%;
+	--sidebar-muted: 215 20% 47%;
+	--status-online: 161 94% 30%;
+	--status-offline: 215 16% 55%;
+	--status-relay: 38 92% 50%;
+}
+
+.dark {
+	--background: 150 50% 4%;
+	--foreground: 213 27% 90%;
+	--card: 148 45% 6%;
+	--card-foreground: 213 27% 90%;
+	--popover: 148 45% 5%;
+	--popover-foreground: 213 27% 90%;
+	--primary: 161 69% 42%;
+	--primary-foreground: 148 60% 8%;
+	--secondary: 148 32% 12%;
+	--secondary-foreground: 213 27% 90%;
+	--muted: 148 28% 12%;
+	--muted-foreground: 215 16% 55%;
+	--accent: 148 35% 15%;
+	--accent-foreground: 161 69% 65%;
+	--destructive: 0 63% 31%;
+	--destructive-foreground: 0 0% 90%;
+	--border: 148 28% 14%;
+	--input: 148 28% 14%;
+	--ring: 161 69% 42%;
+	--sidebar: 150 60% 3%;
+	--sidebar-foreground: 213 27% 85%;
+	--sidebar-border: 148 28% 10%;
+	--sidebar-primary: 161 69% 42%;
+	--sidebar-primary-fg: 148 60% 8%;
+	--sidebar-accent: 148 35% 9%;
+	--sidebar-accent-fg: 213 27% 85%;
+	--sidebar-muted: 148 20% 40%;
+	--status-online: 161 69% 42%;
+	--status-offline: 148 20% 35%;
+	--status-relay: 38 92% 55%;
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	html {
+		scroll-behavior: smooth;
+	}
+	body {
+		@apply bg-background text-foreground;
+		font-family: var(--font-dm-sans), "DM Sans", sans-serif;
+		line-height: 1.6;
+		overflow-x: hidden;
+	}
+}
+
+/* ─── Dashboard layout ───────────────────────────────────── */
+.dash-sidebar {
+	background-color: hsl(var(--sidebar));
+	color: hsl(var(--sidebar-foreground));
+	border-right: 1px solid hsl(var(--sidebar-border));
+}
+.dash-nav-item {
+	@apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150;
+	color: hsl(var(--sidebar-muted));
+}
+.dash-nav-item:hover {
+	background-color: hsl(var(--sidebar-accent));
+	color: hsl(var(--sidebar-accent-fg));
+}
+.dash-nav-item.active {
+	background-color: hsl(var(--sidebar-accent));
+	color: hsl(var(--sidebar-primary));
+}
+
+/* ─── Relay cards ────────────────────────────────────────── */
+.relay-card {
+	@apply rounded-xl border transition-all duration-200 cursor-pointer select-none;
+	background-color: hsl(var(--card));
+	border-color: hsl(var(--border));
+}
+.relay-card:hover {
+	border-color: hsl(var(--primary) / 0.4);
+	box-shadow:
+		0 0 0 1px hsl(var(--primary) / 0.15),
+		0 4px 16px hsl(var(--primary) / 0.1);
+}
+.relay-card.active {
+	border-color: hsl(var(--primary) / 0.6);
+	background-color: hsl(var(--primary) / 0.06);
+	box-shadow:
+		0 0 0 1px hsl(var(--primary) / 0.2),
+		0 4px 20px hsl(var(--primary) / 0.15);
+}
+
+/* ─── Status dot ─────────────────────────────────────────── */
+.status-dot {
+	@apply inline-block w-2 h-2 rounded-full flex-shrink-0;
+}
+.status-dot.online {
+	background-color: hsl(var(--status-online));
+	box-shadow: 0 0 0 3px hsl(var(--status-online) / 0.2);
+	animation: pulse-dot 2s ease-in-out infinite;
+}
+.status-dot.offline {
+	background-color: hsl(var(--status-offline));
+}
+@keyframes pulse-dot {
+	0%,
+	100% {
+		box-shadow: 0 0 0 3px hsl(var(--status-online) / 0.2);
+	}
+	50% {
+		box-shadow: 0 0 0 6px hsl(var(--status-online) / 0.08);
+	}
+}
+
+.mono {
+	font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+	font-feature-settings: "calt" 1;
+}
+
+/* ─── Landing page — always dark green ──────────────────── */
+/* All marketing sections live inside .landing-dark          */
+.landing-dark {
+	background-color: #050f08;
+	color: #dde6f0;
+}
+
+/* Landing typography utilities */
+.landing-dark .land-label {
+	@apply inline-flex items-center gap-2 text-[11px] font-bold tracking-[2.5px] uppercase mb-5;
+	color: #12c984;
+}
+.landing-dark .land-label::before {
+	content: "";
+	@apply block w-5 h-0.5 rounded;
+	background: #12c984;
+}
+.landing-dark .land-title {
+	font-family: var(--font-sora), "Sora", sans-serif;
+	@apply font-extrabold leading-[1.1];
+	font-size: clamp(32px, 4vw, 52px);
+	color: #e8f0ea;
+}
+.landing-dark .land-title .hl {
+	color: #12c984;
+}
+.landing-dark .land-muted {
+	color: #7a9080;
+}
+
+/* Landing buttons */
+.land-btn {
+	@apply inline-flex items-center gap-2 px-7 py-3.5 rounded-[10px] text-[15px] font-semibold no-underline transition-all duration-150 border-2 border-transparent;
+}
+.land-btn:hover {
+	@apply -translate-y-0.5;
+}
+.land-btn-primary {
+	background: #12c984;
+	color: #040c06;
+	border-color: #12c984;
+}
+.land-btn-primary:hover {
+	background: #0faa70;
+	border-color: #0faa70;
+}
+.land-btn-ghost {
+	background: transparent;
+	color: #9ab8a4;
+	border-color: rgba(18, 201, 132, 0.2);
+}
+.land-btn-ghost:hover {
+	color: #e8f0ea;
+	border-color: rgba(18, 201, 132, 0.5);
+}
+
+/* Landing card */
+.land-card {
+	background: #071009;
+	border: 1px solid rgba(18, 201, 132, 0.1);
+	@apply rounded-2xl transition-all duration-200;
+}
+.land-card:hover {
+	border-color: rgba(18, 201, 132, 0.25);
+	box-shadow: 0 4px 24px rgba(18, 201, 132, 0.07);
+}
+
+/* Scroll reveal */
+.reveal {
+	@apply opacity-0 translate-y-8 transition-all duration-[650ms] ease-out;
+}
+.reveal.visible {
+	@apply opacity-100 translate-y-0;
+}
+
+/* Keyframes */
+@keyframes fadeUp {
+	from {
+		opacity: 0;
+		transform: translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@keyframes float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-12px);
+	}
+}
+@keyframes marquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+@keyframes marqueeRev {
+	from {
+		transform: translateX(-50%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
