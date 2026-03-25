@@ -1,3 +1,5 @@
+name: smarthub
+
 services:
   mongodb:
     image: mongo:7
