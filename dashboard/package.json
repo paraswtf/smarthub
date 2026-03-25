@@ -1,5 +1,5 @@
 {
-	"name": "esp-hub",
+	"name": "dashboard",
 	"version": "1.1.0",
 	"private": true,
 	"type": "module",

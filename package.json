@@ -1,0 +1,15 @@
+{
+  "name": "home-automation",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "dashboard"
+  ],
+  "scripts": {
+    "dev": "npm run --workspace=dashboard dev",
+    "build": "npm run --workspace=dashboard build",
+    "ws": "npm run --workspace=dashboard ws",
+    "db:push": "npm run --workspace=dashboard db:push",
+    "db:studio": "npm run --workspace=dashboard db:studio"
+  }
+}
