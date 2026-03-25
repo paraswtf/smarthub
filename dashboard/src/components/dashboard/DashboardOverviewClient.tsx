@@ -91,6 +91,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 
 	type DeviceListItem = RouterOutputs["device"]["list"][number];
 	type RelayItem = DeviceListItem["relays"][number];
+	type MergedDevice = DeviceListItem & { online: boolean };
 
 	// Merge tRPC base data with live WS overrides (flat relay state map — instant updates)
 	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
@@ -103,9 +104,9 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 		}))
 	}));
 
-	const onlineCount = mergedDevices.filter((d: DeviceListItem) => d.online).length;
-	const relayCount = mergedDevices.reduce((n: number, d: DeviceListItem) => n + d.relays.length, 0);
-	const activeRelays = mergedDevices.reduce((n: number, d: DeviceListItem) => n + d.relays.filter((r: RelayItem) => r.state).length, 0);
+	const onlineCount = mergedDevices.filter((d) => d.online).length;
+	const relayCount = mergedDevices.reduce((n, d) => n + d.relays.length, 0);
+	const activeRelays = mergedDevices.reduce((n, d) => n + d.relays.filter((r) => r.state).length, 0);
 	const deviceCount = mergedDevices.length;
 	const apiKeyCount = (apiKeys ?? []).length;
 
@@ -197,7 +198,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 					</div>
 
 					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-						{mergedDevices.slice(0, 6).map((device: DeviceListItem) => (
+						{mergedDevices.slice(0, 6).map((device) => (
 							<Link
 								key={device.id}
 								href={`/dashboard/devices/${device.id}`}
@@ -220,7 +221,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 											<p className="text-xs text-muted-foreground">No relays configured</p>
 										) : (
 											<div className="flex flex-wrap gap-1.5">
-												{device.relays.map((relay: DeviceListItem["relays"][number]) => (
+												{device.relays.map((relay) => (
 													<span
 														key={relay.id}
 														className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
