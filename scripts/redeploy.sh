@@ -23,7 +23,8 @@ cd /repo
 git pull origin main
 
 echo "[redeploy] Rebuilding app containers..."
-docker compose -p home-automation up --build -d nextjs wsserver
+docker compose -p home-automation build nextjs wsserver
+docker compose -p home-automation up -d --no-deps nextjs wsserver
 
 echo "[redeploy] Done."
 rm -f "$LOCKFILE"
