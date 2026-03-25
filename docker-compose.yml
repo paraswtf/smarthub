@@ -74,7 +74,9 @@ services:
         condition: service_healthy
 
   webhook:
-    image: almir/webhook
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.webhook
     restart: unless-stopped
     ports:
       - "9000:9000"
@@ -82,6 +84,7 @@ services:
       - ./scripts/hooks.json:/etc/webhook/hooks.json:ro
       - ./scripts/redeploy.sh:/scripts/redeploy.sh:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/local/lib/docker/cli-plugins:/usr/local/lib/docker/cli-plugins:ro
       - .:/repo
     command: ["-verbose", "-hooks", "/etc/webhook/hooks.json", "-hotreload"]
     environment:
