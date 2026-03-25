@@ -40,14 +40,14 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder /app/dashboard/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/static ./dashboard/.next/static
 
 USER nextjs
 EXPOSE 3000
 
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
-CMD ["node", "server.js"]
+CMD ["node", "dashboard/server.js"]
 
 # ── Stage 3b: WebSocket server production image ──
 FROM node:20-alpine AS wsserver
