@@ -178,7 +178,7 @@ public:
     }
 
 private:
-    static constexpr uint16_t WS_PORT_OVERRIDE = 4001;
+    static constexpr uint16_t WS_PORT_OVERRIDE = 0; // 0 = use port from captive portal config
     static constexpr const char *FIRMWARE_VERSION = "1.2.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 

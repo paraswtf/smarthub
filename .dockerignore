@@ -1,0 +1,14 @@
+node_modules
+dashboard/node_modules
+dashboard/.next
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.vscode
+.idea
+firmware
+scripts
+deployment.md
+README.md
