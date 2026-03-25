@@ -213,6 +213,7 @@ export default function DeviceDetailPage() {
 	const addRelay = api.device.addRelay.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
+			void utils.switch.listAllRelays.invalidate();
 			setAddingRelay(false);
 			setNewRelay({ pin: 2, label: "", icon: "plug" });
 		}
@@ -220,12 +221,14 @@ export default function DeviceDetailPage() {
 	const updateRelay = api.device.updateRelay.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
+			void utils.switch.listAllRelays.invalidate();
 			setEditingRelayId(null);
 		}
 	});
 	const deleteRelay = api.device.deleteRelay.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
+			void utils.switch.listAllRelays.invalidate();
 			setDeleteRelayId(null);
 		}
 	});
