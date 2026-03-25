@@ -119,16 +119,8 @@ public:
 
         if (authenticated)
         {
-            // Send heartbeat on interval
-            if (now - _lastHeartbeat >= HEARTBEAT_INTERVAL_MS)
-            {
-                _sendHeartbeat();
-                _lastHeartbeat = now;
-                DBG_HEAP();
-            }
-
-            // Watchdog: if no heartbeat_ack within 2× the interval, force reconnect
-            if (now - _lastActivity > HEARTBEAT_INTERVAL_MS * 2)
+            // Watchdog: if no ping from server within 90s (3× the 30s interval), force reconnect
+            if (now - _lastActivity > 90000)
             {
                 DBG_WARN("Watchdog: no activity for %lums — forcing reconnect", now - _lastActivity);
                 _forceReconnect();
@@ -187,21 +179,19 @@ public:
 
 private:
     static constexpr uint16_t WS_PORT_OVERRIDE = 4001;
-    static constexpr const char *FIRMWARE_VERSION = "1.1.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.0.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
     DeviceConfig *_cfg = nullptr;
     RelayManager *_relays = nullptr;
     DetectorManager *_detectors = nullptr;
-    uint32_t _lastHeartbeat = 0;
     uint32_t _lastActivity = 0;
 
     void _resetState()
     {
         connected = false;
         authenticated = false;
-        _lastHeartbeat = 0;
     }
 
     void _forceReconnect()
@@ -274,15 +264,6 @@ private:
         _send(doc);
     }
 
-    void _sendHeartbeat()
-    {
-        JsonDocument doc;
-        doc["type"] = "heartbeat";
-        doc["deviceId"] = _cfg->deviceId;
-        DBG_WS("→ heartbeat");
-        _send(doc);
-    }
-
     void _sendRelayAck(const String &relayId, bool state)
     {
         JsonDocument doc;
@@ -290,6 +271,14 @@ private:
         doc["relayId"] = relayId;
         doc["state"] = state;
         DBG_WS("→ relay_ack %s → %s", relayId.c_str(), state ? "ON" : "OFF");
+        _send(doc);
+    }
+
+    void _sendPingAck()
+    {
+        JsonDocument doc;
+        doc["type"] = "ping_ack";
+        DBG_WS("→ ping_ack");
         _send(doc);
     }
 
@@ -317,7 +306,6 @@ private:
         if (strcmp(type, "auth_ok") == 0)
         {
             authenticated = true;
-            _lastHeartbeat = 0;
             _cfg->deviceId = doc["deviceId"].as<String>();
             Storage::saveDeviceId(_cfg->deviceId);
 
@@ -382,31 +370,37 @@ private:
             }
         }
 
-        else if (strcmp(type, "heartbeat_ack") == 0)
+        else if (strcmp(type, "ping") == 0)
         {
+            // Server ping carries authoritative relay states — sync and ack
             JsonArray arr = doc["relays"].as<JsonArray>();
-            uint32_t now = millis();
-            uint8_t synced = 0;
-            for (JsonObject r : arr)
+            if (!arr.isNull())
             {
-                String id = r["id"].as<String>();
-                bool state = r["state"].as<bool>();
-                if (_relays->getState(id) != state)
+                uint32_t now = millis();
+                uint8_t synced = 0;
+                for (JsonObject r : arr)
                 {
-                    // Skip relays changed locally within the last 10s
-                    if (now - _relays->getLastChanged(id) < 10000)
+                    String id = r["id"].as<String>();
+                    bool state = r["state"].as<bool>();
+                    if (_relays->getState(id) != state)
                     {
-                        DBG_WS("heartbeat_ack: skip %s — changed %lums ago",
-                               id.c_str(), now - _relays->getLastChanged(id));
-                        continue;
+                        // Skip relays changed locally within the last 10s
+                        if (now - _relays->getLastChanged(id) < 10000)
+                        {
+                            DBG_WS("ping sync: skip %s — changed %lums ago",
+                                   id.c_str(), now - _relays->getLastChanged(id));
+                            continue;
+                        }
+                        _relays->setById(id, state);
+                        synced++;
+                        DBG_WS("ping sync: %s → %s", id.c_str(), state ? "ON" : "OFF");
                     }
-                    _relays->setById(id, state);
-                    synced++;
-                    DBG_WS("heartbeat_ack: sync %s → %s", id.c_str(), state ? "ON" : "OFF");
                 }
+                if (!synced)
+                    DBG_WS("ping: in sync");
             }
-            if (!synced)
-                DBG_WS("heartbeat_ack: in sync");
+            _sendPingAck();
+            DBG_HEAP();
         }
 
         else if (strcmp(type, "relay_add") == 0)
@@ -465,11 +459,6 @@ private:
                 }
             }
             DBG_WARN("relay_update_config: id=%s not found", id.c_str());
-        }
-
-        else if (strcmp(type, "ping") == 0)
-        {
-            // WebSocketsClient handles PONG automatically
         }
 
         else if (strcmp(type, "detector_add") == 0)
