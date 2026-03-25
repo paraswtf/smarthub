@@ -77,7 +77,10 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 
 		const base = appConfig.apiBaseUrl;
 		const wsBase = base.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
-		const wsUrl = `${wsBase.replace(/:\d+$/, "")}:${process.env.NEXT_PUBLIC_WS_PORT ?? "4001"}/browser`;
+		const wsPort = process.env.NEXT_PUBLIC_WS_PORT;
+		const wsUrl = wsPort
+			? `${wsBase.replace(/:\d+$/, "")}:${wsPort}/browser`
+			: `${wsBase.replace(/:\d+$/, "")}/browser`;
 
 		console.log(`[WS Provider] connecting to ${wsUrl} as userId=${uid}`);
 		const ws = new WebSocket(wsUrl);
