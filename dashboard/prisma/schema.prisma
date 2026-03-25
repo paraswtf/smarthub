@@ -57,7 +57,7 @@ model VerificationToken {
     @@unique([identifier, token])
 }
 
-// ─── ESP Hub ─────────────────────────────────────────────────
+// ─── SmartHUB ────────────────────────────────────────────────
 
 model ApiKey {
     id         String    @id @default(auto()) @map("_id") @db.ObjectId

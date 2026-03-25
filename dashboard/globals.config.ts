@@ -13,7 +13,7 @@
 
 // ─── App Identity ────────────────────────────────────────────
 export const appConfig = {
-	name: "ESP Hub",
+	name: "SmartHUB",
 	tagline: "Home Automation Control Center",
 	/** Version shown in footer / settings */
 	version: "1.0.0",

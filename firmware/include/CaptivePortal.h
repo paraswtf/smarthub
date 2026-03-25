@@ -13,7 +13,7 @@ static const char CONFIG_PAGE[] PROGMEM = R"rawhtml(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP Hub Setup</title>
+<title>SmartHUB Setup</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#050f08;color:#dde6f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -32,8 +32,8 @@ static const char CONFIG_PAGE[] PROGMEM = R"rawhtml(
 </head>
 <body>
 <div class="card">
-  <h1>⚡ ESP Hub Setup</h1>
-  <p class="sub">Configure your device to connect to ESP Hub.</p>
+  <h1>⚡ SmartHUB Setup</h1>
+  <p class="sub">Configure your device to connect to SmartHUB.</p>
   <form method="POST" action="/save">
     <label>WiFi Network (SSID)</label>
     <input name="ssid" placeholder="Your home WiFi name" required value="%SSID%">

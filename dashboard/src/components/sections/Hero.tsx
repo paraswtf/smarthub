@@ -89,7 +89,7 @@ export default function HeroSection() {
 					className="text-[17px] leading-[1.75] max-w-[600px] mx-auto mb-10 font-normal"
 					style={{ color: "#7a9080" }}
 				>
-					ESP Hub connects multiple ESP32 relay boards to a single web dashboard over WebSocket. Configure pins via a captive portal, name your switches, and control them from anywhere.
+					SmartHUB connects multiple ESP32 relay boards to a single web dashboard over WebSocket. Configure pins via a captive portal, name your switches, and control them from anywhere.
 				</p>
 
 				<div className="flex flex-wrap gap-4 justify-center">

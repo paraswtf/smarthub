@@ -1,5 +1,5 @@
 /**
- * ESP Hub WebSocket + HTTP server
+ * SmartHUB WebSocket + HTTP server
  *
  * Usage: npm run ws
  *
@@ -312,7 +312,7 @@ const httpServer = createServer((req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 
 httpServer.listen(PORT, () => {
-	console.log(`[WS] ESP Hub server listening on port ${PORT}`);
+	console.log(`[WS] SmartHUB server listening on port ${PORT}`);
 });
 
 // ─── WebSocket routing ────────────────────────────────────────

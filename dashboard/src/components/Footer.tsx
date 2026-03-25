@@ -45,7 +45,7 @@ export default function Footer() {
 							<div className="w-8 h-8 rounded-lg bg-[#12c984] flex items-center justify-center">
 								<Zap className="w-4 h-4 text-[#040c06]" />
 							</div>
-							<span className="font-['Sora'] font-bold text-[18px] text-[#e8f0ea]">ESP Hub</span>
+							<span className="font-['Sora'] font-bold text-[18px] text-[#e8f0ea]">SmartHUB</span>
 						</Link>
 						<p className="text-[14px] leading-relaxed text-[#4a6b58]">Open source home automation dashboard for ESP32 relay boards.</p>
 					</div>
@@ -84,7 +84,7 @@ export default function Footer() {
 				</div>
 
 				<div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-					<p className="text-[13px] text-[#2e4a3a]">© {new Date().getFullYear()} ESP Hub. MIT License.</p>
+					<p className="text-[13px] text-[#2e4a3a]">© {new Date().getFullYear()} SmartHUB. MIT License.</p>
 					<p className="text-[13px] text-[#2e4a3a]">Built for makers &amp; tinkerers</p>
 				</div>
 			</div>

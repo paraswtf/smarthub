@@ -62,7 +62,7 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
-    DBG_BANNER("ESP Hub — Booting");
+    DBG_BANNER("SmartHUB — Booting");
     DBG_MAIN("Chip: %s  Rev: %d  Cores: %d  Freq: %d MHz",
              ESP.getChipModel(), ESP.getChipRevision(),
              ESP.getChipCores(), getCpuFrequencyMhz());

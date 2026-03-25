@@ -57,7 +57,7 @@ export default function OpenSourceCTA() {
 							className="text-[16px] max-w-[520px] mx-auto leading-relaxed mb-10"
 							style={{ color: "#7a9080" }}
 						>
-							ESP Hub is MIT licensed. Run it on your own server, contribute improvements, or adapt it for your own hardware projects.
+							SmartHUB is MIT licensed. Run it on your own server, contribute improvements, or adapt it for your own hardware projects.
 						</p>
 
 						<div className="flex flex-wrap gap-4 justify-center">

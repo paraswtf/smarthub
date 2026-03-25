@@ -38,7 +38,7 @@ export default function Nav() {
 					<div className="w-8 h-8 rounded-lg bg-[#12c984] flex items-center justify-center">
 						<Zap className="w-4 h-4 text-[#040c06]" />
 					</div>
-					<span className={`font-['Sora'] font-bold text-[18px] ${textColor}`}>ESP Hub</span>
+					<span className={`font-['Sora'] font-bold text-[18px] ${textColor}`}>SmartHUB</span>
 				</Link>
 
 				{/* Desktop */}

@@ -28,7 +28,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "ESP Hub | Home Automation Control Center",
+	title: "SmartHUB | Home Automation Control Center",
 	description: "Connect and control multiple ESP32 devices from a single dashboard.",
 	robots: "index, follow"
 };

@@ -3,9 +3,9 @@
 import { useEffect, useRef } from "react";
 
 const STEPS = [
-	{ n: "01", title: "Create an account", desc: "Sign up at ESP Hub and generate an API key from the dashboard. One key can be shared across multiple ESP32 boards." },
+	{ n: "01", title: "Create an account", desc: "Sign up at SmartHUB and generate an API key from the dashboard. One key can be shared across multiple ESP32 boards." },
 	{ n: "02", title: "Flash & configure", desc: "Power on your ESP32. It starts in AP mode — connect to its WiFi hotspot and open the captive portal at 192.168.4.1. Enter your home WiFi, device name, and API key." },
-	{ n: "03", title: "Device comes online", desc: "The ESP32 reboots, connects to your home network, and opens a WebSocket connection to ESP Hub. It appears in your dashboard within seconds." },
+	{ n: "03", title: "Device comes online", desc: "The ESP32 reboots, connects to your home network, and opens a WebSocket connection to SmartHUB. It appears in your dashboard within seconds." },
 	{ n: "04", title: "Configure & control", desc: "From the device detail page, assign GPIO pins to relays, name them, and start toggling them in real time from any browser." }
 ];
 
