@@ -1,0 +1,90 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test: >
+        mongosh --quiet --eval "
+          try { rs.status().ok && quit(0) }
+          catch(e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongodb:27017'}]}).ok ? quit(0) : quit(1) }
+        "
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nextjs:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      target: nextjs
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+        - NEXT_PUBLIC_WS_PORT=${NEXT_PUBLIC_WS_PORT:-4001}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=mongodb://mongodb:27017/esphub?replicaSet=rs0&directConnection=true
+      - WS_INTERNAL_URL=http://wsserver:4001
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SECRET=${AUTH_SECRET}
+      - WS_SECRET=${WS_SECRET}
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL:-}
+      - NEXTAUTH_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  wsserver:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      target: wsserver
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      - DATABASE_URL=mongodb://mongodb:27017/esphub?replicaSet=rs0&directConnection=true
+      - WS_PORT=4001
+      - WS_SECRET=${WS_SECRET}
+      - NODE_ENV=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  webhook:
+    image: almir/webhook
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./scripts/hooks.json:/etc/webhook/hooks.json:ro
+      - ./scripts/redeploy.sh:/scripts/redeploy.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
+    command: ["-verbose", "-hooks", "/etc/webhook/hooks.json", "-hotreload"]
+    environment:
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-changeme}
+
+volumes:
+  mongodb_data:

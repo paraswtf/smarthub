@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+echo "[redeploy] Pulling latest changes..."
+cd /repo
+git pull origin main
+
+echo "[redeploy] Rebuilding app containers..."
+docker compose up --build -d nextjs wsserver
+
+echo "[redeploy] Done."
