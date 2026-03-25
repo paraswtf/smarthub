@@ -1,5 +1,6 @@
 # ── Stage 1: Install dependencies ──
 FROM node:20-alpine AS deps
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -30,6 +31,7 @@ RUN npm run build
 
 # ── Stage 3a: Next.js production image ──
 FROM node:20-alpine AS nextjs
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -51,6 +53,7 @@ CMD ["node", "dashboard/server.js"]
 
 # ── Stage 3b: WebSocket server production image ──
 FROM node:20-alpine AS wsserver
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
