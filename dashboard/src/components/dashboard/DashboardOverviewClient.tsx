@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight } from "lucide-react";
 import Link from "next/link";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -43,12 +43,44 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 		return unsub;
 	}, [onRelayUpdate]);
 
+	// Online status per device
+	const [onlineStatus, setOnlineStatus] = useState<Record<string, boolean>>({});
+
+	// device_update = device just authenticated → it's online
+	useEffect(() => {
+		return onDeviceUpdate((msg) => {
+			setOnlineStatus((p) => ({ ...p, [msg.deviceId]: true }));
+		});
+	}, [onDeviceUpdate]);
+
 	const { data: devices, isLoading: devicesLoading } = api.device.list.useQuery(undefined, {
 		refetchInterval: wsConnected ? false : 30_000
 	});
 	const { data: apiKeys, isLoading: keysLoading } = api.apiKey.list.useQuery(undefined, {
 		refetchInterval: 60_000
 	});
+
+	const pingMutation = api.device.pingDevice.useMutation();
+
+	// Ping all devices on initial load
+	const pingAll = useCallback(async (deviceList: { id: string }[]) => {
+		await Promise.all(
+			deviceList.map(async (d) => {
+				try {
+					const result = await pingMutation.mutateAsync({ deviceId: d.id });
+					setOnlineStatus((p) => ({ ...p, [d.id]: result.online }));
+				} catch {
+					setOnlineStatus((p) => ({ ...p, [d.id]: false }));
+				}
+			})
+		);
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		if (devices?.length) {
+			void pingAll(devices);
+		}
+	}, [devices?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const greeting = () => {
 		const h = new Date().getHours();
@@ -64,7 +96,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
 		...d,
 		lastSeenAt: liveLastSeen[d.id] ?? d.lastSeenAt,
-		online: liveLastSeen[d.id] ? Date.now() - liveLastSeen[d.id]!.getTime() < 150_000 : d.online,
+		online: onlineStatus[d.id] ?? false,
 		relays: d.relays.map((r: RelayItem) => ({
 			...r,
 			state: liveRelayStates[r.id] ?? r.state

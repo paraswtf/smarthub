@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "Config.h"
 #include "Debug.h"
-#include "DetectorTypes.h"
+#include "SwitchTypes.h"
 
 struct DeviceConfig
 {
@@ -150,11 +150,10 @@ public:
         return flag;
     }
 
-    // ── Detector storage ──────────────────────────────────────
-    // Forward-declare DetectorConfig (defined in DetectorManager.h)
-    // Storage only needs the raw fields — no mode enum needed here
+    // ── Switch storage ───────────────────────────────────────
+    // Forward-declare SwitchConfig (defined in SwitchTypes.h)
 
-    static void saveDetectors(const struct DetectorConfig detectors[], uint8_t count)
+    static void saveSwitches(const struct SwitchConfig sw[], uint8_t count)
     {
         Preferences prefs;
         prefs.begin(NVS_NAMESPACE, false);
@@ -162,17 +161,17 @@ public:
         for (uint8_t i = 0; i < count && i < 8; i++)
         {
             String p = "d" + String(i) + "_";
-            prefs.putString((p + "id").c_str(), detectors[i].id);
-            prefs.putUChar((p + "pin").c_str(), detectors[i].pin);
-            prefs.putString((p + "lbl").c_str(), detectors[i].label);
-            prefs.putUChar((p + "swt").c_str(), (uint8_t)detectors[i].switchType);
-            prefs.putString((p + "rid").c_str(), detectors[i].linkedRelayId);
+            prefs.putString((p + "id").c_str(), sw[i].id);
+            prefs.putUChar((p + "pin").c_str(), sw[i].pin);
+            prefs.putString((p + "lbl").c_str(), sw[i].label);
+            prefs.putUChar((p + "swt").c_str(), (uint8_t)sw[i].switchType);
+            prefs.putString((p + "rid").c_str(), sw[i].linkedRelayId);
         }
         prefs.end();
-        DBG_STORAGE("saveDetectors() — %d detector(s)", count);
+        DBG_STORAGE("saveSwitches() — %d switch(es)", count);
     }
 
-    static uint8_t loadDetectors(struct DetectorConfig detectors[])
+    static uint8_t loadSwitches(struct SwitchConfig sw[])
     {
         Preferences prefs;
         prefs.begin(NVS_NAMESPACE, true);
@@ -180,12 +179,12 @@ public:
         for (uint8_t i = 0; i < count && i < 8; i++)
         {
             String p = "d" + String(i) + "_";
-            detectors[i].id = prefs.getString((p + "id").c_str(), "");
-            detectors[i].pin = prefs.getUChar((p + "pin").c_str(), 0);
-            detectors[i].label = prefs.getString((p + "lbl").c_str(), "Switch");
-            detectors[i].switchType = (DetectorSwitch)prefs.getUChar((p + "swt").c_str(), 0);
-            detectors[i].linkedRelayId = prefs.getString((p + "rid").c_str(), "");
-            DBG_STORAGE("  det[%d] pin=%d type=%d label=%s", i, detectors[i].pin, detectors[i].switchType, detectors[i].label.c_str());
+            sw[i].id = prefs.getString((p + "id").c_str(), "");
+            sw[i].pin = prefs.getUChar((p + "pin").c_str(), 0);
+            sw[i].label = prefs.getString((p + "lbl").c_str(), "Switch");
+            sw[i].switchType = (SwitchType)prefs.getUChar((p + "swt").c_str(), 0);
+            sw[i].linkedRelayId = prefs.getString((p + "rid").c_str(), "");
+            DBG_STORAGE("  sw[%d] pin=%d type=%d label=%s", i, sw[i].pin, sw[i].switchType, sw[i].label.c_str());
         }
         prefs.end();
         return count;

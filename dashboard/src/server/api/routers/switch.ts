@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 
-const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY — ideal for detectors
+const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY — ideal for switches
 
 function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof import("~/server/db").db }) {
 	return ctx.db.device.findFirst({
@@ -10,12 +10,12 @@ function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof i
 	});
 }
 
-export const detectorRouter = createTRPCRouter({
-	/** List all detectors for a device */
+export const switchRouter = createTRPCRouter({
+	/** List all switches for a device */
 	list: protectedProcedure.input(z.object({ deviceId: z.string() })).query(async ({ ctx, input }) => {
 		const owned = await assertDeviceOwned(input.deviceId, ctx.session.user.id, ctx);
 		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
-		return ctx.db.detector.findMany({
+		return ctx.db.switch.findMany({
 			where: { deviceId: input.deviceId },
 			orderBy: { createdAt: "asc" }
 		});
@@ -35,14 +35,14 @@ export const detectorRouter = createTRPCRouter({
 		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices.flatMap((d: (typeof k.devices)[number]) => d.relays.map((r: (typeof d.relays)[number]) => ({ ...r, deviceName: d.name }))));
 	}),
 
-	/** Add a detector to a device */
+	/** Add a switch to a device */
 	add: protectedProcedure
 		.input(
 			z.object({
 				deviceId: z.string(),
 				pin: z.number().int().min(0).max(39),
 				label: z.string().min(1).max(40).default("Switch"),
-				switchType: z.enum(["latching", "momentary"]).default("latching"),
+				switchType: z.enum(["two_way", "three_way", "momentary"]).default("two_way"),
 				linkedRelayId: z.string()
 			})
 		)
@@ -56,7 +56,7 @@ export const detectorRouter = createTRPCRouter({
 			});
 			if (!relay) throw new TRPCError({ code: "BAD_REQUEST", message: "Linked relay not found" });
 
-			const detector = await ctx.db.detector.create({
+			const sw = await ctx.db.switch.create({
 				data: {
 					deviceId: input.deviceId,
 					pin: input.pin,
@@ -67,47 +67,47 @@ export const detectorRouter = createTRPCRouter({
 			});
 
 			// Push to connected ESP32
-			const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-detector-add`;
+			const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-switch-add`;
 			try {
 				await fetch(wsUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-					body: JSON.stringify({ deviceId: input.deviceId, detector: { id: detector.id, pin: detector.pin, label: detector.label, switchType: detector.switchType, linkedRelayId: detector.linkedRelayId } }),
+					body: JSON.stringify({ deviceId: input.deviceId, switch: { id: sw.id, pin: sw.pin, label: sw.label, switchType: sw.switchType, linkedRelayId: sw.linkedRelayId } }),
 					signal: AbortSignal.timeout(2000)
 				});
 			} catch {
 				/* offline — picks up on reconnect */
 			}
 
-			return detector;
+			return sw;
 		}),
 
-	/** Update a detector */
+	/** Update a switch */
 	update: protectedProcedure
 		.input(
 			z.object({
-				detectorId: z.string(),
+				switchId: z.string(),
 				pin: z.number().int().min(0).max(39).optional(),
 				label: z.string().min(1).max(40).optional(),
-				switchType: z.enum(["latching", "momentary"]).optional(),
+				switchType: z.enum(["two_way", "three_way", "momentary"]).optional(),
 				linkedRelayId: z.string().optional()
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const { detectorId, ...data } = input;
-			const detector = await ctx.db.detector.findFirst({
-				where: { id: detectorId, device: { apiKey: { userId: ctx.session.user.id } } }
+			const { switchId, ...data } = input;
+			const sw = await ctx.db.switch.findFirst({
+				where: { id: switchId, device: { apiKey: { userId: ctx.session.user.id } } }
 			});
-			if (!detector) throw new TRPCError({ code: "FORBIDDEN" });
+			if (!sw) throw new TRPCError({ code: "FORBIDDEN" });
 
-			const updated = await ctx.db.detector.update({ where: { id: detectorId }, data });
+			const updated = await ctx.db.switch.update({ where: { id: switchId }, data });
 
-			const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-detector-update`;
+			const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-switch-update`;
 			try {
 				await fetch(wsUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-					body: JSON.stringify({ deviceId: updated.deviceId, detector: { id: updated.id, pin: updated.pin, label: updated.label, switchType: updated.switchType, linkedRelayId: updated.linkedRelayId } }),
+					body: JSON.stringify({ deviceId: updated.deviceId, switch: { id: updated.id, pin: updated.pin, label: updated.label, switchType: updated.switchType, linkedRelayId: updated.linkedRelayId } }),
 					signal: AbortSignal.timeout(2000)
 				});
 			} catch {
@@ -117,21 +117,21 @@ export const detectorRouter = createTRPCRouter({
 			return updated;
 		}),
 
-	/** Delete a detector */
-	delete: protectedProcedure.input(z.object({ detectorId: z.string() })).mutation(async ({ ctx, input }) => {
-		const detector = await ctx.db.detector.findFirst({
-			where: { id: input.detectorId, device: { apiKey: { userId: ctx.session.user.id } } }
+	/** Delete a switch */
+	delete: protectedProcedure.input(z.object({ switchId: z.string() })).mutation(async ({ ctx, input }) => {
+		const sw = await ctx.db.switch.findFirst({
+			where: { id: input.switchId, device: { apiKey: { userId: ctx.session.user.id } } }
 		});
-		if (!detector) throw new TRPCError({ code: "FORBIDDEN" });
+		if (!sw) throw new TRPCError({ code: "FORBIDDEN" });
 
-		await ctx.db.detector.delete({ where: { id: input.detectorId } });
+		await ctx.db.switch.delete({ where: { id: input.switchId } });
 
-		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-detector-delete`;
+		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-switch-delete`;
 		try {
 			await fetch(wsUrl, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-				body: JSON.stringify({ deviceId: detector.deviceId, detectorId: input.detectorId }),
+				body: JSON.stringify({ deviceId: sw.deviceId, switchId: input.switchId }),
 				signal: AbortSignal.timeout(2000)
 			});
 		} catch {

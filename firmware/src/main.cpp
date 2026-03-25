@@ -6,7 +6,7 @@
 #include "StatusLed.h"
 #include "CaptivePortal.h"
 #include "RelayManager.h"
-#include "DetectorManager.h"
+#include "SwitchManager.h"
 #include "HubClient.h"
 
 enum State
@@ -20,19 +20,19 @@ enum State
 static State state = S_PORTAL;
 static DeviceConfig cfg;
 static RelayManager relays;
-static DetectorManager detectors;
+static SwitchManager switches;
 static HubClient hub;
 static CaptivePortal portal;
 
-// ─── Detector callback ────────────────────────────────────────
-// Called by DetectorManager when an input pin changes state.
-// Sends detector_trigger to the server — which finds the linked relay
+// ─── Switch callback ─────────────────────────────────────────
+// Called by SwitchManager when an input pin changes state.
+// Sends switch_trigger to the server — which finds the linked relay
 // (potentially on a different device) and issues relay_cmd to it.
-void onDetectorTriggered(const String &relayId, bool newState, bool isToggle)
+void onSwitchTriggered(const String &relayId, bool newState, bool isToggle)
 {
-    DBG_RELAY("Detector triggered: relay=%s → %s (%s)",
+    DBG_RELAY("Switch triggered: relay=%s → %s (%s)",
               relayId.c_str(), newState ? "ON" : "OFF", isToggle ? "toggle" : "follow");
-    hub.sendDetectorTrigger(relayId, newState, isToggle);
+    hub.sendSwitchTrigger(relayId, newState, isToggle);
 }
 
 // ─── WiFi connection ──────────────────────────────────────────
@@ -109,14 +109,40 @@ void setup()
     }
 
     relays.begin();
-    detectors.begin(onDetectorTriggered);
+    switches.begin(onSwitchTriggered);
     DBG_HEAP();
+}
+
+// ─── Factory reset (BOOT button) ─────────────────────────────
+// Works in any state — hold GPIO 0 for 3s to wipe NVS and restart.
+void checkFactoryReset()
+{
+    if (digitalRead(0) != LOW) return;
+
+    DBG_MAIN("BOOT held — hold 3s for factory reset");
+    StatusLed::set(LED_BLINK_FAST);
+    uint32_t held = millis();
+    while (digitalRead(0) == LOW)
+    {
+        StatusLed::tick();
+        delay(10);
+        if (millis() - held > 3000)
+        {
+            DBG_MAIN("Factory reset!");
+            hub.disconnect();
+            Storage::clear();
+            delay(500);
+            ESP.restart();
+        }
+    }
+    DBG_MAIN("BOOT released early — ignoring");
 }
 
 // ─── Loop ────────────────────────────────────────────────────
 void loop()
 {
     StatusLed::tick();
+    checkFactoryReset();
 
     switch (state)
     {
@@ -152,7 +178,7 @@ void loop()
     case S_REGISTER:
         DBG_BANNER("State: REGISTER");
         StatusLed::set(LED_BLINK_SLOW);
-        hub.begin(cfg, relays, detectors);
+        hub.begin(cfg, relays, switches);
         if (hub.registerDevice())
         {
             hub.connectWebSocket();
@@ -177,10 +203,10 @@ void loop()
         hub.loop();
         StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
 
-        // Poll detectors (input pins) — fires callback on state change
+        // Poll switches (input pins) — fires callback on state change
         if (hub.authenticated)
         {
-            // Build relay state arrays for DetectorManager::loop()
+            // Build relay state arrays for SwitchManager::loop()
             static bool relayStates[MAX_RELAYS];
             static String relayIds[MAX_RELAYS];
             for (uint8_t i = 0; i < relays.count; i++)
@@ -188,30 +214,7 @@ void loop()
                 relayStates[i] = relays.relays[i].state;
                 relayIds[i] = relays.relays[i].id;
             }
-            detectors.loop(relayStates, relayIds, relays.count);
-        }
-
-        // Hold BOOT button for 3s while running to factory reset
-        if (digitalRead(0) == LOW)
-        {
-            DBG_MAIN("BOOT held — hold 3s for factory reset");
-            StatusLed::set(LED_BLINK_FAST);
-            uint32_t held = millis();
-            while (digitalRead(0) == LOW)
-            {
-                StatusLed::tick();
-                delay(10);
-                if (millis() - held > 3000)
-                {
-                    DBG_MAIN("Factory reset!");
-                    hub.disconnect();
-                    Storage::clear();
-                    delay(500);
-                    ESP.restart();
-                }
-            }
-            DBG_MAIN("BOOT released early — ignoring");
-            StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
+            switches.loop(relayStates, relayIds, relays.count);
         }
 
         if (WiFi.status() != WL_CONNECTED)

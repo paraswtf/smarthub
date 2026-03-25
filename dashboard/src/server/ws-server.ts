@@ -8,16 +8,16 @@
  *     { type: "auth",             apiKey, macAddress }
  *     { type: "ping_ack" }
  *     { type: "relay_ack",        relayId, state }
- *     { type: "detector_trigger", linkedRelayId, desiredState, isToggle }
+ *     { type: "switch_trigger", linkedRelayId, desiredState, isToggle }
  *
  *   Server → ESP32
- *     { type: "auth_ok",            deviceId, relays, detectors }
+ *     { type: "auth_ok",            deviceId, relays, switches }
  *     { type: "auth_fail",          reason }
  *     { type: "ping",               relays: [{id, pin, state}] }
  *     { type: "relay_cmd",          relayId, pin, state }
  *     { type: "relay_add",          relay }
  *     { type: "relay_update_config", relay }
- *     { type: "detector_add" | "detector_update_config" | "detector_delete", ... }
+ *     { type: "switch_add" | "switch_update_config" | "switch_delete", ... }
  *
  * ─── Browser protocol ────────────────────────────────────────
  *   Browser → Server: { type: "subscribe", userId }
@@ -136,13 +136,13 @@ interface RelayAckMsg {
 interface PingAckMsg {
 	type: "ping_ack";
 }
-interface DetectorTriggerMsg {
-	type: "detector_trigger";
+interface SwitchTriggerMsg {
+	type: "switch_trigger";
 	linkedRelayId: string;
 	desiredState: boolean;
 	isToggle: boolean;
 }
-type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | DetectorTriggerMsg;
+type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg;
 
 interface BrowserSubscribeMsg {
 	type: "subscribe";
@@ -227,8 +227,8 @@ const httpServer = createServer((req, res) => {
 		return;
 	}
 
-	// ── Detector push endpoints ───────────────────────────────
-	for (const url of ["/push-detector-add", "/push-detector-update", "/push-detector-delete"]) {
+	// ── Switch push endpoints ────────────────────────────────
+	for (const url of ["/push-switch-add", "/push-switch-update", "/push-switch-delete"]) {
 		if (req.method === "POST" && req.url === url) {
 			if (!authorized) {
 				res.writeHead(403).end();
@@ -242,9 +242,9 @@ const httpServer = createServer((req, res) => {
 				try {
 					const data = JSON.parse(body) as { deviceId: string; [k: string]: unknown };
 					const typeMap: Record<string, string> = {
-						"/push-detector-add": "detector_add",
-						"/push-detector-update": "detector_update_config",
-						"/push-detector-delete": "detector_delete"
+						"/push-switch-add": "switch_add",
+						"/push-switch-update": "switch_update_config",
+						"/push-switch-delete": "switch_delete"
 					};
 					const pushed = pushToDevice(data.deviceId, { type: typeMap[url], ...data });
 					res.writeHead(200, { "Content-Type": "application/json" });
@@ -399,7 +399,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id, lastSeenAt: new Date() },
 				include: {
 					relays: { orderBy: { order: "asc" } },
-					detectors: { orderBy: { createdAt: "asc" } }
+					switches: { orderBy: { createdAt: "asc" } }
 				}
 			});
 
@@ -414,7 +414,7 @@ function handleDeviceConnection(ws: WebSocket) {
 					type: "auth_ok",
 					deviceId: device.id,
 					relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
-					detectors: device.detectors.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "latching", linkedRelayId: d.linkedRelayId }))
+					switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId }))
 				})
 			);
 
@@ -436,8 +436,8 @@ function handleDeviceConnection(ws: WebSocket) {
 			return;
 		}
 
-		// ── DETECTOR TRIGGER ───────────────────────────────────
-		if (msg.type === "detector_trigger" && authenticatedDeviceId) {
+		// ── SWITCH TRIGGER ────────────────────────────────────
+		if (msg.type === "switch_trigger" && authenticatedDeviceId) {
 			const { linkedRelayId, desiredState, isToggle } = msg;
 
 			const relay = await db.relay.findFirst({
@@ -445,7 +445,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				include: { device: { include: { apiKey: true } } }
 			});
 			if (!relay) {
-				console.log(`[WS] detector_trigger: relay ${linkedRelayId} not found`);
+				console.log(`[WS] switch_trigger: relay ${linkedRelayId} not found`);
 				return;
 			}
 
@@ -454,7 +454,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				include: { apiKey: true }
 			});
 			if (relay.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
-				console.log(`[WS] detector_trigger: cross-user relay access denied`);
+				console.log(`[WS] switch_trigger: cross-user relay access denied`);
 				return;
 			}
 
@@ -469,7 +469,7 @@ function handleDeviceConnection(ws: WebSocket) {
 			const targetWs = deviceSockets.get(relay.deviceId);
 			if (targetWs && targetWs.readyState === WebSocket.OPEN) {
 				targetWs.send(JSON.stringify({ type: "relay_cmd", relayId: relay.id, pin: relay.pin, state: newState }));
-				console.log(`[WS] detector_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
+				console.log(`[WS] switch_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
 			}
 
 			if (deviceUserId) {

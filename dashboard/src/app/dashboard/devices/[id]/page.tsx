@@ -28,6 +28,42 @@ const RELAY_ICONS: Record<string, React.ElementType> = {
 	radio: Radio
 };
 
+type SwitchTypeValue = "two_way" | "three_way" | "momentary";
+
+const TwoWayIcon = ({ className }: { className?: string }) => (
+	<svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+		<circle cx="6" cy="12" r="2" />
+		<circle cx="18" cy="7" r="2" />
+		<line x1="8" y1="11" x2="16" y2="7.5" />
+		<line x1="18" y1="9" x2="18" y2="17" strokeDasharray="2 2" opacity="0.4" />
+	</svg>
+);
+
+const ThreeWayIcon = ({ className }: { className?: string }) => (
+	<svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+		<circle cx="6" cy="12" r="2" />
+		<circle cx="18" cy="7" r="2" />
+		<circle cx="18" cy="17" r="2" />
+		<line x1="8" y1="11" x2="16" y2="7.5" />
+	</svg>
+);
+
+const MomentaryIcon = ({ className }: { className?: string }) => (
+	<svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+		<line x1="4" y1="17" x2="9" y2="17" />
+		<line x1="9" y1="17" x2="9" y2="9" />
+		<line x1="9" y1="9" x2="15" y2="9" />
+		<line x1="15" y1="9" x2="15" y2="17" />
+		<line x1="15" y1="17" x2="20" y2="17" />
+	</svg>
+);
+
+const SWITCH_TYPES: { value: SwitchTypeValue; label: string; desc: string; icon: React.ReactNode }[] = [
+	{ value: "two_way", label: "Two-way", desc: "Toggle switch (VCC \u2194 floating)", icon: <TwoWayIcon className="w-5 h-5" /> },
+	{ value: "three_way", label: "Three-way", desc: "SPDT switch (VCC \u2194 GND)", icon: <ThreeWayIcon className="w-5 h-5" /> },
+	{ value: "momentary", label: "Momentary", desc: "Push button (press to toggle)", icon: <MomentaryIcon className="w-5 h-5" /> }
+];
+
 const ICON_OPTIONS = Object.keys(RELAY_ICONS);
 
 export default function DeviceDetailPage() {
@@ -70,8 +106,8 @@ export default function DeviceDetailPage() {
 	}, [onDeviceUpdate, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	type DeviceGetOutput = RouterOutputs["device"]["get"];
-	type DetectorItem = RouterOutputs["detector"]["list"][number];
-	type AllRelayItem = RouterOutputs["detector"]["listAllRelays"][number];
+	type SwitchItem = RouterOutputs["switch"]["list"][number];
+	type AllRelayItem = RouterOutputs["switch"]["listAllRelays"][number];
 
 	useEffect(() => {
 		return onRelayUpdate((update) => {
@@ -194,29 +230,29 @@ export default function DeviceDetailPage() {
 		}
 	});
 
-	// ── Detector state & mutations ────────────────────────────
-	const { data: detectorList = [] } = api.detector.list.useQuery({ deviceId: id });
-	const { data: allRelays = [] } = api.detector.listAllRelays.useQuery();
-	const [addingDetector, setAddingDetector] = useState(false);
-	const [newDetector, setNewDetector] = useState({ pin: 36, label: "Switch", switchType: "latching" as "latching" | "momentary", linkedRelayId: "" });
-	const [editingDetectorId, setEditingDetectorId] = useState<string | null>(null);
-	const [editDetector, setEditDetector] = useState({ pin: 36, label: "Switch", switchType: "latching" as "latching" | "momentary", linkedRelayId: "" });
+	// ── Switch state & mutations ────────────────────────────
+	const { data: switchList = [] } = api.switch.list.useQuery({ deviceId: id });
+	const { data: allRelays = [] } = api.switch.listAllRelays.useQuery();
+	const [addingSwitch, setAddingSwitch] = useState(false);
+	const [newSwitch, setNewSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as "two_way" | "three_way" | "momentary", linkedRelayId: "" });
+	const [editingSwitchId, setEditingSwitchId] = useState<string | null>(null);
+	const [editSwitch, setEditSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as "two_way" | "three_way" | "momentary", linkedRelayId: "" });
 
-	const addDetector = api.detector.add.useMutation({
+	const addSwitch = api.switch.add.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
-			void utils.detector.list.invalidate({ deviceId: id });
-			setAddingDetector(false);
-			setNewDetector({ pin: 36, label: "Switch", switchType: "latching", linkedRelayId: "" });
+			void utils.switch.list.invalidate({ deviceId: id });
+			setAddingSwitch(false);
+			setNewSwitch({ pin: 36, label: "Switch", switchType: "two_way", linkedRelayId: "" });
 		}
 	});
-	const updateDetector = api.detector.update.useMutation({
+	const updateSwitch = api.switch.update.useMutation({
 		onSuccess: () => {
-			void utils.detector.list.invalidate({ deviceId: id });
-			setEditingDetectorId(null);
+			void utils.switch.list.invalidate({ deviceId: id });
+			setEditingSwitchId(null);
 		}
 	});
-	const deleteDetector = api.detector.delete.useMutation({ onSuccess: () => void utils.detector.list.invalidate({ deviceId: id }) });
+	const deleteSwitch = api.switch.delete.useMutation({ onSuccess: () => void utils.switch.list.invalidate({ deviceId: id }) });
 
 	// Delete confirm
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
@@ -361,13 +397,13 @@ export default function DeviceDetailPage() {
 				))}
 			</div>
 
-			{/* Tabs: Relays + Detectors + Config */}
+			{/* Tabs: Relays + Switches + Config */}
 			<Tabs defaultValue="relays">
 				<TabsList>
 					<TabsTrigger value="relays">
 						Relays ({device.relays.length}/{appConfig.maxRelaysPerDevice})
 					</TabsTrigger>
-					<TabsTrigger value="detectors">Detectors ({detectorList.length})</TabsTrigger>
+					<TabsTrigger value="switches">Switches ({switchList.length})</TabsTrigger>
 					<TabsTrigger value="config">Device Config</TabsTrigger>
 				</TabsList>
 
@@ -596,30 +632,26 @@ export default function DeviceDetailPage() {
 					)}
 				</TabsContent>
 
-				{/* DETECTORS TAB */}
+				{/* SWITCHES TAB */}
 				<TabsContent
-					value="detectors"
+					value="switches"
 					className="mt-4 space-y-3"
 				>
 					<p className="text-xs text-muted-foreground">
-						Detectors monitor input GPIO pins and toggle a linked relay when the switch state changes.
-						<br />
-						<span className="text-primary font-medium">Latching</span> — toggles on both VCC/GND changes (e.g. toggle switch). &nbsp;
-						<span className="text-primary font-medium">Momentary</span> — toggles on press only (e.g. push button).
-						<br />
-						Pins 34–39 are input-only and ideal for detectors.
+						Switches monitor input GPIO pins and toggle a linked relay when the switch state changes.
+						Pins 34–39 are input-only and ideal for switches.
 					</p>
 
-					{detectorList.map((det: DetectorItem) => (
+					{switchList.map((det: SwitchItem) => (
 						<div
 							key={det.id}
 							className="relay-card p-4"
 						>
-							{editingDetectorId === det.id ? (
+							{editingSwitchId === det.id ? (
 								<div className="space-y-2.5">
 									<Input
-										value={editDetector.label}
-										onChange={(e) => setEditDetector((d) => ({ ...d, label: e.target.value }))}
+										value={editSwitch.label}
+										onChange={(e) => setEditSwitch((d) => ({ ...d, label: e.target.value }))}
 										placeholder="Label"
 										className="h-8 text-sm"
 									/>
@@ -628,8 +660,8 @@ export default function DeviceDetailPage() {
 											<Label className="text-[10px]">GPIO Pin</Label>
 											<Input
 												type="number"
-												value={editDetector.pin}
-												onChange={(e) => setEditDetector((d) => ({ ...d, pin: Number(e.target.value) }))}
+												value={editSwitch.pin}
+												onChange={(e) => setEditSwitch((d) => ({ ...d, pin: Number(e.target.value) }))}
 												className="h-8 text-sm mt-0.5"
 												min={0}
 												max={39}
@@ -637,22 +669,28 @@ export default function DeviceDetailPage() {
 										</div>
 										<div className="flex-1">
 											<Label className="text-[10px]">Switch Type</Label>
-											<select
-												value={editDetector.switchType}
-												onChange={(e) => setEditDetector((d) => ({ ...d, switchType: e.target.value as "latching" | "momentary" }))}
-												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-											>
-												<option value="latching">Latching — toggles on both VCC↔GND changes</option>
-												<option value="momentary">Momentary — toggles only on press (VCC)</option>
-											</select>
+											<div className="flex gap-1 mt-0.5">
+												{SWITCH_TYPES.map((st) => (
+													<button
+														key={st.value}
+														type="button"
+														onClick={() => setEditSwitch((d) => ({ ...d, switchType: st.value }))}
+														className={`flex-1 flex flex-col items-center gap-0.5 rounded-md border px-1.5 py-1.5 text-[10px] transition-colors ${editSwitch.switchType === st.value ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground hover:border-primary/40"}`}
+														title={st.desc}
+													>
+														{st.icon}
+														<span className="font-medium">{st.label}</span>
+													</button>
+												))}
+											</div>
 										</div>
 									</div>
 									<div className="flex gap-2">
 										<div className="flex-1">
 											<Label className="text-[10px]">Linked Relay</Label>
 											<select
-												value={editDetector.linkedRelayId}
-												onChange={(e) => setEditDetector((d) => ({ ...d, linkedRelayId: e.target.value }))}
+												value={editSwitch.linkedRelayId}
+												onChange={(e) => setEditSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
 												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
 											>
 												<option value="">— select —</option>
@@ -671,10 +709,10 @@ export default function DeviceDetailPage() {
 										<Button
 											size="sm"
 											className="flex-1 h-7 text-xs"
-											onClick={() => updateDetector.mutate({ detectorId: det.id, ...editDetector })}
-											disabled={updateDetector.isPending || !editDetector.label || !editDetector.linkedRelayId}
+											onClick={() => updateSwitch.mutate({ switchId: det.id, ...editSwitch })}
+											disabled={updateSwitch.isPending || !editSwitch.label || !editSwitch.linkedRelayId}
 										>
-											{updateDetector.isPending ? (
+											{updateSwitch.isPending ? (
 												<Loader2 className="w-3 h-3 animate-spin" />
 											) : (
 												<>
@@ -686,7 +724,7 @@ export default function DeviceDetailPage() {
 											size="sm"
 											variant="ghost"
 											className="h-7 text-xs"
-											onClick={() => setEditingDetectorId(null)}
+											onClick={() => setEditingSwitchId(null)}
 										>
 											Cancel
 										</Button>
@@ -694,7 +732,7 @@ export default function DeviceDetailPage() {
 											size="sm"
 											variant="ghost"
 											className="h-7 text-xs text-destructive hover:text-destructive"
-											onClick={() => deleteDetector.mutate({ detectorId: det.id })}
+											onClick={() => deleteSwitch.mutate({ switchId: det.id })}
 										>
 											<Trash2 className="w-3 h-3" />
 										</Button>
@@ -703,9 +741,12 @@ export default function DeviceDetailPage() {
 							) : (
 								<div className="flex items-center justify-between">
 									<div>
-										<p className="font-semibold text-sm">{det.label}</p>
+										<div className="flex items-center gap-1.5">
+											{(() => { const st = SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way")); return st ? <span className="text-muted-foreground">{st.icon}</span> : null; })()}
+											<p className="font-semibold text-sm">{det.label}</p>
+										</div>
 										<p className="text-xs text-muted-foreground mono mt-0.5">
-											GPIO {det.pin} · {det.switchType ?? "latching"} · →{" "}
+											GPIO {det.pin} · {SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"))?.label ?? det.switchType} · →{" "}
 											{(() => {
 												const r = allRelays.find((x: AllRelayItem) => x.id === det.linkedRelayId);
 												return r ? `${r.deviceName} — ${r.label}` : "unknown";
@@ -714,8 +755,8 @@ export default function DeviceDetailPage() {
 									</div>
 									<button
 										onClick={() => {
-											setEditingDetectorId(det.id);
-											setEditDetector({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "latching") as "latching" | "momentary", linkedRelayId: det.linkedRelayId });
+											setEditingSwitchId(det.id);
+											setEditSwitch({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "two_way") as SwitchTypeValue, linkedRelayId: det.linkedRelayId });
 										}}
 										className="text-muted-foreground hover:text-foreground"
 									>
@@ -726,13 +767,13 @@ export default function DeviceDetailPage() {
 						</div>
 					))}
 
-					{/* Add detector */}
-					{addingDetector ? (
+					{/* Add switch */}
+					{addingSwitch ? (
 						<div className="relay-card p-4 space-y-2.5">
 							<Input
-								value={newDetector.label}
-								onChange={(e) => setNewDetector((d) => ({ ...d, label: e.target.value }))}
-								placeholder="Detector label"
+								value={newSwitch.label}
+								onChange={(e) => setNewSwitch((d) => ({ ...d, label: e.target.value }))}
+								placeholder="Switch label"
 								className="h-8 text-sm"
 								autoFocus
 							/>
@@ -741,8 +782,8 @@ export default function DeviceDetailPage() {
 									<Label className="text-[10px]">GPIO Pin</Label>
 									<Input
 										type="number"
-										value={newDetector.pin}
-										onChange={(e) => setNewDetector((d) => ({ ...d, pin: Number(e.target.value) }))}
+										value={newSwitch.pin}
+										onChange={(e) => setNewSwitch((d) => ({ ...d, pin: Number(e.target.value) }))}
 										className="h-8 text-sm mt-0.5"
 										min={0}
 										max={39}
@@ -750,22 +791,28 @@ export default function DeviceDetailPage() {
 								</div>
 								<div className="flex-1">
 									<Label className="text-[10px]">Switch Type</Label>
-									<select
-										value={newDetector.switchType}
-										onChange={(e) => setNewDetector((d) => ({ ...d, switchType: e.target.value as "latching" | "momentary" }))}
-										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-									>
-										<option value="latching">Latching — toggles on both VCC↔GND changes</option>
-										<option value="momentary">Momentary — toggles only on press (VCC)</option>
-									</select>
+									<div className="flex gap-1 mt-0.5">
+										{SWITCH_TYPES.map((st) => (
+											<button
+												key={st.value}
+												type="button"
+												onClick={() => setNewSwitch((d) => ({ ...d, switchType: st.value }))}
+												className={`flex-1 flex flex-col items-center gap-0.5 rounded-md border px-1.5 py-1.5 text-[10px] transition-colors ${newSwitch.switchType === st.value ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground hover:border-primary/40"}`}
+												title={st.desc}
+											>
+												{st.icon}
+												<span className="font-medium">{st.label}</span>
+											</button>
+										))}
+									</div>
 								</div>
 							</div>
 							<div className="flex gap-2">
 								<div className="flex-1">
 									<Label className="text-[10px]">Linked Relay</Label>
 									<select
-										value={newDetector.linkedRelayId}
-										onChange={(e) => setNewDetector((d) => ({ ...d, linkedRelayId: e.target.value }))}
+										value={newSwitch.linkedRelayId}
+										onChange={(e) => setNewSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
 										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
 									>
 										<option value="">— select —</option>
@@ -784,14 +831,14 @@ export default function DeviceDetailPage() {
 								<Button
 									size="sm"
 									className="flex-1 h-7 text-xs"
-									onClick={() => addDetector.mutate({ deviceId: device.id, ...newDetector })}
-									disabled={addDetector.isPending || !newDetector.label || !newDetector.linkedRelayId}
+									onClick={() => addSwitch.mutate({ deviceId: device.id, ...newSwitch })}
+									disabled={addSwitch.isPending || !newSwitch.label || !newSwitch.linkedRelayId}
 								>
-									{addDetector.isPending ? (
+									{addSwitch.isPending ? (
 										<Loader2 className="w-3 h-3 animate-spin" />
 									) : (
 										<>
-											<Plus className="w-3 h-3" /> Add Detector
+											<Plus className="w-3 h-3" /> Add Switch
 										</>
 									)}
 								</Button>
@@ -799,7 +846,7 @@ export default function DeviceDetailPage() {
 									size="sm"
 									variant="ghost"
 									className="h-7 text-xs"
-									onClick={() => setAddingDetector(false)}
+									onClick={() => setAddingSwitch(false)}
 								>
 									Cancel
 								</Button>
@@ -810,10 +857,10 @@ export default function DeviceDetailPage() {
 							variant="outline"
 							size="sm"
 							className="w-full"
-							onClick={() => setAddingDetector(true)}
+							onClick={() => setAddingSwitch(true)}
 							disabled={allRelays.length === 0}
 						>
-							<Plus className="w-3.5 h-3.5" /> Add Detector
+							<Plus className="w-3.5 h-3.5" /> Add Switch
 							{device.relays.length === 0 && <span className="ml-2 text-muted-foreground">(add a relay to any device first)</span>}
 						</Button>
 					)}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-ESP Hub is a full-stack IoT platform for controlling ESP32 relay modules via a web dashboard. Users register ESP32 devices, configure GPIO relay outputs and detector inputs, and toggle relays in real-time through WebSocket communication. The system supports cross-device detector→relay linking (a switch on one ESP32 can control a relay on another).
+ESP Hub is a full-stack IoT platform for controlling ESP32 relay modules via a web dashboard. Users register ESP32 devices, configure GPIO relay outputs and switch inputs, and toggle relays in real-time through WebSocket communication. The system supports cross-device switch→relay linking (a switch on one ESP32 can control a relay on another).
 
 ## Architecture
 
@@ -11,11 +11,11 @@ ESP Hub is a full-stack IoT platform for controlling ESP32 relay modules via a w
 │   ESP32      │◄────────────────────────►│   WS Server              │
 │  (Arduino)   │  auth, ping, relay_cmd,   │   (standalone Node.js)   │
 │              │  relay_ack, ping_ack,      │                          │
-│              │  detector_trigger          │   HTTP endpoints:        │
+│              │  switch_trigger            │   HTTP endpoints:        │
 └──────────────┘                           │   /push-relay            │
                                            │   /push-relay-update     │
 ┌──────────────┐      WS (/browser)       │   /push-relay-add        │
-│   Browser    │◄────────────────────────►│   /push-detector-*       │
+│   Browser    │◄────────────────────────►│   /push-switch-*         │
 │   (React)    │  subscribe, device_update,│   /ping-device           │
 │              │  relay_update             └──────────┬───────────────┘
 └──────┬───────┘                                      │
@@ -23,7 +23,7 @@ ESP Hub is a full-stack IoT platform for controlling ESP32 relay modules via a w
        ▼                                              ▼
 ┌──────────────────────────────────────────────────────┐
 │   Next.js App (port 3000)                            │
-│   tRPC routers: device, detector, apiKey, user       │
+│   tRPC routers: device, switch, apiKey, user         │
 │   Auth: NextAuth v5 (credentials + session)          │
 │   DB: Prisma → MongoDB                               │
 └──────────────────────────────────────────────────────┘
@@ -48,7 +48,7 @@ ESP Hub is a full-stack IoT platform for controlling ESP32 relay modules via a w
 - **Framework**: Arduino (PlatformIO, espressif32 platform)
 - **Board**: esp32dev (ESP32 240MHz, 320KB RAM, 4MB Flash)
 - **Libraries**: WebSockets 2.7.3 (links2004), ArduinoJson 7.4.3
-- **Storage**: ESP32 NVS (Preferences library) for config, relay states, detector config
+- **Storage**: ESP32 NVS (Preferences library) for config, relay states, switch config
 - **Architecture**: Header-only modules included from `main.cpp`
 
 ## Project Structure
@@ -75,7 +75,7 @@ src/
       layout.tsx               # Sidebar layout
       page.tsx                 # Overview/home
       devices/page.tsx         # Device list (pings all devices on load)
-      devices/[id]/page.tsx    # Device detail (relays, detectors, config)
+      devices/[id]/page.tsx    # Device detail (relays, switches, config)
       api-keys/page.tsx        # API key management
       settings/page.tsx        # User settings
   components/
@@ -97,7 +97,7 @@ src/
       root.ts                  # Router composition
       routers/
         device.ts              # CRUD + toggleRelay + pingDevice
-        detector.ts            # CRUD for detectors
+        switch.ts              # CRUD for switches
         apiKey.ts              # CRUD for API keys
         user.ts                # User queries
   hooks/useRelativeTime.ts     # "2m ago" ticking hook
@@ -113,13 +113,13 @@ src/main.cpp                   # State machine: S_PORTAL → S_CONNECT → S_REG
 include/
   Config.h                     # Constants (timeouts, max relays, LED pin, NVS namespace)
   Debug.h                      # DBG_* macros (compile to nothing when DEBUG_MODE=0)
-  Storage.h                    # NVS read/write: DeviceConfig, RelayConfig, DetectorConfig
+  Storage.h                    # NVS read/write: DeviceConfig, RelayConfig, SwitchConfig
   StatusLed.h                  # LED blink patterns (fast=AP, slow=connecting, solid=running)
   CaptivePortal.h              # WiFi AP + DNS + web form for initial config
-  HubClient.h                  # WebSocket client: auth, ping/sync, relay commands, detector triggers
+  HubClient.h                  # WebSocket client: auth, ping/sync, relay commands, switch triggers
   RelayManager.h               # GPIO output management, NVS persistence, applyServerConfig
-  DetectorManager.h            # Input pin monitoring: latching (poll) + momentary (ISR)
-  DetectorTypes.h              # Enums: DetectorMode, DetectorPull, DetectorSwitch; DetectorConfig struct
+  SwitchManager.h              # Input pin monitoring: two-way/three-way (poll) + momentary (ISR)
+  SwitchTypes.h                # Enums: SwitchType; SwitchConfig struct
 ```
 
 ## Database Schema (Prisma/MongoDB)
@@ -127,9 +127,9 @@ include/
 ```prisma
 model User       { id, name, email, passwordHash, accounts[], sessions[], apiKeys[] }
 model ApiKey     { id, key (unique), label, active, lastUsedAt, userId → User, devices[] }
-model Device     { id, name, macAddress (unique), firmwareVersion?, ssid?, notes?, apiKeyId → ApiKey, relays[], detectors[] }
+model Device     { id, name, macAddress (unique), firmwareVersion?, ssid?, notes?, apiKeyId → ApiKey, relays[], switches[] }
 model Relay      { id, pin, label, state, order, icon, deviceId → Device }
-model Detector   { id, pin, label, mode ("toggle"|"follow"), switchType ("latching"|"momentary"), linkedRelayId, pullMode ("pullup"|"pulldown"), deviceId → Device }
+model Switch     { id, pin, label, switchType ("two_way"|"three_way"|"momentary"), linkedRelayId, deviceId → Device }
 ```
 
 **Note**: `lastSeenAt` was removed from Device. Online status is determined on-demand via `pingDevice`.
@@ -138,23 +138,23 @@ model Detector   { id, pin, label, mode ("toggle"|"follow"), switchType ("latchi
 
 ### ESP32 ↔ WS Server
 
-**ESP32 → Server:** | Message | Fields | Purpose | |---------|--------|---------| | `auth` | apiKey, macAddress | Authenticate on connect | | `ping_ack` | (none) | Response to server ping | | `relay_ack` | relayId, state | Confirm GPIO was set | | `detector_trigger` | linkedRelayId, desiredState, isToggle | Physical switch event |
+**ESP32 → Server:** | Message | Fields | Purpose | |---------|--------|---------| | `auth` | apiKey, macAddress | Authenticate on connect | | `ping_ack` | (none) | Response to server ping | | `relay_ack` | relayId, state | Confirm GPIO was set | | `switch_trigger` | linkedRelayId, desiredState, isToggle | Physical switch event |
 
-**Server → ESP32:** | Message | Fields | Purpose | |---------|--------|---------| | `auth_ok` | deviceId, relays[], detectors[] | Full config on auth | | `auth_fail` | reason | Bad API key | | `ping` | relays: [{id, pin, state}] | Keepalive + authoritative state sync (every 30s) | | `relay_cmd` | relayId, pin, state | Toggle a relay | | `relay_add` | relay: {id, pin, label, state, icon} | New relay added from dashboard | | `relay_update_config` | relay: {id, pin, label, state, icon} | Relay config edited | | `detector_add` | detector: {id, pin, label, mode, pullMode, switchType, linkedRelayId} | New detector | | `detector_update_config` | detector: {...} | Detector config edited | | `detector_delete` | detectorId | Detector removed |
+**Server → ESP32:** | Message | Fields | Purpose | |---------|--------|---------| | `auth_ok` | deviceId, relays[], switches[] | Full config on auth | | `auth_fail` | reason | Bad API key | | `ping` | relays: [{id, pin, state}] | Keepalive + authoritative state sync (every 30s) | | `relay_cmd` | relayId, pin, state | Toggle a relay | | `relay_add` | relay: {id, pin, label, state, icon} | New relay added from dashboard | | `relay_update_config` | relay: {id, pin, label, state, icon} | Relay config edited | | `switch_add` | switch: {id, pin, label, switchType, linkedRelayId} | New switch | | `switch_update_config` | switch: {...} | Switch config edited | | `switch_delete` | switchId | Switch removed |
 
 ### Browser ↔ WS Server
 
 **Browser → Server:** `{ type: "subscribe", userId }` **Server → Browser:**
 
 - `device_update` — { deviceId, relays: [{id, state}] } — sent on auth + ping
-- `relay_update` — { deviceId, relayId, state } — sent on relay_ack + detector_trigger
+- `relay_update` — { deviceId, relayId, state } — sent on relay_ack + switch_trigger
 
 ### Internal HTTP (tRPC → WS Server, port 4001)
 
 - `POST /push-relay` — toggle relay command
 - `POST /push-relay-add` — new relay notification
 - `POST /push-relay-update` — relay config change notification
-- `POST /push-detector-add|update|delete` — detector lifecycle
+- `POST /push-switch-add|update|delete` — switch lifecycle
 - `POST /ping-device` — on-demand ping, returns { online: true/false }
 
 All endpoints require `x-internal-secret` header matching `WS_SECRET` env var.
@@ -173,9 +173,9 @@ All endpoints require `x-internal-secret` header matching `WS_SECRET` env var.
 - `addRelay` — creates relay + pushes to ESP32
 - `deleteRelay`
 
-### detector router
+### switch router
 
-- `list` — all detectors for a device
+- `list` — all switches for a device
 - `listAllRelays` — all relays across all user devices (for cross-device linking)
 - `add` — create + push to ESP32 (includes switchType)
 - `update` — edit + push to ESP32 (includes switchType)
@@ -200,14 +200,14 @@ setup()
   │   ├─ Yes → state = S_CONNECT
   │   └─ No  → state = S_PORTAL
   ├─ relays.begin()
-  └─ detectors.begin(onDetectorTriggered)
+  └─ switches.begin(onSwitchTriggered)
 
 loop() state machine:
   S_PORTAL  → CaptivePortal (AP mode, DNS, web form) → saves config → reboot
   S_CONNECT → connectWiFi() → success → S_REGISTER, fail 3x → S_PORTAL
   S_REGISTER → hub.begin() + hub.registerDevice() (HTTP POST /api/esp/register)
               → hub.connectWebSocket() → S_RUN
-  S_RUN     → hub.loop() + detectors.loop() + WiFi watchdog + BOOT button check
+  S_RUN     → hub.loop() + switches.loop() + WiFi watchdog + BOOT button check
 ```
 
 ## ESP32 Runtime (S_RUN)
@@ -232,20 +232,22 @@ loop() state machine:
 4. WS server writes DB + broadcasts `relay_update` to browsers
 5. Browser shows "confirmed" only if that client initiated the toggle
 
-### Detector Trigger Flow
+### Switch Trigger Flow
 
-1. Physical switch → ISR (momentary) or poll (latching) → `onDetectorTriggered` callback
-2. ESP32 sends `detector_trigger` with linkedRelayId + toggle/follow mode
+1. Physical switch → ISR (momentary) or poll (two-way/three-way) → `onSwitchTriggered` callback
+2. ESP32 sends `switch_trigger` with linkedRelayId + isToggle
 3. WS server looks up relay (possibly on different device), writes DB, pushes `relay_cmd` to target device
 4. Broadcasts `relay_update` to browsers
 
-## Detector Manager Details
+## Switch Manager Details
 
-Two switch types with different strategies:
+Three switch types with different strategies:
 
-**Latching (SWITCH_LATCHING):** Poll-based with 50ms software debounce. Fires on any stable state change. Uses internal pullup/pulldown.
+**Two-way (SWITCH_TWO_WAY):** SPST switch (VCC ↔ floating). `INPUT_PULLDOWN`. Poll-based with 50ms software debounce. Toggles on any stable state change.
 
-**Momentary (SWITCH_MOMENTARY):** Interrupt-driven (RISING edge). Key features:
+**Three-way (SWITCH_THREE_WAY):** SPDT switch (VCC ↔ GND). `INPUT` (no pull — pin always driven). Same poll+debounce logic as two-way. Toggles on any stable state change.
+
+**Momentary (SWITCH_MOMENTARY):** Push button. `INPUT_PULLDOWN` + ISR on RISING edge. Key features:
 
 - ISR-level debounce (80ms) filters contact bounce
 - **Release gate**: after firing, pin must return to LOW before accepting next trigger (prevents release bounce double-triggers)
@@ -256,7 +258,7 @@ Two switch types with different strategies:
 
 ## Key GPIO Notes
 
-**Best pins for relays and detectors**: 4, 5, 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33
+**Best pins for relays and switches**: 4, 5, 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33
 
 **Avoid**: GPIO 0 (boot), 1/3 (UART), 6-11 (SPI flash)
 
@@ -295,6 +297,6 @@ pio device monitor
 - **No `lastSeenAt` in DB**. Online status is purely on-demand via `pingDevice` tRPC mutation → WS server `/ping-device` → `ping_ack` from ESP32.
 - **No periodic heartbeat from ESP32**. Server pings every 30s carrying authoritative state. ESP32 just responds.
 - **Ping serves dual purpose**: TCP keepalive (prevents NAT timeout) + relay state sync.
-- **Cross-device detectors**: A detector on Device A can link to a relay on Device B (same user). The WS server resolves the cross-device routing.
+- **Cross-device switches**: A switch on Device A can link to a relay on Device B (same user). The WS server resolves the cross-device routing.
 - **Optimistic UI**: Relay toggles update UI immediately. `relay_ack` confirms. Timeout after 5s rolls back.
 - **NVS persistence**: ESP32 stores relay states in NVS flash. On boot, loads cached states immediately so relays don't flicker. Server config overrides on connect.

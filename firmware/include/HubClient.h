@@ -5,8 +5,8 @@
 #include <ArduinoJson.h>
 #include "Storage.h"
 #include "RelayManager.h"
-#include "DetectorTypes.h"
-#include "DetectorManager.h"
+#include "SwitchTypes.h"
+#include "SwitchManager.h"
 #include "Debug.h"
 #include "Config.h"
 
@@ -16,11 +16,11 @@ public:
     bool connected = false;
     bool authenticated = false;
 
-    void begin(DeviceConfig &cfg, RelayManager &relays, DetectorManager &detectors)
+    void begin(DeviceConfig &cfg, RelayManager &relays, SwitchManager &switches)
     {
         _cfg = &cfg;
         _relays = &relays;
-        _detectors = &detectors;
+        _switches = &switches;
     }
 
     // ── REST registration ─────────────────────────────────────
@@ -154,38 +154,38 @@ public:
         _resetState();
     }
 
-    // Public so main.cpp detector callback can send acks directly
+    // Public so main.cpp switch callback can send acks directly
     void sendRelayAck(const String &relayId, bool state)
     {
         _sendRelayAck(relayId, state);
     }
 
-    // Send detector trigger to server — server resolves cross-device relay
-    void sendDetectorTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
+    // Send switch trigger to server — server resolves cross-device relay
+    void sendSwitchTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
     {
         if (!authenticated)
         {
-            DBG_WARN("detector_trigger: not authenticated — ignored");
+            DBG_WARN("switch_trigger: not authenticated — ignored");
             return;
         }
         JsonDocument doc;
-        doc["type"] = "detector_trigger";
+        doc["type"] = "switch_trigger";
         doc["linkedRelayId"] = linkedRelayId;
         doc["desiredState"] = desiredState;
         doc["isToggle"] = isToggle;
-        DBG_WS("→ detector_trigger relay=%s toggle=%d", linkedRelayId.c_str(), isToggle);
+        DBG_WS("→ switch_trigger relay=%s toggle=%d", linkedRelayId.c_str(), isToggle);
         _send(doc);
     }
 
 private:
     static constexpr uint16_t WS_PORT_OVERRIDE = 4001;
-    static constexpr const char *FIRMWARE_VERSION = "1.0.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.2.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
     DeviceConfig *_cfg = nullptr;
     RelayManager *_relays = nullptr;
-    DetectorManager *_detectors = nullptr;
+    SwitchManager *_switches = nullptr;
     uint32_t _lastActivity = 0;
 
     void _resetState()
@@ -322,23 +322,23 @@ private:
             _relays->applyServerConfig(rBuf, rCount);
             _relays->printAll();
 
-            // Apply detectors
-            JsonArray darr = doc["detectors"].as<JsonArray>();
-            DetectorConfig dBuf[MAX_DETECTORS];
-            uint8_t dCount = 0;
+            // Apply switches
+            JsonArray darr = doc["switches"].as<JsonArray>();
+            SwitchConfig swBuf[MAX_SWITCHES];
+            uint8_t swCount = 0;
             for (JsonObject d : darr)
             {
-                if (dCount >= MAX_DETECTORS)
+                if (swCount >= MAX_SWITCHES)
                     break;
-                dBuf[dCount].id = d["id"].as<String>();
-                dBuf[dCount].pin = d["pin"].as<uint8_t>();
-                dBuf[dCount].label = d["label"].as<String>();
-                dBuf[dCount].switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
-                dBuf[dCount].linkedRelayId = d["linkedRelayId"].as<String>();
-                dCount++;
+                swBuf[swCount].id = d["id"].as<String>();
+                swBuf[swCount].pin = d["pin"].as<uint8_t>();
+                swBuf[swCount].label = d["label"].as<String>();
+                swBuf[swCount].switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
+                swBuf[swCount].linkedRelayId = d["linkedRelayId"].as<String>();
+                swCount++;
             }
-            _detectors->applyServerConfig(dBuf, dCount);
-            DBG_WS("auth_ok — %d relay(s)  %d detector(s)", rCount, dCount);
+            _switches->applyServerConfig(swBuf, swCount);
+            DBG_WS("auth_ok — %d relay(s)  %d switch(es)", rCount, swCount);
         }
 
         else if (strcmp(type, "auth_fail") == 0)
@@ -459,52 +459,52 @@ private:
             DBG_WARN("relay_update_config: id=%s not found", id.c_str());
         }
 
-        else if (strcmp(type, "detector_add") == 0)
+        else if (strcmp(type, "switch_add") == 0)
         {
             if (!authenticated)
             {
-                DBG_WARN("detector_add before auth — ignored");
+                DBG_WARN("switch_add before auth — ignored");
                 return;
             }
-            JsonObject d = doc["detector"].as<JsonObject>();
-            DetectorConfig nd;
+            JsonObject d = doc["switch"].as<JsonObject>();
+            SwitchConfig nd;
             nd.id = d["id"].as<String>();
             nd.pin = d["pin"].as<uint8_t>();
             nd.label = d["label"].as<String>();
-            nd.switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
+            nd.switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
             nd.linkedRelayId = d["linkedRelayId"].as<String>();
-            _detectors->add(nd);
-            DBG_WS("detector_add: id=%s pin=%d", nd.id.c_str(), nd.pin);
+            _switches->add(nd);
+            DBG_WS("switch_add: id=%s pin=%d", nd.id.c_str(), nd.pin);
         }
 
-        else if (strcmp(type, "detector_update_config") == 0)
+        else if (strcmp(type, "switch_update_config") == 0)
         {
             if (!authenticated)
             {
-                DBG_WARN("detector_update_config before auth — ignored");
+                DBG_WARN("switch_update_config before auth — ignored");
                 return;
             }
-            JsonObject d = doc["detector"].as<JsonObject>();
-            DetectorConfig updated;
+            JsonObject d = doc["switch"].as<JsonObject>();
+            SwitchConfig updated;
             updated.id = d["id"].as<String>();
             updated.pin = d["pin"].as<uint8_t>();
             updated.label = d["label"].as<String>();
-            updated.switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
+            updated.switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
             updated.linkedRelayId = d["linkedRelayId"].as<String>();
-            _detectors->updateById(updated.id, updated);
-            DBG_WS("detector_update_config: id=%s pin=%d", updated.id.c_str(), updated.pin);
+            _switches->updateById(updated.id, updated);
+            DBG_WS("switch_update_config: id=%s pin=%d", updated.id.c_str(), updated.pin);
         }
 
-        else if (strcmp(type, "detector_delete") == 0)
+        else if (strcmp(type, "switch_delete") == 0)
         {
             if (!authenticated)
             {
-                DBG_WARN("detector_delete before auth — ignored");
+                DBG_WARN("switch_delete before auth — ignored");
                 return;
             }
-            String detectorId = doc["detectorId"].as<String>();
-            _detectors->deleteById(detectorId);
-            DBG_WS("detector_delete: id=%s", detectorId.c_str());
+            String switchId = doc["switchId"].as<String>();
+            _switches->deleteById(switchId);
+            DBG_WS("switch_delete: id=%s", switchId.c_str());
         }
 
         else

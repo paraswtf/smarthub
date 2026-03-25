@@ -3,16 +3,16 @@
 #include "Config.h"
 #include "Debug.h"
 #include "Storage.h"
-#include "DetectorTypes.h"
+#include "SwitchTypes.h"
 
-// Callback type — called when a detector triggers with (relayId, newState)
-using DetectorCallback = void (*)(const String &relayId, bool newState, bool isToggle);
+// Callback type — called when a switch triggers with (relayId, newState)
+using SwitchCallback = void (*)(const String &relayId, bool newState, bool isToggle);
 
 // ── ISR state (file-scope, not inside a class) ────────────────────
 // Xtensa IRAM literal-pool relocations fail for C++ static class
 // methods. Plain free functions link correctly.
 static DRAM_ATTR volatile uint8_t _det_isrFlags = 0;
-static DRAM_ATTR volatile uint32_t _det_isrTimestamp[MAX_DETECTORS] = {0};
+static DRAM_ATTR volatile uint32_t _det_isrTimestamp[MAX_SWITCHES] = {0};
 static constexpr uint32_t DET_ISR_DEBOUNCE_MS = 80;
 
 static void IRAM_ATTR _detMomentaryISR(void *arg)
@@ -26,7 +26,7 @@ static void IRAM_ATTR _detMomentaryISR(void *arg)
 }
 
 /**
- * DetectorManager — input-pin monitoring for physical switches.
+ * SwitchManager — input-pin monitoring for physical switches.
  *
  * Two strategies depending on switch type:
  *
@@ -37,16 +37,16 @@ static void IRAM_ATTR _detMomentaryISR(void *arg)
  *               the edge instantly; loop() processes the flag with a
  *               cooldown to reject EMI / contact-bounce noise.
  */
-class DetectorManager
+class SwitchManager
 {
 public:
     uint8_t count = 0;
-    DetectorConfig detectors[MAX_DETECTORS];
+    SwitchConfig switches[MAX_SWITCHES];
 
-    void begin(DetectorCallback cb)
+    void begin(SwitchCallback cb)
     {
         _callback = cb;
-        for (uint8_t i = 0; i < MAX_DETECTORS; i++)
+        for (uint8_t i = 0; i < MAX_SWITCHES; i++)
         {
             _lastState[i] = -1;
             _pendingState[i] = -1;
@@ -57,23 +57,23 @@ public:
             _waitRelease[i] = false;
             _det_isrFlags &= ~(1 << i);
         }
-        count = Storage::loadDetectors(detectors);
-        DBG_RELAY("Loaded %d detector(s) from NVS", count);
+        count = Storage::loadSwitches(switches);
+        DBG_RELAY("Loaded %d switch(es) from NVS", count);
         for (uint8_t i = 0; i < count; i++)
             _initPin(i);
     }
 
-    void applyServerConfig(const DetectorConfig newDetectors[], uint8_t newCount)
+    void applyServerConfig(const SwitchConfig newSwitches[], uint8_t newCount)
     {
         // Detach all existing interrupts before reconfiguring
         for (uint8_t i = 0; i < count; i++)
             _releasePin(i);
 
         count = newCount;
-        DBG_RELAY("Applying %d detector(s) from server", count);
+        DBG_RELAY("Applying %d switch(es) from server", count);
         for (uint8_t i = 0; i < count; i++)
         {
-            detectors[i] = newDetectors[i];
+            switches[i] = newSwitches[i];
             _lastState[i] = -1;
             _pendingState[i] = -1;
             _lastChange[i] = 0;
@@ -84,15 +84,15 @@ public:
             _det_isrFlags &= ~(1 << i);
             _initPin(i);
         }
-        Storage::saveDetectors(detectors, count);
+        Storage::saveSwitches(switches, count);
     }
 
-    // Add a single detector without rebuilding everything
-    void add(const DetectorConfig &d)
+    // Add a single switch without rebuilding everything
+    void add(const SwitchConfig &d)
     {
-        if (count >= MAX_DETECTORS)
+        if (count >= MAX_SWITCHES)
             return;
-        detectors[count] = d;
+        switches[count] = d;
         _lastState[count] = -1;
         _pendingState[count] = -1;
         _lastChange[count] = 0;
@@ -103,19 +103,20 @@ public:
         _det_isrFlags &= ~(1 << count);
         _initPin(count);
         count++;
-        Storage::saveDetectors(detectors, count);
-        DBG_RELAY("Detector added: id=%s pin=%d type=%s", d.id.c_str(), d.pin, d.switchType == SWITCH_MOMENTARY ? "momentary" : "latching");
+        Storage::saveSwitches(switches, count);
+        DBG_RELAY("Switch added: id=%s pin=%d type=%s", d.id.c_str(), d.pin,
+                  d.switchType == SWITCH_MOMENTARY ? "momentary" : d.switchType == SWITCH_THREE_WAY ? "three_way" : "two_way");
     }
 
-    // Update an existing detector by id
-    void updateById(const String &id, const DetectorConfig &updated)
+    // Update an existing switch by id
+    void updateById(const String &id, const SwitchConfig &updated)
     {
         for (uint8_t i = 0; i < count; i++)
         {
-            if (detectors[i].id == id)
+            if (switches[i].id == id)
             {
                 _releasePin(i);
-                detectors[i] = updated;
+                switches[i] = updated;
                 _lastState[i] = -1;
                 _pendingState[i] = -1;
                 _lastMomentaryFire[i] = 0;
@@ -124,25 +125,25 @@ public:
                 _waitRelease[i] = false;
                 _det_isrFlags &= ~(1 << i);
                 _initPin(i);
-                Storage::saveDetectors(detectors, count);
-                DBG_RELAY("Detector updated: id=%s pin=%d", id.c_str(), updated.pin);
+                Storage::saveSwitches(switches, count);
+                DBG_RELAY("Switch updated: id=%s pin=%d", id.c_str(), updated.pin);
                 return;
             }
         }
     }
 
-    // Remove a detector by id
+    // Remove a switch by id
     void deleteById(const String &id)
     {
         for (uint8_t i = 0; i < count; i++)
         {
-            if (detectors[i].id == id)
+            if (switches[i].id == id)
             {
                 _releasePin(i);
                 // Shift array left
                 for (uint8_t j = i; j < count - 1; j++)
                 {
-                    detectors[j] = detectors[j + 1];
+                    switches[j] = switches[j + 1];
                     _lastState[j] = _lastState[j + 1];
                     _pendingState[j] = _pendingState[j + 1];
                     _lastChange[j] = _lastChange[j + 1];
@@ -151,17 +152,17 @@ public:
                     _confirmTotal[j] = _confirmTotal[j + 1];
                     _waitRelease[j] = _waitRelease[j + 1];
                     // Re-attach interrupt with updated index for momentary
-                    if (detectors[j].switchType == SWITCH_MOMENTARY && detectors[j].pin != 0)
+                    if (switches[j].switchType == SWITCH_MOMENTARY && switches[j].pin != 0)
                     {
-                        detachInterrupt(digitalPinToInterrupt(detectors[j].pin));
+                        detachInterrupt(digitalPinToInterrupt(switches[j].pin));
                         attachInterruptArg(
-                            digitalPinToInterrupt(detectors[j].pin),
+                            digitalPinToInterrupt(switches[j].pin),
                             _detMomentaryISR, (void *)(uintptr_t)j, RISING);
                     }
                 }
                 count--;
-                Storage::saveDetectors(detectors, count);
-                DBG_RELAY("Detector deleted: id=%s", id.c_str());
+                Storage::saveSwitches(switches, count);
+                DBG_RELAY("Switch deleted: id=%s", id.c_str());
                 return;
             }
         }
@@ -180,19 +181,19 @@ public:
 
         for (uint8_t i = 0; i < count; i++)
         {
-            if (detectors[i].pin == 0)
+            if (switches[i].pin == 0)
                 continue;
 
             // ── MOMENTARY: interrupt-driven ────────────────────────
-            if (detectors[i].switchType == SWITCH_MOMENTARY)
+            if (switches[i].switchType == SWITCH_MOMENTARY)
             {
-                bool needsConfirm = _isInputOnly(detectors[i].pin);
+                bool needsConfirm = _isInputOnly(switches[i].pin);
 
                 // ── Release gate: pin must return to LOW before next trigger ─
                 // Prevents release-bounce from firing a second trigger.
                 if (_waitRelease[i])
                 {
-                    if (digitalRead(detectors[i].pin) == LOW)
+                    if (digitalRead(switches[i].pin) == LOW)
                         _waitRelease[i] = false;
                     // Drain any ISR flags that fired during the press/release
                     _det_isrFlags &= ~(1 << i);
@@ -202,7 +203,7 @@ public:
                 // ── Already confirming? (input-only pins only) ──────
                 if (_confirmTotal[i] > 0)
                 {
-                    _confirmHigh[i] += (digitalRead(detectors[i].pin) == HIGH) ? 1 : 0;
+                    _confirmHigh[i] += (digitalRead(switches[i].pin) == HIGH) ? 1 : 0;
                     _confirmTotal[i]++;
 
                     if (_confirmTotal[i] < CONFIRM_SAMPLES)
@@ -232,22 +233,22 @@ public:
                 if (needsConfirm)
                 {
                     // Input-only pin (34-39): no internal pull, need confirmation
-                    _confirmHigh[i] = (digitalRead(detectors[i].pin) == HIGH) ? 1 : 0;
+                    _confirmHigh[i] = (digitalRead(switches[i].pin) == HIGH) ? 1 : 0;
                     _confirmTotal[i] = 1;
                 }
                 else
                 {
                     // Pin 0-33: internal pulldown works — verify pin is still
                     // HIGH (filters crosstalk spikes from adjacent wires)
-                    if (digitalRead(detectors[i].pin) == HIGH)
+                    if (digitalRead(switches[i].pin) == HIGH)
                         _fireMomentary(i, now, relayStates, relayIds, relayCount);
                 }
                 continue;
             }
 
             // ── LATCHING: poll + debounce ──────────────────────────
-            int raw = digitalRead(detectors[i].pin);
-            int logical = !raw; // always INPUT_PULLUP for latching
+            int raw = digitalRead(switches[i].pin);
+            int logical = raw; // always INPUT_PULLDOWN for latching
 
             if (_lastState[i] == -1)
             {
@@ -270,7 +271,7 @@ public:
                 continue;
 
             _lastState[i] = logical;
-            DBG_RELAY("Latching[%d] pin=%d → %s", i, detectors[i].pin, logical ? "HIGH" : "LOW");
+            DBG_RELAY("Latching[%d] pin=%d → %s", i, switches[i].pin, logical ? "HIGH" : "LOW");
 
             if (!_callback)
                 continue;
@@ -279,34 +280,34 @@ public:
             bool currentState = false;
             for (uint8_t j = 0; j < relayCount; j++)
             {
-                if (relayIds[j] == detectors[i].linkedRelayId)
+                if (relayIds[j] == switches[i].linkedRelayId)
                 {
                     currentState = relayStates[j];
                     break;
                 }
             }
-            _callback(detectors[i].linkedRelayId, !currentState, true);
+            _callback(switches[i].linkedRelayId, !currentState, true);
         }
     }
 
 private:
-    DetectorCallback _callback = nullptr;
+    SwitchCallback _callback = nullptr;
 
     // Latching state
-    int _lastState[MAX_DETECTORS];
-    int _pendingState[MAX_DETECTORS];
-    uint32_t _lastChange[MAX_DETECTORS];
+    int _lastState[MAX_SWITCHES];
+    int _pendingState[MAX_SWITCHES];
+    uint32_t _lastChange[MAX_SWITCHES];
 
     // Momentary interrupt state
-    uint32_t _lastMomentaryFire[MAX_DETECTORS]; // last time callback actually fired
-    bool _waitRelease[MAX_DETECTORS];           // true = pin must go LOW before next trigger
+    uint32_t _lastMomentaryFire[MAX_SWITCHES]; // last time callback actually fired
+    bool _waitRelease[MAX_SWITCHES];           // true = pin must go LOW before next trigger
 
     // Non-blocking confirmation: samples accumulated across loop() iterations.
     // A real 200-400ms VCC press reads HIGH on every sample.
     // A floating pin (GPIO 34-39 without pull resistor) reads ~50% HIGH —
     // fails the threshold.  Zero blocking, one digitalRead per loop pass.
-    uint8_t _confirmHigh[MAX_DETECTORS];  // HIGH reads during confirmation
-    uint8_t _confirmTotal[MAX_DETECTORS]; // total reads (0 = not confirming)
+    uint8_t _confirmHigh[MAX_SWITCHES];  // HIGH reads during confirmation
+    uint8_t _confirmTotal[MAX_SWITCHES]; // total reads (0 = not confirming)
 
     static constexpr uint32_t MOMENTARY_COOLDOWN_MS = 150; // min gap between accepted triggers
     static constexpr uint8_t CONFIRM_SAMPLES = 6;          // total reads before evaluating (input-only pins)
@@ -322,7 +323,7 @@ private:
     {
         _lastMomentaryFire[i] = now;
         _waitRelease[i] = true; // must see LOW before next trigger
-        DBG_RELAY("Momentary[%d] pin=%d TRIGGERED", i, detectors[i].pin);
+        DBG_RELAY("Momentary[%d] pin=%d TRIGGERED", i, switches[i].pin);
 
         if (!_callback)
             return;
@@ -331,58 +332,65 @@ private:
         bool currentState = false;
         for (uint8_t j = 0; j < relayCount; j++)
         {
-            if (relayIds[j] == detectors[i].linkedRelayId)
+            if (relayIds[j] == switches[i].linkedRelayId)
             {
                 currentState = relayStates[j];
                 break;
             }
         }
-        _callback(detectors[i].linkedRelayId, !currentState, true);
+        _callback(switches[i].linkedRelayId, !currentState, true);
     }
 
     void _initPin(uint8_t i)
     {
-        if (detectors[i].pin == 0)
+        if (switches[i].pin == 0)
             return;
 
-        if (detectors[i].switchType == SWITCH_MOMENTARY)
+        if (switches[i].switchType == SWITCH_MOMENTARY)
         {
             // Momentary: float=LOW, press=VCC=HIGH
             // Use interrupt to catch short pulses reliably
-            if (_isInputOnly(detectors[i].pin))
+            if (_isInputOnly(switches[i].pin))
             {
-                pinMode(detectors[i].pin, INPUT); // pulldown has no effect on 34-39
+                pinMode(switches[i].pin, INPUT); // pulldown has no effect on 34-39
                 DBG_WARN("GPIO%d is input-only — NO internal pull. "
                          "Add external 10k pull-down resistor!",
-                         detectors[i].pin);
+                         switches[i].pin);
             }
             else
             {
-                pinMode(detectors[i].pin, INPUT_PULLDOWN);
+                pinMode(switches[i].pin, INPUT_PULLDOWN);
             }
             _det_isrTimestamp[i] = 0;
             _det_isrFlags &= ~(1 << i);
             attachInterruptArg(
-                digitalPinToInterrupt(detectors[i].pin),
+                digitalPinToInterrupt(switches[i].pin),
                 _detMomentaryISR, (void *)(uintptr_t)i, RISING);
-            DBG_RELAY("Detector init GPIO%-2d MOMENTARY (ISR RISING) label=%s",
-                      detectors[i].pin, detectors[i].label.c_str());
+            DBG_RELAY("Switch init GPIO%-2d MOMENTARY (ISR RISING) label=%s",
+                      switches[i].pin, switches[i].label.c_str());
+        }
+        else if (switches[i].switchType == SWITCH_THREE_WAY)
+        {
+            // Three-way (SPDT): pin always driven by switch, no pull needed
+            pinMode(switches[i].pin, INPUT);
+            DBG_RELAY("Switch init GPIO%-2d THREE_WAY (INPUT) label=%s",
+                      switches[i].pin, switches[i].label.c_str());
         }
         else
         {
-            // Latching: poll-based, always pull-up
-            pinMode(detectors[i].pin, INPUT_PULLUP);
-            DBG_RELAY("Detector init GPIO%-2d LATCHING (PULLUP) label=%s",
-                      detectors[i].pin, detectors[i].label.c_str());
+            // Two-way (SPST): VCC ↔ floating, pull-down keeps idle LOW
+            pinMode(switches[i].pin, INPUT_PULLDOWN);
+            DBG_RELAY("Switch init GPIO%-2d TWO_WAY (PULLDOWN) label=%s",
+                      switches[i].pin, switches[i].label.c_str());
         }
     }
 
     void _releasePin(uint8_t i)
     {
-        if (detectors[i].pin == 0)
+        if (switches[i].pin == 0)
             return;
-        if (detectors[i].switchType == SWITCH_MOMENTARY)
-            detachInterrupt(digitalPinToInterrupt(detectors[i].pin));
-        pinMode(detectors[i].pin, INPUT);
+        if (switches[i].switchType == SWITCH_MOMENTARY)
+            detachInterrupt(digitalPinToInterrupt(switches[i].pin));
+        pinMode(switches[i].pin, INPUT);
     }
 };
