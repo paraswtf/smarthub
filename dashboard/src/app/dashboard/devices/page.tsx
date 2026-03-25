@@ -10,11 +10,19 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
+import { timeAgo } from "~/lib/utils";
 
 export default function DevicesPage() {
 	const [search, setSearch] = useState("");
 
 	const { connected: wsConnected, onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
+
+	// Re-render every second for live "last seen" times
+	const [, setTick] = useState(0);
+	useEffect(() => {
+		const id = setInterval(() => setTick((t) => t + 1), 1000);
+		return () => clearInterval(id);
+	}, []);
 
 	// Live relay states from WS
 	const [liveRelayStates, setLiveRelayStates] = useState<Record<string, boolean>>({});
@@ -209,7 +217,7 @@ export default function DevicesPage() {
 													</>
 												) : (
 													<>
-														<WifiOff className="w-3 h-3" /> Offline
+														<WifiOff className="w-3 h-3" /> {timeAgo(device.lastSeenAt)}
 													</>
 												)}
 											</p>

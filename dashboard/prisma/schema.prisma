@@ -80,6 +80,7 @@ model Device {
     firmwareVersion String?
     ssid            String?
     notes           String?
+    lastSeenAt      DateTime?
     apiKeyId        String     @db.ObjectId
     apiKey          ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
     relays          Relay[]
@@ -99,19 +100,17 @@ model Relay {
     device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
 
-// A detector monitors an input GPIO pin and controls a relay on state change.
-// mode "toggle"  — any change on the input pin flips the relay state
-// mode "follow"  — relay mirrors the pin state (HIGH=ON, LOW=OFF)
+// A detector monitors an input GPIO pin and toggles a linked relay on state change.
+// switchType "latching"  — poll-based, toggles on any stable change (INPUT_PULLUP)
+// switchType "momentary" — ISR-driven, toggles on press only (INPUT_PULLDOWN)
 model Detector {
-    id           String   @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt    DateTime @default(now())
-    updatedAt    DateTime @updatedAt
-    pin          Int
-    label        String   @default("Switch")
-    mode         String   @default("toggle")      // "toggle" | "follow"
-    switchType   String   @default("latching")    // "latching" | "momentary"
+    id            String   @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+    pin           Int
+    label         String   @default("Switch")
+    switchType    String   @default("latching")
     linkedRelayId String   @db.ObjectId
-    pullMode     String   @default("pullup")      // "pullup" | "pulldown" — only used for follow mode
-    deviceId     String   @db.ObjectId
-    device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+    deviceId      String   @db.ObjectId
+    device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }

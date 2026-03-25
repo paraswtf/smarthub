@@ -395,8 +395,8 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			const device = await db.device.upsert({
 				where: { macAddress },
-				update: { apiKeyId: key.id },
-				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id },
+				update: { apiKeyId: key.id, lastSeenAt: new Date() },
+				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id, lastSeenAt: new Date() },
 				include: {
 					relays: { orderBy: { order: "asc" } },
 					detectors: { orderBy: { createdAt: "asc" } }
@@ -414,13 +414,14 @@ function handleDeviceConnection(ws: WebSocket) {
 					type: "auth_ok",
 					deviceId: device.id,
 					relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
-					detectors: device.detectors.map((d) => ({ id: d.id, pin: d.pin, label: d.label, mode: d.mode, pullMode: d.pullMode, switchType: d.switchType ?? "latching", linkedRelayId: d.linkedRelayId }))
+					detectors: device.detectors.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "latching", linkedRelayId: d.linkedRelayId }))
 				})
 			);
 
 			broadcastToUser(key.userId, {
 				type: "device_update",
 				deviceId: device.id,
+				lastSeenAt: new Date().toISOString(),
 				relays: device.relays.map((r) => ({ id: r.id, state: r.state }))
 			});
 
@@ -431,6 +432,7 @@ function handleDeviceConnection(ws: WebSocket) {
 		// ── PING ACK ──────────────────────────────────────────
 		if (msg.type === "ping_ack" && authenticatedDeviceId) {
 			resolvePendingPing(authenticatedDeviceId);
+			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 			return;
 		}
 
@@ -462,6 +464,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				where: { id: linkedRelayId },
 				data: { state: newState, updatedAt: new Date() }
 			});
+			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
 			const targetWs = deviceSockets.get(relay.deviceId);
 			if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -481,6 +484,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				where: { id: msg.relayId, deviceId: authenticatedDeviceId },
 				data: { state: msg.state, updatedAt: new Date() }
 			});
+			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
 			if (deviceUserId) {
 				broadcastToUser(deviceUserId, {

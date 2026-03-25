@@ -104,7 +104,7 @@ public:
         _initPin(count);
         count++;
         Storage::saveDetectors(detectors, count);
-        DBG_RELAY("Detector added: id=%s pin=%d mode=%s", d.id.c_str(), d.pin, d.mode == DETECTOR_TOGGLE ? "toggle" : "follow");
+        DBG_RELAY("Detector added: id=%s pin=%d type=%s", d.id.c_str(), d.pin, d.switchType == SWITCH_MOMENTARY ? "momentary" : "latching");
     }
 
     // Update an existing detector by id
@@ -247,7 +247,7 @@ public:
 
             // ── LATCHING: poll + debounce ──────────────────────────
             int raw = digitalRead(detectors[i].pin);
-            int logical = (detectors[i].pullMode == DETECTOR_PULLUP) ? !raw : raw;
+            int logical = !raw; // always INPUT_PULLUP for latching
 
             if (_lastState[i] == -1)
             {
@@ -275,23 +275,17 @@ public:
             if (!_callback)
                 continue;
 
-            if (detectors[i].mode == DETECTOR_FOLLOW)
+            // Always toggle
+            bool currentState = false;
+            for (uint8_t j = 0; j < relayCount; j++)
             {
-                _callback(detectors[i].linkedRelayId, (bool)logical, false);
-            }
-            else
-            {
-                bool currentState = false;
-                for (uint8_t j = 0; j < relayCount; j++)
+                if (relayIds[j] == detectors[i].linkedRelayId)
                 {
-                    if (relayIds[j] == detectors[i].linkedRelayId)
-                    {
-                        currentState = relayStates[j];
-                        break;
-                    }
+                    currentState = relayStates[j];
+                    break;
                 }
-                _callback(detectors[i].linkedRelayId, !currentState, true);
             }
+            _callback(detectors[i].linkedRelayId, !currentState, true);
         }
     }
 
@@ -333,23 +327,17 @@ private:
         if (!_callback)
             return;
 
-        if (detectors[i].mode == DETECTOR_FOLLOW)
+        // Always toggle
+        bool currentState = false;
+        for (uint8_t j = 0; j < relayCount; j++)
         {
-            _callback(detectors[i].linkedRelayId, true, false);
-        }
-        else
-        {
-            bool currentState = false;
-            for (uint8_t j = 0; j < relayCount; j++)
+            if (relayIds[j] == detectors[i].linkedRelayId)
             {
-                if (relayIds[j] == detectors[i].linkedRelayId)
-                {
-                    currentState = relayStates[j];
-                    break;
-                }
+                currentState = relayStates[j];
+                break;
             }
-            _callback(detectors[i].linkedRelayId, !currentState, true);
         }
+        _callback(detectors[i].linkedRelayId, !currentState, true);
     }
 
     void _initPin(uint8_t i)
@@ -382,13 +370,10 @@ private:
         }
         else
         {
-            // Latching: poll-based
-            uint8_t mode = (detectors[i].pullMode == DETECTOR_PULLUP) ? INPUT_PULLUP : INPUT_PULLDOWN;
-            pinMode(detectors[i].pin, mode);
-            DBG_RELAY("Detector init GPIO%-2d LATCHING pull=%s label=%s",
-                      detectors[i].pin,
-                      detectors[i].pullMode == DETECTOR_PULLUP ? "UP" : "DOWN",
-                      detectors[i].label.c_str());
+            // Latching: poll-based, always pull-up
+            pinMode(detectors[i].pin, INPUT_PULLUP);
+            DBG_RELAY("Detector init GPIO%-2d LATCHING (PULLUP) label=%s",
+                      detectors[i].pin, detectors[i].label.c_str());
         }
     }
 

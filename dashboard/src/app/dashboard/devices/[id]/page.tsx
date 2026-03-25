@@ -198,16 +198,16 @@ export default function DeviceDetailPage() {
 	const { data: detectorList = [] } = api.detector.list.useQuery({ deviceId: id });
 	const { data: allRelays = [] } = api.detector.listAllRelays.useQuery();
 	const [addingDetector, setAddingDetector] = useState(false);
-	const [newDetector, setNewDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", switchType: "latching" as "latching" | "momentary", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
+	const [newDetector, setNewDetector] = useState({ pin: 36, label: "Switch", switchType: "latching" as "latching" | "momentary", linkedRelayId: "" });
 	const [editingDetectorId, setEditingDetectorId] = useState<string | null>(null);
-	const [editDetector, setEditDetector] = useState({ pin: 36, label: "Switch", mode: "toggle" as "toggle" | "follow", switchType: "latching" as "latching" | "momentary", pullMode: "pullup" as "pullup" | "pulldown", linkedRelayId: "" });
+	const [editDetector, setEditDetector] = useState({ pin: 36, label: "Switch", switchType: "latching" as "latching" | "momentary", linkedRelayId: "" });
 
 	const addDetector = api.detector.add.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.detector.list.invalidate({ deviceId: id });
 			setAddingDetector(false);
-			setNewDetector({ pin: 36, label: "Switch", mode: "toggle", switchType: "latching", pullMode: "pullup", linkedRelayId: "" });
+			setNewDetector({ pin: 36, label: "Switch", switchType: "latching", linkedRelayId: "" });
 		}
 	});
 	const updateDetector = api.detector.update.useMutation({
@@ -602,10 +602,10 @@ export default function DeviceDetailPage() {
 					className="mt-4 space-y-3"
 				>
 					<p className="text-xs text-muted-foreground">
-						Detectors monitor input GPIO pins and control a relay when the pin state changes.
+						Detectors monitor input GPIO pins and toggle a linked relay when the switch state changes.
 						<br />
-						<span className="text-primary font-medium">Toggle</span> — any change flips the relay. &nbsp;
-						<span className="text-primary font-medium">Follow</span> — relay mirrors pin state.
+						<span className="text-primary font-medium">Latching</span> — toggles on both VCC/GND changes (e.g. toggle switch). &nbsp;
+						<span className="text-primary font-medium">Momentary</span> — toggles on press only (e.g. push button).
 						<br />
 						Pins 34–39 are input-only and ideal for detectors.
 					</p>
@@ -636,19 +636,6 @@ export default function DeviceDetailPage() {
 											/>
 										</div>
 										<div className="flex-1">
-											<Label className="text-[10px]">Mode</Label>
-											<select
-												value={editDetector.mode}
-												onChange={(e) => setEditDetector((d) => ({ ...d, mode: e.target.value as "toggle" | "follow" }))}
-												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-											>
-												<option value="toggle">Toggle</option>
-												<option value="follow">Follow</option>
-											</select>
-										</div>
-									</div>
-									{editDetector.mode === "toggle" && (
-										<div>
 											<Label className="text-[10px]">Switch Type</Label>
 											<select
 												value={editDetector.switchType}
@@ -659,21 +646,8 @@ export default function DeviceDetailPage() {
 												<option value="momentary">Momentary — toggles only on press (VCC)</option>
 											</select>
 										</div>
-									)}
+									</div>
 									<div className="flex gap-2">
-										{editDetector.mode === "follow" && (
-											<div className="flex-1">
-												<Label className="text-[10px]">Pull Mode</Label>
-												<select
-													value={editDetector.pullMode}
-													onChange={(e) => setEditDetector((d) => ({ ...d, pullMode: e.target.value as "pullup" | "pulldown" }))}
-													className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-												>
-													<option value="pullup">Pull-up (active LOW)</option>
-													<option value="pulldown">Pull-down (active HIGH)</option>
-												</select>
-											</div>
-										)}
 										<div className="flex-1">
 											<Label className="text-[10px]">Linked Relay</Label>
 											<select
@@ -731,8 +705,7 @@ export default function DeviceDetailPage() {
 									<div>
 										<p className="font-semibold text-sm">{det.label}</p>
 										<p className="text-xs text-muted-foreground mono mt-0.5">
-											GPIO {det.pin} · {det.mode}
-											{det.mode === "follow" ? ` · ${det.pullMode}` : ""} · →{" "}
+											GPIO {det.pin} · {det.switchType ?? "latching"} · →{" "}
 											{(() => {
 												const r = allRelays.find((x: AllRelayItem) => x.id === det.linkedRelayId);
 												return r ? `${r.deviceName} — ${r.label}` : "unknown";
@@ -742,7 +715,7 @@ export default function DeviceDetailPage() {
 									<button
 										onClick={() => {
 											setEditingDetectorId(det.id);
-											setEditDetector({ pin: det.pin, label: det.label, mode: det.mode as "toggle" | "follow", switchType: (det.switchType ?? "latching") as "latching" | "momentary", pullMode: det.pullMode as "pullup" | "pulldown", linkedRelayId: det.linkedRelayId });
+											setEditDetector({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "latching") as "latching" | "momentary", linkedRelayId: det.linkedRelayId });
 										}}
 										className="text-muted-foreground hover:text-foreground"
 									>
@@ -776,19 +749,6 @@ export default function DeviceDetailPage() {
 									/>
 								</div>
 								<div className="flex-1">
-									<Label className="text-[10px]">Mode</Label>
-									<select
-										value={newDetector.mode}
-										onChange={(e) => setNewDetector((d) => ({ ...d, mode: e.target.value as "toggle" | "follow" }))}
-										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-									>
-										<option value="toggle">Toggle</option>
-										<option value="follow">Follow</option>
-									</select>
-								</div>
-							</div>
-							{newDetector.mode === "toggle" && (
-								<div>
 									<Label className="text-[10px]">Switch Type</Label>
 									<select
 										value={newDetector.switchType}
@@ -799,21 +759,8 @@ export default function DeviceDetailPage() {
 										<option value="momentary">Momentary — toggles only on press (VCC)</option>
 									</select>
 								</div>
-							)}
+							</div>
 							<div className="flex gap-2">
-								{newDetector.mode === "follow" && (
-									<div className="flex-1">
-										<Label className="text-[10px]">Pull Mode</Label>
-										<select
-											value={newDetector.pullMode}
-											onChange={(e) => setNewDetector((d) => ({ ...d, pullMode: e.target.value as "pullup" | "pulldown" }))}
-											className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
-										>
-											<option value="pullup">Pull-up (active LOW)</option>
-											<option value="pulldown">Pull-down (active HIGH)</option>
-										</select>
-									</div>
-								)}
 								<div className="flex-1">
 									<Label className="text-[10px]">Linked Relay</Label>
 									<select

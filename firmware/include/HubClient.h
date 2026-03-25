@@ -333,8 +333,6 @@ private:
                 dBuf[dCount].id = d["id"].as<String>();
                 dBuf[dCount].pin = d["pin"].as<uint8_t>();
                 dBuf[dCount].label = d["label"].as<String>();
-                dBuf[dCount].mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
-                dBuf[dCount].pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
                 dBuf[dCount].switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
                 dBuf[dCount].linkedRelayId = d["linkedRelayId"].as<String>();
                 dCount++;
@@ -473,8 +471,6 @@ private:
             nd.id = d["id"].as<String>();
             nd.pin = d["pin"].as<uint8_t>();
             nd.label = d["label"].as<String>();
-            nd.mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
-            nd.pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
             nd.switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
             nd.linkedRelayId = d["linkedRelayId"].as<String>();
             _detectors->add(nd);
@@ -493,8 +489,6 @@ private:
             updated.id = d["id"].as<String>();
             updated.pin = d["pin"].as<uint8_t>();
             updated.label = d["label"].as<String>();
-            updated.mode = strcmp(d["mode"], "follow") == 0 ? DETECTOR_FOLLOW : DETECTOR_TOGGLE;
-            updated.pullMode = strcmp(d["pullMode"], "pulldown") == 0 ? DETECTOR_PULLDOWN : DETECTOR_PULLUP;
             updated.switchType = String(d["switchType"] | "latching") == "momentary" ? SWITCH_MOMENTARY : SWITCH_LATCHING;
             updated.linkedRelayId = d["linkedRelayId"].as<String>();
             _detectors->updateById(updated.id, updated);

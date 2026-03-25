@@ -58,6 +58,9 @@ export const deviceRouter = createTRPCRouter({
 				signal: AbortSignal.timeout(5000) // outer timeout > inner ping timeout
 			});
 			const data = (await res.json()) as { online?: boolean };
+			if (data.online === true) {
+				await ctx.db.device.update({ where: { id: input.deviceId }, data: { lastSeenAt: new Date() } });
+			}
 			return { online: data.online === true };
 		} catch {
 			return { online: false };

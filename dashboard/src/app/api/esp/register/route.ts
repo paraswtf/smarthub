@@ -46,14 +46,16 @@ export async function POST(req: NextRequest) {
 			update: {
 				...(ssid && { ssid }),
 				...(firmwareVersion && { firmwareVersion }),
-				apiKeyId: key.id
+				apiKeyId: key.id,
+				lastSeenAt: new Date()
 			},
 			create: {
 				macAddress,
 				name: name ?? `ESP32 ${macAddress.slice(-5)}`,
 				ssid: ssid ?? null,
 				firmwareVersion: firmwareVersion ?? null,
-				apiKeyId: key.id
+				apiKeyId: key.id,
+				lastSeenAt: new Date()
 			},
 			include: {
 				relays: { orderBy: { order: "asc" } }
