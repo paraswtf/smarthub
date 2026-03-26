@@ -51,31 +51,8 @@ export const authConfig = {
 	session: { strategy: "jwt" },
 	callbacks: {
 		async signIn({ user, account, profile }) {
-			// Google users are always email-verified, save profile picture
-			if (account?.provider === "google") {
-				try {
-					if (user.id) {
-						await db.user.update({
-							where: { id: user.id },
-							data: {
-								emailVerified: new Date(),
-								...(profile?.picture ? { image: profile.picture as string } : {}),
-							},
-						});
-					} else if (user.email) {
-						await db.user.updateMany({
-							where: { email: user.email },
-							data: {
-								emailVerified: new Date(),
-								...(profile?.picture ? { image: profile.picture as string } : {}),
-							},
-						});
-					}
-				} catch {
-					// User may not exist yet (first Google sign-in) — adapter creates them after signIn
-				}
-				return true;
-			}
+			// Google users — always allow (profile picture + verification handled in jwt callback)
+			if (account?.provider === "google") return true;
 
 			// Block unverified credential users and resend verification email
 			if (account?.provider === "credentials" && user.email) {
@@ -94,9 +71,20 @@ export const authConfig = {
 
 			return true;
 		},
-		jwt: ({ token, user }) => {
+		jwt: async ({ token, user, account, profile }) => {
 			if (user) {
 				token.id = user.id;
+			}
+			// On Google sign-in, save profile picture and mark email verified
+			// (runs after adapter creates the user, so it always exists here)
+			if (account?.provider === "google" && user?.id) {
+				await db.user.update({
+					where: { id: user.id },
+					data: {
+						emailVerified: new Date(),
+						...(profile?.picture ? { image: profile.picture as string } : {}),
+					},
+				});
 			}
 			return token;
 		},
