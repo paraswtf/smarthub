@@ -17,7 +17,19 @@ async function refreshDeviceSubscribers(deviceId: string) {
 	}
 }
 
+/** Find target user by email, validate not self */
+async function findShareTarget(db: { user: { findUnique: (args: { where: { email: string } }) => Promise<{ id: string } | null> } }, email: string, currentUserId: string) {
+	const target = await db.user.findUnique({ where: { email } });
+	if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "No user found with that email" });
+	if (target.id === currentUserId) {
+		throw new TRPCError({ code: "BAD_REQUEST", message: "You can't share with yourself" });
+	}
+	return target;
+}
+
 export const sharingRouter = createTRPCRouter({
+	// ─── Home Sharing ─────────────────────────────────────────
+
 	/** Share a home with another user by email */
 	shareHome: protectedProcedure
 		.input(z.object({ homeId: z.string(), email: z.string().email() }))
@@ -27,13 +39,8 @@ export const sharingRouter = createTRPCRouter({
 			});
 			if (!home) throw new TRPCError({ code: "FORBIDDEN" });
 
-			const target = await ctx.db.user.findUnique({ where: { email: input.email } });
-			if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "No user found with that email" });
-			if (target.id === ctx.session.user.id) {
-				throw new TRPCError({ code: "BAD_REQUEST", message: "You can't share with yourself" });
-			}
+			const target = await findShareTarget(ctx.db, input.email, ctx.session.user.id);
 
-			// Upsert to avoid duplicate errors
 			const share = await ctx.db.homeShare.upsert({
 				where: { homeId_userId: { homeId: input.homeId, userId: target.id } },
 				create: { homeId: input.homeId, userId: target.id },
@@ -66,48 +73,6 @@ export const sharingRouter = createTRPCRouter({
 			return deleted;
 		}),
 
-	/** Share a device with another user by email */
-	shareDevice: protectedProcedure
-		.input(z.object({ deviceId: z.string(), email: z.string().email() }))
-		.mutation(async ({ ctx, input }) => {
-			const device = await ctx.db.device.findFirst({
-				where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } }
-			});
-			if (!device) throw new TRPCError({ code: "FORBIDDEN" });
-
-			const target = await ctx.db.user.findUnique({ where: { email: input.email } });
-			if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "No user found with that email" });
-			if (target.id === ctx.session.user.id) {
-				throw new TRPCError({ code: "BAD_REQUEST", message: "You can't share with yourself" });
-			}
-
-			const share = await ctx.db.deviceShare.upsert({
-				where: { deviceId_userId: { deviceId: input.deviceId, userId: target.id } },
-				create: { deviceId: input.deviceId, userId: target.id },
-				update: {}
-			});
-
-			await refreshDeviceSubscribers(input.deviceId);
-			return share;
-		}),
-
-	/** Remove a device share */
-	unshareDevice: protectedProcedure
-		.input(z.object({ deviceId: z.string(), userId: z.string() }))
-		.mutation(async ({ ctx, input }) => {
-			const device = await ctx.db.device.findFirst({
-				where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } }
-			});
-			if (!device) throw new TRPCError({ code: "FORBIDDEN" });
-
-			const deleted = await ctx.db.deviceShare.delete({
-				where: { deviceId_userId: { deviceId: input.deviceId, userId: input.userId } }
-			});
-
-			await refreshDeviceSubscribers(input.deviceId);
-			return deleted;
-		}),
-
 	/** List users a home is shared with */
 	listHomeShares: protectedProcedure
 		.input(z.object({ homeId: z.string() }))
@@ -123,46 +88,197 @@ export const sharingRouter = createTRPCRouter({
 			});
 		}),
 
-	/** List users a device is shared with */
-	listDeviceShares: protectedProcedure
-		.input(z.object({ deviceId: z.string() }))
-		.query(async ({ ctx, input }) => {
-			const device = await ctx.db.device.findFirst({
-				where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } }
-			});
-			if (!device) throw new TRPCError({ code: "FORBIDDEN" });
+	// ─── Room Sharing ─────────────────────────────────────────
 
-			return ctx.db.deviceShare.findMany({
-				where: { deviceId: input.deviceId },
+	/** Share a room with another user by email */
+	shareRoom: protectedProcedure
+		.input(z.object({ roomId: z.string(), email: z.string().email() }))
+		.mutation(async ({ ctx, input }) => {
+			const room = await ctx.db.room.findFirst({
+				where: { id: input.roomId },
+				include: { home: { select: { ownerId: true } } }
+			});
+			if (!room || room.home.ownerId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			const target = await findShareTarget(ctx.db, input.email, ctx.session.user.id);
+
+			const share = await ctx.db.roomShare.upsert({
+				where: { roomId_userId: { roomId: input.roomId, userId: target.id } },
+				create: { roomId: input.roomId, userId: target.id },
+				update: {}
+			});
+
+			// Refresh WS subscribers for all devices with relays in this room
+			const relays = await ctx.db.relay.findMany({
+				where: { roomId: input.roomId },
+				select: { deviceId: true },
+				distinct: ["deviceId"]
+			});
+			await Promise.all(relays.map((r: { deviceId: string }) => refreshDeviceSubscribers(r.deviceId)));
+
+			return share;
+		}),
+
+	/** Remove a room share */
+	unshareRoom: protectedProcedure
+		.input(z.object({ roomId: z.string(), userId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const room = await ctx.db.room.findFirst({
+				where: { id: input.roomId },
+				include: { home: { select: { ownerId: true } } }
+			});
+			if (!room || room.home.ownerId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			const deleted = await ctx.db.roomShare.delete({
+				where: { roomId_userId: { roomId: input.roomId, userId: input.userId } }
+			});
+
+			const relays = await ctx.db.relay.findMany({
+				where: { roomId: input.roomId },
+				select: { deviceId: true },
+				distinct: ["deviceId"]
+			});
+			await Promise.all(relays.map((r: { deviceId: string }) => refreshDeviceSubscribers(r.deviceId)));
+
+			return deleted;
+		}),
+
+	/** List users a room is shared with */
+	listRoomShares: protectedProcedure
+		.input(z.object({ roomId: z.string() }))
+		.query(async ({ ctx, input }) => {
+			const room = await ctx.db.room.findFirst({
+				where: { id: input.roomId },
+				include: { home: { select: { ownerId: true } } }
+			});
+			if (!room || room.home.ownerId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			return ctx.db.roomShare.findMany({
+				where: { roomId: input.roomId },
 				include: { user: { select: { id: true, name: true, email: true } } }
 			});
 		}),
 
+	// ─── Relay Sharing ────────────────────────────────────────
+
+	/** Share a relay with another user by email */
+	shareRelay: protectedProcedure
+		.input(z.object({ relayId: z.string(), email: z.string().email() }))
+		.mutation(async ({ ctx, input }) => {
+			const relay = await ctx.db.relay.findFirst({
+				where: { id: input.relayId },
+				include: { device: { select: { apiKey: { select: { userId: true } } } } }
+			});
+			if (!relay || relay.device.apiKey.userId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			const target = await findShareTarget(ctx.db, input.email, ctx.session.user.id);
+
+			const share = await ctx.db.relayShare.upsert({
+				where: { relayId_userId: { relayId: input.relayId, userId: target.id } },
+				create: { relayId: input.relayId, userId: target.id },
+				update: {}
+			});
+
+			await refreshDeviceSubscribers(relay.deviceId);
+			return share;
+		}),
+
+	/** Remove a relay share */
+	unshareRelay: protectedProcedure
+		.input(z.object({ relayId: z.string(), userId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const relay = await ctx.db.relay.findFirst({
+				where: { id: input.relayId },
+				include: { device: { select: { apiKey: { select: { userId: true } } } } }
+			});
+			if (!relay || relay.device.apiKey.userId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			const deleted = await ctx.db.relayShare.delete({
+				where: { relayId_userId: { relayId: input.relayId, userId: input.userId } }
+			});
+
+			await refreshDeviceSubscribers(relay.deviceId);
+			return deleted;
+		}),
+
+	/** List users a relay is shared with */
+	listRelayShares: protectedProcedure
+		.input(z.object({ relayId: z.string() }))
+		.query(async ({ ctx, input }) => {
+			const relay = await ctx.db.relay.findFirst({
+				where: { id: input.relayId },
+				include: { device: { select: { apiKey: { select: { userId: true } } } } }
+			});
+			if (!relay || relay.device.apiKey.userId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			return ctx.db.relayShare.findMany({
+				where: { relayId: input.relayId },
+				include: { user: { select: { id: true, name: true, email: true } } }
+			});
+		}),
+
+	// ─── Shared With Me ───────────────────────────────────────
+
 	/** List everything shared with the current user */
 	listSharedWithMe: protectedProcedure.query(async ({ ctx }) => {
-		const [homeShares, deviceShares] = await Promise.all([
+		const [homeShares, roomShares, relayShares] = await Promise.all([
 			ctx.db.homeShare.findMany({
 				where: { userId: ctx.session.user.id },
 				include: {
 					home: {
 						include: {
 							owner: { select: { id: true, name: true, email: true } },
-							devices: {
-								include: { relays: { orderBy: { order: "asc" } } },
-								orderBy: { updatedAt: "desc" }
+							rooms: {
+								include: {
+									relays: {
+										orderBy: { order: "asc" },
+										include: { device: { select: { id: true, name: true, lastSeenAt: true } } }
+									}
+								},
+								orderBy: { order: "asc" }
 							},
-							_count: { select: { devices: true } }
+							_count: { select: { rooms: true } }
 						}
 					}
 				}
 			}),
-			ctx.db.deviceShare.findMany({
+			ctx.db.roomShare.findMany({
 				where: { userId: ctx.session.user.id },
 				include: {
-					device: {
+					room: {
 						include: {
-							relays: { orderBy: { order: "asc" } },
-							apiKey: { select: { user: { select: { id: true, name: true, email: true } } } }
+							home: { select: { id: true, name: true, ownerId: true, owner: { select: { id: true, name: true, email: true } } } },
+							relays: {
+								orderBy: { order: "asc" },
+								include: { device: { select: { id: true, name: true, lastSeenAt: true } } }
+							}
+						}
+					}
+				}
+			}),
+			ctx.db.relayShare.findMany({
+				where: { userId: ctx.session.user.id },
+				include: {
+					relay: {
+						include: {
+							device: {
+								select: {
+									id: true, name: true, lastSeenAt: true,
+									apiKey: { select: { user: { select: { id: true, name: true, email: true } } } }
+								}
+							}
 						}
 					}
 				}
@@ -170,13 +286,18 @@ export const sharingRouter = createTRPCRouter({
 		]);
 
 		return {
-			homes: homeShares.map((s: (typeof homeShares)[number]) => ({
+			homes: homeShares.map((s) => ({
 				...s.home,
 				sharedAt: s.createdAt
 			})),
-			devices: deviceShares.map((s: (typeof deviceShares)[number]) => ({
-				...s.device,
-				owner: s.device.apiKey.user,
+			rooms: roomShares.map((s) => ({
+				...s.room,
+				owner: s.room.home.owner,
+				sharedAt: s.createdAt
+			})),
+			relays: relayShares.map((s) => ({
+				...s.relay,
+				owner: s.relay.device.apiKey.user,
 				sharedAt: s.createdAt
 			}))
 		};

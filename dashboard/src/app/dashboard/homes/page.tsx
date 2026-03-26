@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Home, Plus, Cpu, Users, ChevronRight, Loader2 } from "lucide-react";
+import { Home, Plus, Cpu, Users, ChevronRight, Loader2, DoorOpen } from "lucide-react";
 import { api } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -109,11 +109,19 @@ export default function HomesPage() {
 								</CardHeader>
 								<CardContent className="pb-4">
 									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2">
-											<Cpu className="w-3.5 h-3.5 text-muted-foreground" />
-											<span className="text-xs text-muted-foreground">
-												{home._count.devices} {home._count.devices === 1 ? "device" : "devices"}
-											</span>
+										<div className="flex items-center gap-4">
+											<div className="flex items-center gap-1.5">
+												<DoorOpen className="w-3.5 h-3.5 text-muted-foreground" />
+												<span className="text-xs text-muted-foreground">
+													{home._count.rooms} {home._count.rooms === 1 ? "room" : "rooms"}
+												</span>
+											</div>
+											<div className="flex items-center gap-1.5">
+												<Cpu className="w-3.5 h-3.5 text-muted-foreground" />
+												<span className="text-xs text-muted-foreground">
+													{home._count.devices} {home._count.devices === 1 ? "device" : "devices"}
+												</span>
+											</div>
 										</div>
 										<ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
 									</div>

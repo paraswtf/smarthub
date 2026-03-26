@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle, Share2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -261,28 +261,6 @@ export default function DeviceDetailPage() {
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
 	const [deleteRelayId, setDeleteRelayId] = useState<string | null>(null);
 
-	// Share device
-	const [shareOpen, setShareOpen] = useState(false);
-	const [shareEmail, setShareEmail] = useState("");
-	const [shareError, setShareError] = useState("");
-
-	const { data: deviceShares } = api.sharing.listDeviceShares.useQuery({ deviceId: id }, { enabled: !!device && device.accessLevel === "owner" });
-
-	const shareMutation = api.sharing.shareDevice.useMutation({
-		onSuccess: () => {
-			void utils.sharing.listDeviceShares.invalidate({ deviceId: id });
-			setShareOpen(false);
-			setShareEmail("");
-			setShareError("");
-		},
-		onError: (err) => setShareError(err.message)
-	});
-
-	const unshareMutation = api.sharing.unshareDevice.useMutation({
-		onSuccess: () => {
-			void utils.sharing.listDeviceShares.invalidate({ deviceId: id });
-		}
-	});
 
 	if (isLoading)
 		return (
@@ -382,7 +360,7 @@ export default function DeviceDetailPage() {
 						<div>
 							<div className="flex items-center gap-3 flex-wrap">
 								<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">{device.name}</h1>
-								{!isOwner && <Badge variant="outline" className="gap-1"><Share2 className="w-3 h-3" /> Shared</Badge>}
+								{!isOwner && <Badge variant="outline">Shared</Badge>}
 								<Badge variant={isOnline ? "online" : "offline"}>{isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline"}</Badge>
 							</div>
 							<p className="text-sm text-muted-foreground mono mt-1">{device.macAddress}</p>
@@ -390,13 +368,6 @@ export default function DeviceDetailPage() {
 						</div>
 						{isOwner && (
 							<div className="flex gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => { setShareError(""); setShareOpen(true); }}
-								>
-									<Share2 className="w-3.5 h-3.5" /> Share
-								</Button>
 								<Button
 									variant="outline"
 									size="sm"
@@ -1001,61 +972,6 @@ export default function DeviceDetailPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Share device dialog */}
-			<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Share "{device.name}"</DialogTitle>
-						<DialogDescription>Share this device with another user so they can view and toggle relays.</DialogDescription>
-					</DialogHeader>
-					<form
-						onSubmit={(e) => {
-							e.preventDefault();
-							setShareError("");
-							if (shareEmail.trim()) shareMutation.mutate({ deviceId: id, email: shareEmail.trim() });
-						}}
-						className="space-y-4"
-					>
-						<div className="space-y-2">
-							<Label htmlFor="share-device-email">User email</Label>
-							<Input
-								id="share-device-email"
-								type="email"
-								placeholder="user@example.com"
-								value={shareEmail}
-								onChange={(e) => setShareEmail(e.target.value)}
-							/>
-							{shareError && <p className="text-sm text-destructive">{shareError}</p>}
-						</div>
-						<Button type="submit" disabled={!shareEmail.trim() || shareMutation.isPending} className="w-full">
-							{shareMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Share"}
-						</Button>
-					</form>
-
-					{(deviceShares?.length ?? 0) > 0 && (
-						<div className="space-y-2 pt-2 border-t">
-							<p className="text-sm font-medium">Shared with</p>
-							{deviceShares!.map((share) => (
-								<div key={share.id} className="flex items-center justify-between py-1">
-									<div className="min-w-0">
-										<p className="text-sm truncate">{share.user.name ?? share.user.email}</p>
-										{share.user.name && <p className="text-xs text-muted-foreground truncate">{share.user.email}</p>}
-									</div>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-7 w-7 text-destructive"
-										onClick={() => unshareMutation.mutate({ deviceId: id, userId: share.user.id })}
-										disabled={unshareMutation.isPending}
-									>
-										<X className="w-3.5 h-3.5" />
-									</Button>
-								</div>
-							))}
-						</div>
-					)}
-				</DialogContent>
-			</Dialog>
 		</div>
 	);
 }

@@ -8,17 +8,27 @@ export const homeRouter = createTRPCRouter({
 		return ctx.db.home.findMany({
 			where: { ownerId: ctx.session.user.id },
 			include: {
-				_count: { select: { devices: true, shares: true } }
+				_count: { select: { devices: true, rooms: true, shares: true } }
 			},
 			orderBy: { createdAt: "asc" }
 		});
 	}),
 
-	/** Get a single home with its devices */
+	/** Get a single home with its rooms and devices */
 	get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
 		const home = await ctx.db.home.findFirst({
 			where: { id: input.id, ownerId: ctx.session.user.id },
 			include: {
+				rooms: {
+					include: {
+						relays: {
+							orderBy: { order: "asc" },
+							include: { device: { select: { id: true, name: true, lastSeenAt: true } } }
+						},
+						_count: { select: { relays: true, shares: true } }
+					},
+					orderBy: { order: "asc" }
+				},
 				devices: {
 					include: { relays: { orderBy: { order: "asc" } } },
 					orderBy: { updatedAt: "desc" }
@@ -83,6 +93,14 @@ export const homeRouter = createTRPCRouter({
 					where: { id: input.homeId, ownerId: ctx.session.user.id }
 				});
 				if (!home) throw new TRPCError({ code: "FORBIDDEN" });
+			}
+
+			// If unassigning from home, also unassign all relays from rooms
+			if (!input.homeId) {
+				await ctx.db.relay.updateMany({
+					where: { deviceId: input.deviceId, roomId: { not: null } },
+					data: { roomId: null }
+				});
 			}
 
 			return ctx.db.device.update({

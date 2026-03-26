@@ -66,24 +66,42 @@ function broadcastToUser(userId: string, payload: object) {
 	}
 }
 
-/** Build the subscriber set for a device (owner + all shared users) */
+/** Build the subscriber set for a device (owner + relay/room/home shared users) */
 async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 	const device = await db.device.findFirst({
 		where: { id: deviceId },
-		select: { homeId: true, apiKey: { select: { userId: true } } }
+		select: {
+			homeId: true,
+			apiKey: { select: { userId: true } },
+			relays: {
+				select: {
+					id: true,
+					roomId: true,
+					shares: { select: { userId: true } }
+				}
+			}
+		}
 	});
 	if (!device) return new Set();
 
 	const subscribers = new Set([device.apiKey.userId]);
 
-	// Users with direct device share
-	const deviceShares = await db.deviceShare.findMany({
-		where: { deviceId },
-		select: { userId: true }
-	});
-	for (const s of deviceShares) subscribers.add(s.userId);
+	// 1. Direct relay shares on this device's relays
+	for (const relay of device.relays) {
+		for (const s of relay.shares) subscribers.add(s.userId);
+	}
 
-	// Users with home share (if device is in a home)
+	// 2. Room shares for rooms that contain this device's relays
+	const roomIds = [...new Set(device.relays.map((r) => r.roomId).filter(Boolean))] as string[];
+	if (roomIds.length > 0) {
+		const roomShares = await db.roomShare.findMany({
+			where: { roomId: { in: roomIds } },
+			select: { userId: true }
+		});
+		for (const s of roomShares) subscribers.add(s.userId);
+	}
+
+	// 3. Home share (device's home shared with user)
 	if (device.homeId) {
 		const homeShares = await db.homeShare.findMany({
 			where: { homeId: device.homeId },

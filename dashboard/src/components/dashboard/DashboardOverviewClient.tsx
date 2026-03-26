@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight, Home } from "lucide-react";
+import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight, Home, DoorOpen, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { LiveLastSeen } from "~/components/dashboard/LiveLastSeen";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../globals.config";
 
@@ -20,11 +19,9 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const { connected: wsConnected, onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
 	const [liveRelayStates, setLiveRelayStates] = useState<Record<string, boolean>>({});
-	const [liveLastSeen, setLiveLastSeen] = useState<Record<string, Date>>({});
 
 	useEffect(() => {
 		const unsub = onDeviceUpdate((msg) => {
-			setLiveLastSeen((p) => ({ ...p, [msg.deviceId]: new Date(msg.lastSeenAt) }));
 			setLiveRelayStates((p) => {
 				const next = { ...p };
 				msg.relays.forEach((r) => {
@@ -56,10 +53,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const { data: devices, isLoading: devicesLoading } = api.device.list.useQuery(undefined, {
 		refetchInterval: wsConnected ? false : 30_000
 	});
-	const { data: apiKeys, isLoading: keysLoading } = api.apiKey.list.useQuery(undefined, {
-		refetchInterval: 60_000
-	});
-	const { data: homes } = api.home.list.useQuery();
+	const { data: homes, isLoading: homesLoading } = api.home.list.useQuery();
 
 	const pingMutation = api.device.pingDevice.useMutation();
 
@@ -92,12 +86,9 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 
 	type DeviceListItem = RouterOutputs["device"]["list"][number];
 	type RelayItem = DeviceListItem["relays"][number];
-	type MergedDevice = DeviceListItem & { online: boolean };
 
-	// Merge tRPC base data with live WS overrides (flat relay state map — instant updates)
 	const mergedDevices = (devices ?? ([] as DeviceListItem[])).map((d: DeviceListItem) => ({
 		...d,
-		lastSeenAt: liveLastSeen[d.id] ?? d.lastSeenAt,
 		online: onlineStatus[d.id] ?? false,
 		relays: d.relays.map((r: RelayItem) => ({
 			...r,
@@ -109,12 +100,12 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const relayCount = mergedDevices.reduce((n, d) => n + d.relays.length, 0);
 	const activeRelays = mergedDevices.reduce((n, d) => n + d.relays.filter((r) => r.state).length, 0);
 	const deviceCount = mergedDevices.length;
-	const apiKeyCount = (apiKeys ?? []).length;
 	const homeCount = (homes ?? []).length;
+	const roomCount = (homes ?? []).reduce((n, h) => n + (h._count?.rooms ?? 0), 0);
 
 	const STAT_CARDS = [
-		{ label: "Homes", value: homeCount, icon: Home, sub: `${deviceCount} devices` },
-		{ label: "Total Devices", value: deviceCount, icon: Cpu, sub: `${onlineCount} online` },
+		{ label: "Homes", value: homeCount, icon: Home, sub: `${roomCount} rooms` },
+		{ label: "Rooms", value: roomCount, icon: DoorOpen, sub: `${relayCount} relays` },
 		{ label: "Active Relays", value: activeRelays, icon: ToggleRight, sub: `of ${relayCount} configured` },
 		{ label: "Devices Online", value: onlineCount, icon: Wifi, sub: deviceCount > 0 ? `${Math.round((onlineCount / deviceCount) * 100)}% uptime` : "—" },
 	];
@@ -140,7 +131,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							<div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
 								<Icon className="w-4 h-4 text-primary" />
 							</div>
-							{devicesLoading || keysLoading ? <Skeleton className="h-8 w-12 mb-1" /> : <p className="font-sora font-extrabold text-3xl text-foreground">{value}</p>}
+							{devicesLoading || homesLoading ? <Skeleton className="h-8 w-12 mb-1" /> : <p className="font-sora font-extrabold text-3xl text-foreground">{value}</p>}
 							<p className="text-xs font-semibold text-foreground mt-0.5">{label}</p>
 							<p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
 						</CardContent>
@@ -173,8 +164,8 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 				</Card>
 			)}
 
-			{/* Device grid */}
-			{devicesLoading ? (
+			{/* Homes grid */}
+			{homesLoading ? (
 				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 					{Array.from({ length: 3 }).map((_, i) => (
 						<Card key={i}>
@@ -186,10 +177,10 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 						</Card>
 					))}
 				</div>
-			) : mergedDevices.length > 0 ? (
+			) : (homes ?? []).length > 0 ? (
 				<div>
 					<div className="flex items-center justify-between mb-4">
-						<h2 className="font-sora font-bold text-lg text-foreground">Your Devices</h2>
+						<h2 className="font-sora font-bold text-lg text-foreground">Your Homes</h2>
 						<Button
 							variant="outline"
 							size="sm"
@@ -200,58 +191,31 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 					</div>
 
 					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-						{mergedDevices.slice(0, 6).map((device) => (
+						{(homes ?? []).slice(0, 6).map((home) => (
 							<Link
-								key={device.id}
-								href={`/dashboard/devices/${device.id}`}
+								key={home.id}
+								href={`/dashboard/homes/${home.id}`}
 								className="no-underline group"
 							>
 								<Card className="transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer">
 									<CardHeader className="pb-3">
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2.5">
-												<span className={`status-dot ${device.online ? "online" : "offline"}`} />
-												<CardTitle className="text-base font-semibold">{device.name}</CardTitle>
+												<Home className="w-4 h-4 text-primary" />
+												<CardTitle className="text-base font-semibold">{home.name}</CardTitle>
 											</div>
-											<Badge variant={device.online ? "online" : "offline"}>{device.online ? "Online" : "Offline"}</Badge>
+											<ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
 										</div>
-										<p className="text-xs text-muted-foreground mono mt-1">{device.macAddress}</p>
 									</CardHeader>
-
 									<CardContent className="pb-4">
-										{device.relays.length === 0 ? (
-											<p className="text-xs text-muted-foreground">No relays configured</p>
-										) : (
-											<div className="flex flex-wrap gap-1.5">
-												{device.relays.map((relay) => (
-													<span
-														key={relay.id}
-														className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
-													>
-														<span
-															className="w-1.5 h-1.5 rounded-full"
-															style={{ background: relay.state ? "hsl(var(--status-online))" : "hsl(var(--status-offline))" }}
-														/>
-														{relay.label}
-													</span>
-												))}
-											</div>
-										)}
-										<p className="text-[10px] text-muted-foreground mt-3 flex items-center gap-1">
-											{device.online ? (
-												<>
-													<Wifi className="w-3 h-3" /> Connected
-												</>
-											) : (
-												<>
-													<WifiOff className="w-3 h-3" /> Last seen{" "}
-													<LiveLastSeen
-														date={device.lastSeenAt}
-														compact
-													/>
-												</>
-											)}
-										</p>
+										<div className="flex items-center gap-4 text-xs text-muted-foreground">
+											<span className="flex items-center gap-1">
+												<DoorOpen className="w-3.5 h-3.5" /> {home._count.rooms} {home._count.rooms === 1 ? "room" : "rooms"}
+											</span>
+											<span className="flex items-center gap-1">
+												<Cpu className="w-3.5 h-3.5" /> {home._count.devices} {home._count.devices === 1 ? "device" : "devices"}
+											</span>
+										</div>
 									</CardContent>
 								</Card>
 							</Link>
@@ -276,7 +240,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							{ n: 3, text: "Connect to the ESP32 WiFi and open the captive portal (192.168.4.1)" },
 							{ n: 4, text: "Enter your home WiFi credentials, give the device a name, and paste your API key" },
 							{ n: 5, text: "Save — the ESP32 will reboot, connect, and appear in your dashboard" },
-							{ n: 6, text: "Configure relay pins and labels from the device detail page" }
+							{ n: 6, text: "Create a home, add rooms, and assign relays to organize your controls" }
 						].map(({ n, text }) => (
 							<li
 								key={n}

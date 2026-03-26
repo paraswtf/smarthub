@@ -4,6 +4,7 @@ import { deviceRouter } from "./routers/device";
 import { apiKeyRouter } from "./routers/apiKey";
 import { switchRouter } from "./routers/switch";
 import { homeRouter } from "./routers/home";
+import { roomRouter } from "./routers/room";
 import { sharingRouter } from "./routers/sharing";
 
 export const appRouter = createTRPCRouter({
@@ -12,6 +13,7 @@ export const appRouter = createTRPCRouter({
 	apiKey: apiKeyRouter,
 	switch: switchRouter,
 	home: homeRouter,
+	room: roomRouter,
 	sharing: sharingRouter
 });
 

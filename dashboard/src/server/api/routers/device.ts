@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDeviceAccess } from "~/server/api/lib/permissions";
+import { getDeviceAccess, getRelayAccess } from "~/server/api/lib/permissions";
 
 // GPIO 34–39 are input-only on ESP32 — cannot be used as relay outputs
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
@@ -101,7 +101,7 @@ export const deviceRouter = createTRPCRouter({
 		});
 		if (!relay) throw new TRPCError({ code: "NOT_FOUND" });
 
-		const access = await getDeviceAccess(ctx.db, relay.deviceId, ctx.session.user.id);
+		const access = await getRelayAccess(ctx.db, input.relayId, ctx.session.user.id);
 		if (access === "none") throw new TRPCError({ code: "FORBIDDEN" });
 
 		// Always try to push to connected ESP32 first

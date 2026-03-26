@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
 	Home, ArrowLeft, Cpu, Users, Plus, Trash2, Pencil, Share2,
-	Wifi, WifiOff, ToggleRight, ChevronRight, Loader2, X
+	DoorOpen, ToggleRight, ChevronRight, Loader2, X
 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -16,14 +16,13 @@ import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
-import { timeAgo } from "~/lib/utils";
 
 export default function HomeDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const router = useRouter();
 	const utils = api.useUtils();
 
-	const { connected: wsConnected, onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
+	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
 	const { data: home, isLoading } = api.home.get.useQuery({ id });
 	const { data: unassigned } = api.home.unassignedDevices.useQuery();
@@ -89,14 +88,24 @@ export default function HomeDetailPage() {
 		}
 	});
 
-	// ── Device online status ───────────────────────────────────
-	const [onlineStatus, setOnlineStatus] = useState<Record<string, boolean>>({});
-	const [pinging, setPinging] = useState<Record<string, boolean>>({});
+	// ── Create room ────────────────────────────────────────────
+	const [createRoomOpen, setCreateRoomOpen] = useState(false);
+	const [newRoomName, setNewRoomName] = useState("");
+
+	const createRoom = api.room.create.useMutation({
+		onSuccess: () => {
+			void utils.home.get.invalidate({ id });
+			void utils.home.list.invalidate();
+			setCreateRoomOpen(false);
+			setNewRoomName("");
+		}
+	});
+
+	// ── Live relay states ──────────────────────────────────────
 	const [liveRelayStates, setLiveRelayStates] = useState<Record<string, boolean>>({});
 
 	useEffect(() => {
 		return onDeviceUpdate((msg) => {
-			setOnlineStatus((p) => ({ ...p, [msg.deviceId]: true }));
 			setLiveRelayStates((p) => {
 				const next = { ...p };
 				msg.relays.forEach((r) => { next[r.id] = r.state; });
@@ -110,31 +119,6 @@ export default function HomeDetailPage() {
 			setLiveRelayStates((p) => ({ ...p, [msg.relayId]: msg.state }));
 		});
 	}, [onRelayUpdate]);
-
-	const pingMutation = api.device.pingDevice.useMutation();
-
-	const pingAll = useCallback(async (deviceList: { id: string }[]) => {
-		const batch: Record<string, boolean> = {};
-		for (const d of deviceList) batch[d.id] = true;
-		setPinging(batch);
-		await Promise.all(
-			deviceList.map(async (d) => {
-				try {
-					const result = await pingMutation.mutateAsync({ deviceId: d.id });
-					setOnlineStatus((p) => ({ ...p, [d.id]: result.online }));
-				} catch {
-					setOnlineStatus((p) => ({ ...p, [d.id]: false }));
-				}
-				setPinging((p) => ({ ...p, [d.id]: false }));
-			})
-		);
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-	useEffect(() => {
-		if (home?.devices.length) {
-			void pingAll(home.devices);
-		}
-	}, [home?.devices.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	if (isLoading) {
 		return (
@@ -153,8 +137,6 @@ export default function HomeDetailPage() {
 			</div>
 		);
 	}
-
-	type DeviceItem = RouterOutputs["home"]["get"]["devices"][number];
 
 	return (
 		<div className="p-6 lg:p-8 space-y-6 animate-fade-in mt-14 lg:mt-0">
@@ -255,7 +237,7 @@ export default function HomeDetailPage() {
 					{/* Assign device */}
 					<Dialog open={assignOpen} onOpenChange={setAssignOpen}>
 						<DialogTrigger asChild>
-							<Button variant="outline"><Plus className="w-4 h-4" /> Assign Device</Button>
+							<Button variant="outline"><Cpu className="w-4 h-4" /> Assign Device</Button>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
@@ -286,6 +268,39 @@ export default function HomeDetailPage() {
 						</DialogContent>
 					</Dialog>
 
+					{/* Create room */}
+					<Dialog open={createRoomOpen} onOpenChange={setCreateRoomOpen}>
+						<DialogTrigger asChild>
+							<Button><Plus className="w-4 h-4" /> Add Room</Button>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Create Room</DialogTitle>
+							</DialogHeader>
+							<form
+								onSubmit={(e) => {
+									e.preventDefault();
+									if (newRoomName.trim()) createRoom.mutate({ homeId: id, name: newRoomName.trim() });
+								}}
+								className="space-y-4"
+							>
+								<div className="space-y-2">
+									<Label htmlFor="room-name">Name</Label>
+									<Input
+										id="room-name"
+										placeholder="e.g. Living Room"
+										value={newRoomName}
+										onChange={(e) => setNewRoomName(e.target.value)}
+										maxLength={60}
+									/>
+								</div>
+								<Button type="submit" disabled={!newRoomName.trim() || createRoom.isPending} className="w-full">
+									{createRoom.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
+								</Button>
+							</form>
+						</DialogContent>
+					</Dialog>
+
 					{/* Delete */}
 					<Button
 						variant="ghost"
@@ -308,6 +323,9 @@ export default function HomeDetailPage() {
 			{/* Stats */}
 			<div className="flex gap-4">
 				<Badge variant="outline" className="gap-1.5 px-3 py-1">
+					<DoorOpen className="w-3.5 h-3.5" /> {home.rooms.length} {home.rooms.length === 1 ? "room" : "rooms"}
+				</Badge>
+				<Badge variant="outline" className="gap-1.5 px-3 py-1">
 					<Cpu className="w-3.5 h-3.5" /> {home.devices.length} {home.devices.length === 1 ? "device" : "devices"}
 				</Badge>
 				{home.shares.length > 0 && (
@@ -317,38 +335,52 @@ export default function HomeDetailPage() {
 				)}
 			</div>
 
-			{/* Devices */}
-			{home.devices.length === 0 ? (
+			{/* Rooms */}
+			{home.rooms.length === 0 && home.devices.length === 0 ? (
 				<Card className="border-dashed">
 					<CardContent className="p-12 text-center">
-						<Cpu className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-						<h3 className="font-semibold text-foreground mb-1">No devices in this home</h3>
-						<p className="text-sm text-muted-foreground">Assign devices to this home to get started.</p>
+						<DoorOpen className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+						<h3 className="font-semibold text-foreground mb-1">No rooms yet</h3>
+						<p className="text-sm text-muted-foreground">Assign devices to this home, then create rooms and add relays to them.</p>
 					</CardContent>
 				</Card>
 			) : (
-				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-					{home.devices.map((device: DeviceItem) => {
-						const online = onlineStatus[device.id] ?? false;
-						const checking = pinging[device.id] === true && onlineStatus[device.id] === undefined;
-						const relays = device.relays.map((r) => ({ ...r, state: liveRelayStates[r.id] ?? r.state }));
-						const activeRelays = relays.filter((r) => r.state).length;
+				<>
+					{home.rooms.length === 0 && home.devices.length > 0 && (
+						<Card className="border-dashed border-primary/40 bg-primary/5">
+							<CardContent className="p-6 text-center">
+								<DoorOpen className="w-8 h-8 text-primary mx-auto mb-3" />
+								<h3 className="font-semibold text-foreground mb-1">Create your first room</h3>
+								<p className="text-sm text-muted-foreground mb-3">
+									You have {home.devices.length} {home.devices.length === 1 ? "device" : "devices"} assigned. Create rooms and organize relays into them.
+								</p>
+							</CardContent>
+						</Card>
+					)}
 
-						return (
-							<div key={device.id} className="group relative">
-								<Link href={`/dashboard/devices/${device.id}`} className="no-underline">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+						{home.rooms.map((room) => {
+							const relays = room.relays.map((r) => ({
+								...r,
+								state: liveRelayStates[r.id] ?? r.state
+							}));
+							const activeRelays = relays.filter((r) => r.state).length;
+
+							return (
+								<Link key={room.id} href={`/dashboard/rooms/${room.id}`} className="no-underline group">
 									<Card className="h-full transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer">
 										<CardHeader className="pb-3">
 											<div className="flex items-start justify-between gap-2">
 												<div className="flex items-center gap-2.5 min-w-0">
-													<span className={`status-dot flex-shrink-0 ${checking ? "checking" : online ? "online" : "offline"}`} />
-													<CardTitle className="text-base font-semibold truncate">{device.name}</CardTitle>
+													<DoorOpen className="w-4 h-4 text-primary flex-shrink-0" />
+													<CardTitle className="text-base font-semibold truncate">{room.name}</CardTitle>
 												</div>
-												<Badge variant={online ? "online" : "offline"} className="flex-shrink-0">
-													{checking ? "Pinging" : online ? "Online" : "Offline"}
-												</Badge>
+												{room._count.shares > 0 && (
+													<Badge variant="outline" className="flex-shrink-0 gap-1">
+														<Users className="w-3 h-3" /> {room._count.shares}
+													</Badge>
+												)}
 											</div>
-											<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
 										</CardHeader>
 										<CardContent className="pb-4 space-y-3">
 											<div className="flex items-center gap-2">
@@ -371,10 +403,39 @@ export default function HomeDetailPage() {
 													{relays.length > 4 && <span className="text-xs text-muted-foreground px-1 self-center">+{relays.length - 4} more</span>}
 												</div>
 											)}
-											<div className="flex items-center justify-between pt-1">
-												<p className="text-[10px] text-muted-foreground flex items-center gap-1">
-													{online ? <><Wifi className="w-3 h-3" /> Connected</> : <><WifiOff className="w-3 h-3" /> {timeAgo(device.lastSeenAt)}</>}
-												</p>
+											<div className="flex items-center justify-end pt-1">
+												<ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+											</div>
+										</CardContent>
+									</Card>
+								</Link>
+							);
+						})}
+					</div>
+				</>
+			)}
+
+			{/* Devices in this home */}
+			{home.devices.length > 0 && (
+				<div className="space-y-3">
+					<h2 className="font-sora font-semibold text-lg text-foreground">Devices</h2>
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+						{home.devices.map((device) => (
+							<div key={device.id} className="group relative">
+								<Link href={`/dashboard/devices/${device.id}`} className="no-underline">
+									<Card className="h-full transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer">
+										<CardHeader className="pb-3">
+											<div className="flex items-center gap-2.5 min-w-0">
+												<Cpu className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+												<CardTitle className="text-base font-semibold truncate">{device.name}</CardTitle>
+											</div>
+											<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
+										</CardHeader>
+										<CardContent className="pb-4">
+											<div className="flex items-center justify-between">
+												<span className="text-xs text-muted-foreground">
+													{device.relays.length} {device.relays.length === 1 ? "relay" : "relays"}
+												</span>
 												<ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
 											</div>
 										</CardContent>
@@ -395,8 +456,8 @@ export default function HomeDetailPage() {
 									<X className="w-3.5 h-3.5" />
 								</Button>
 							</div>
-						);
-					})}
+						))}
+					</div>
 				</div>
 			)}
 		</div>
