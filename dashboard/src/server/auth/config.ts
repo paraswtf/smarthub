@@ -52,14 +52,28 @@ export const authConfig = {
 	callbacks: {
 		async signIn({ user, account, profile }) {
 			// Google users are always email-verified, save profile picture
-			if (account?.provider === "google" && user.id) {
-				await db.user.update({
-					where: { id: user.id },
-					data: {
-						emailVerified: new Date(),
-						...(profile?.picture ? { image: profile.picture as string } : {}),
-					},
-				});
+			if (account?.provider === "google") {
+				try {
+					if (user.id) {
+						await db.user.update({
+							where: { id: user.id },
+							data: {
+								emailVerified: new Date(),
+								...(profile?.picture ? { image: profile.picture as string } : {}),
+							},
+						});
+					} else if (user.email) {
+						await db.user.updateMany({
+							where: { email: user.email },
+							data: {
+								emailVerified: new Date(),
+								...(profile?.picture ? { image: profile.picture as string } : {}),
+							},
+						});
+					}
+				} catch {
+					// User may not exist yet (first Google sign-in) — adapter creates them after signIn
+				}
 				return true;
 			}
 
