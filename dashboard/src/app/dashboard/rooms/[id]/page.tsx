@@ -96,12 +96,18 @@ export default function RoomDetailPage() {
 	const updateRoom = api.room.update.useMutation({
 		onSuccess: () => {
 			void utils.room.get.invalidate({ id });
+			if (room?.homeId) void utils.home.get.invalidate({ id: room.homeId });
 			setEditing(false);
 		}
 	});
 
 	const deleteRoom = api.room.delete.useMutation({
 		onSuccess: () => {
+			if (room?.homeId) {
+				void utils.home.get.invalidate({ id: room.homeId });
+				void utils.room.unassignedRelays.invalidate({ homeId: room.homeId });
+			}
+			void utils.home.list.invalidate();
 			if (room) router.push(`/dashboard/homes/${room.homeId}`);
 		}
 	});

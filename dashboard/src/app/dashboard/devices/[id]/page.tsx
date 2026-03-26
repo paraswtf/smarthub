@@ -174,10 +174,23 @@ export default function DeviceDetailPage() {
 	const updateDevice = api.device.update.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
+			void utils.device.list.invalidate();
+			if (device?.homeId) void utils.home.get.invalidate({ id: device.homeId });
 			setEditingDevice(false);
 		}
 	});
-	const deleteDevice = api.device.delete.useMutation({ onSuccess: () => router.push("/dashboard/devices") });
+	const deleteDevice = api.device.delete.useMutation({
+		onSuccess: () => {
+			void utils.device.list.invalidate();
+			void utils.home.get.invalidate();
+			void utils.home.list.invalidate();
+			void utils.home.unassignedDevices.invalidate();
+			void utils.room.get.invalidate();
+			void utils.room.unassignedRelays.invalidate();
+			void utils.switch.listAllRelays.invalidate();
+			router.push("/dashboard/devices");
+		}
+	});
 
 	// Optimistic relay toggle — update UI immediately, roll back on error
 	const toggleRelay = api.device.toggleRelay.useMutation({
@@ -214,6 +227,7 @@ export default function DeviceDetailPage() {
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.listAllRelays.invalidate();
+			void utils.room.unassignedRelays.invalidate();
 			setAddingRelay(false);
 			setNewRelay({ pin: 2, label: "", icon: "plug" });
 		}
@@ -222,6 +236,7 @@ export default function DeviceDetailPage() {
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.listAllRelays.invalidate();
+			void utils.room.get.invalidate();
 			setEditingRelayId(null);
 		}
 	});
@@ -229,6 +244,8 @@ export default function DeviceDetailPage() {
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.listAllRelays.invalidate();
+			void utils.room.get.invalidate();
+			void utils.room.unassignedRelays.invalidate();
 			setDeleteRelayId(null);
 		}
 	});
@@ -251,11 +268,17 @@ export default function DeviceDetailPage() {
 	});
 	const updateSwitch = api.switch.update.useMutation({
 		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
 			void utils.switch.list.invalidate({ deviceId: id });
 			setEditingSwitchId(null);
 		}
 	});
-	const deleteSwitch = api.switch.delete.useMutation({ onSuccess: () => void utils.switch.list.invalidate({ deviceId: id }) });
+	const deleteSwitch = api.switch.delete.useMutation({
+		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
+			void utils.switch.list.invalidate({ deviceId: id });
+		}
+	});
 
 	// Delete confirm
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);

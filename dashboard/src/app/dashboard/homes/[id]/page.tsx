@@ -85,6 +85,8 @@ export default function HomeDetailPage() {
 			void utils.home.get.invalidate({ id });
 			void utils.home.list.invalidate();
 			void utils.home.unassignedDevices.invalidate();
+			void utils.room.get.invalidate();
+			void utils.room.unassignedRelays.invalidate();
 		}
 	});
 
