@@ -42,10 +42,14 @@ model User {
     name          String?
     email         String?   @unique
     emailVerified DateTime?
+    image         String?
     passwordHash  String?
     accounts      Account[]
     sessions      Session[]
     apiKeys       ApiKey[]
+    homes         Home[]
+    sharedHomes   HomeShare[]   @relation("SharedHomes")
+    sharedDevices DeviceShare[] @relation("SharedDevices")
 }
 
 model VerificationToken {
@@ -82,10 +86,13 @@ model Device {
     ssid            String?
     notes           String?
     lastSeenAt      DateTime?
-    apiKeyId        String     @db.ObjectId
-    apiKey          ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+    apiKeyId        String        @db.ObjectId
+    apiKey          ApiKey        @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+    homeId          String?       @db.ObjectId
+    home            Home?         @relation(fields: [homeId], references: [id])
     relays          Relay[]
     switches        Switch[]
+    shares          DeviceShare[]
 }
 
 model Relay {
@@ -115,4 +122,39 @@ model Switch {
     linkedRelayId String   @db.ObjectId
     deviceId      String   @db.ObjectId
     device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+// ─── Homes & Sharing ─────────────────────────────────────────
+
+model Home {
+    id        String      @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt DateTime    @default(now())
+    updatedAt DateTime    @updatedAt
+    name      String      @default("My Home")
+    ownerId   String      @db.ObjectId
+    owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+    devices   Device[]
+    shares    HomeShare[]
+}
+
+model HomeShare {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt DateTime @default(now())
+    homeId    String   @db.ObjectId
+    home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+    userId    String   @db.ObjectId
+    user      User     @relation("SharedHomes", fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([homeId, userId])
+}
+
+model DeviceShare {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt DateTime @default(now())
+    deviceId  String   @db.ObjectId
+    device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+    userId    String   @db.ObjectId
+    user      User     @relation("SharedDevices", fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([deviceId, userId])
 }

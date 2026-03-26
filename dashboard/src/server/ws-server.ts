@@ -40,6 +40,8 @@ const deviceSockets = new Map<string, WebSocket>();
 const browserSockets = new Map<string, Set<WebSocket>>();
 // Map: deviceId → pending on-demand ping resolve/timer
 const pendingPings = new Map<string, { resolve: (online: boolean) => void; timer: ReturnType<typeof setTimeout> }>();
+// Map: deviceId → Set of userIds who should receive updates (owner + shared users)
+const deviceSubscribers = new Map<string, Set<string>>();
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -61,6 +63,44 @@ function broadcastToUser(userId: string, payload: object) {
 	if (sockets.size === 0) browserSockets.delete(userId);
 	if ((payload as { type: string }).type === "relay_update") {
 		console.log(`[WS] broadcast relay_update → userId=${userId} sent=${sent} dead_pruned=${dead.length}`);
+	}
+}
+
+/** Build the subscriber set for a device (owner + all shared users) */
+async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
+	const device = await db.device.findFirst({
+		where: { id: deviceId },
+		select: { homeId: true, apiKey: { select: { userId: true } } }
+	});
+	if (!device) return new Set();
+
+	const subscribers = new Set([device.apiKey.userId]);
+
+	// Users with direct device share
+	const deviceShares = await db.deviceShare.findMany({
+		where: { deviceId },
+		select: { userId: true }
+	});
+	for (const s of deviceShares) subscribers.add(s.userId);
+
+	// Users with home share (if device is in a home)
+	if (device.homeId) {
+		const homeShares = await db.homeShare.findMany({
+			where: { homeId: device.homeId },
+			select: { userId: true }
+		});
+		for (const s of homeShares) subscribers.add(s.userId);
+	}
+
+	return subscribers;
+}
+
+/** Broadcast a payload to all subscribers of a device */
+function broadcastToDeviceSubscribers(deviceId: string, payload: object) {
+	const subscribers = deviceSubscribers.get(deviceId);
+	if (!subscribers) return;
+	for (const userId of subscribers) {
+		broadcastToUser(userId, payload);
 	}
 }
 
@@ -306,6 +346,31 @@ const httpServer = createServer((req, res) => {
 		return;
 	}
 
+	// ── /refresh-device-subscribers — called when shares change ──
+	if (req.method === "POST" && req.url === "/refresh-device-subscribers") {
+		if (!authorized) {
+			res.writeHead(403).end();
+			return;
+		}
+		let body = "";
+		req.on("data", (c: Buffer) => {
+			body += c.toString();
+		});
+		req.on("end", async () => {
+			try {
+				const { deviceId } = JSON.parse(body) as { deviceId: string };
+				const subscribers = await buildDeviceSubscribers(deviceId);
+				deviceSubscribers.set(deviceId, subscribers);
+				res.writeHead(200, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({ ok: true, subscriberCount: subscribers.size }));
+				console.log(`[HTTP] /refresh-device-subscribers → device=${deviceId} subscribers=${subscribers.size}`);
+			} catch {
+				res.writeHead(400).end();
+			}
+		});
+		return;
+	}
+
 	res.writeHead(404).end();
 });
 
@@ -407,6 +472,10 @@ function handleDeviceConnection(ws: WebSocket) {
 			deviceUserId = key.userId;
 			deviceSockets.set(device.id, ws);
 
+			// Build subscriber set (owner + shared users)
+			const subscribers = await buildDeviceSubscribers(device.id);
+			deviceSubscribers.set(device.id, subscribers);
+
 			await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
 
 			ws.send(
@@ -418,7 +487,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				})
 			);
 
-			broadcastToUser(key.userId, {
+			broadcastToDeviceSubscribers(device.id, {
 				type: "device_update",
 				deviceId: device.id,
 				lastSeenAt: new Date().toISOString(),
@@ -472,9 +541,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				console.log(`[WS] switch_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
 			}
 
-			if (deviceUserId) {
-				broadcastToUser(deviceUserId, { type: "relay_update", deviceId: relay.deviceId, relayId: relay.id, state: newState });
-			}
+			broadcastToDeviceSubscribers(relay.deviceId, { type: "relay_update", deviceId: relay.deviceId, relayId: relay.id, state: newState });
 			return;
 		}
 
@@ -486,14 +553,12 @@ function handleDeviceConnection(ws: WebSocket) {
 			});
 			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
-			if (deviceUserId) {
-				broadcastToUser(deviceUserId, {
-					type: "relay_update",
-					deviceId: authenticatedDeviceId,
-					relayId: msg.relayId,
-					state: msg.state
-				});
-			}
+			broadcastToDeviceSubscribers(authenticatedDeviceId, {
+				type: "relay_update",
+				deviceId: authenticatedDeviceId,
+				relayId: msg.relayId,
+				state: msg.state
+			});
 			console.log(`[WS] Relay ack: ${msg.relayId} → ${msg.state ? "ON" : "OFF"}`);
 		}
 	});

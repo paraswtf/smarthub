@@ -71,9 +71,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 animate-fade-in max-w-2xl">
+    <div className="p-6 lg:p-8 space-y-6 animate-fade-in max-w-2xl mt-14 lg:mt-0">
       {/* Header */}
-      <div className="pt-2 lg:pt-0">
+      <div>
         <h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">Manage your account and preferences</p>
       </div>

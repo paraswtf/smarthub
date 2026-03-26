@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { db } from "~/server/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { sendVerificationEmail } from "~/server/email";
 
 const schema = z.object({
 	name: z.string().min(1).max(80),
@@ -28,7 +30,17 @@ export async function POST(req: NextRequest) {
 			data: { name, email, passwordHash }
 		});
 
-		return NextResponse.json({ ok: true });
+		// Generate verification token and send email
+		const token = randomBytes(32).toString("hex");
+		const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+		await db.verificationToken.create({
+			data: { identifier: email, token, expires }
+		});
+
+		await sendVerificationEmail(email, token);
+
+		return NextResponse.json({ ok: true, requiresVerification: true });
 	} catch {
 		return NextResponse.json({ error: "Internal server error." }, { status: 500 });
 	}

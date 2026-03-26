@@ -6,7 +6,8 @@ import { signOut } from "next-auth/react";
 import {
   Zap,
   LayoutDashboard,
-  Cpu,
+  Home,
+  Share2,
   Key,
   Settings,
   LogOut,
@@ -17,18 +18,19 @@ import {
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { ThemeToggle } from "~/components/ThemeToggle";
-import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "~/components/ui/avatar";
 import { appConfig } from "../../../globals.config";
 
 const NAV = [
-  { href: "/dashboard",          label: "Overview",    icon: LayoutDashboard },
-  { href: "/dashboard/devices",  label: "Devices",     icon: Cpu },
-  { href: "/dashboard/api-keys", label: "API Keys",    icon: Key },
-  { href: "/dashboard/settings", label: "Settings",    icon: Settings },
+  { href: "/dashboard",          label: "Overview",       icon: LayoutDashboard },
+  { href: "/dashboard/homes",    label: "Homes",          icon: Home },
+  { href: "/dashboard/shared",   label: "Shared with me", icon: Share2 },
+  { href: "/dashboard/api-keys", label: "API Keys",       icon: Key },
+  { href: "/dashboard/settings", label: "Settings",       icon: Settings },
 ];
 
 interface Props {
-  user: { name?: string | null; email?: string | null; id: string };
+  user: { name?: string | null; email?: string | null; image?: string | null; id: string };
 }
 
 export default function DashboardSidebar({ user }: Props) {
@@ -84,6 +86,7 @@ export default function DashboardSidebar({ user }: Props) {
         <div className="flex items-center justify-between px-2 py-1.5 rounded-lg">
           <div className="flex items-center gap-2 min-w-0">
             <Avatar className="w-7 h-7 flex-shrink-0">
+              {user.image && <AvatarImage src={user.image} alt={user.name ?? "User"} />}
               <AvatarFallback className="text-xs bg-primary text-primary-foreground">
                 {initials}
               </AvatarFallback>

@@ -64,9 +64,9 @@ export default function ApiKeysPage() {
 	const maskKey = (key: string) => `${key.slice(0, 8)}${"•".repeat(28)}${key.slice(-4)}`;
 
 	return (
-		<div className="p-6 lg:p-8 space-y-6 animate-fade-in">
+		<div className="p-6 lg:p-8 space-y-6 animate-fade-in mt-14 lg:mt-0">
 			{/* Header */}
-			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 lg:pt-0">
+			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div>
 					<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">API Keys</h1>
 					<p className="text-sm text-muted-foreground mt-1">Each key links ESP32 devices to your account. Flash the key via the captive portal.</p>

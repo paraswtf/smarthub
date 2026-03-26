@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
+import { getDeviceAccess } from "~/server/api/lib/permissions";
 
 // GPIO 34–39 are input-only on ESP32 — cannot be used as relay outputs
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
@@ -28,26 +29,24 @@ export const deviceRouter = createTRPCRouter({
 		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices);
 	}),
 
-	/** Get a single device (must belong to current user) */
+	/** Get a single device (owner or shared user) */
 	get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+		const accessLevel = await getDeviceAccess(ctx.db, input.id, ctx.session.user.id);
+		if (accessLevel === "none") throw new TRPCError({ code: "NOT_FOUND" });
+
 		const device = await ctx.db.device.findFirst({
-			where: {
-				id: input.id,
-				apiKey: { userId: ctx.session.user.id }
-			},
+			where: { id: input.id },
 			include: { relays: { orderBy: { order: "asc" } } }
 		});
 		if (!device) throw new TRPCError({ code: "NOT_FOUND" });
-		return device;
+		return { ...device, accessLevel };
 	}),
 
 	/** Ping a device to check if it's online (sends authoritative state, waits for ack) */
 	pingDevice: protectedProcedure.input(z.object({ deviceId: z.string() })).mutation(async ({ ctx, input }) => {
-		// Verify ownership
-		const device = await ctx.db.device.findFirst({
-			where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } }
-		});
-		if (!device) throw new TRPCError({ code: "NOT_FOUND" });
+		// Verify ownership or shared access
+		const access = await getDeviceAccess(ctx.db, input.deviceId, ctx.session.user.id);
+		if (access === "none") throw new TRPCError({ code: "NOT_FOUND" });
 
 		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/ping-device`;
 		try {
@@ -94,15 +93,16 @@ export const deviceRouter = createTRPCRouter({
 		return ctx.db.device.delete({ where: { id: input.id } });
 	}),
 
-	/** Toggle a relay on/off */
+	/** Toggle a relay on/off (owner or shared user) */
 	toggleRelay: protectedProcedure.input(z.object({ relayId: z.string(), state: z.boolean() })).mutation(async ({ ctx, input }) => {
 		const relay = await ctx.db.relay.findFirst({
-			where: {
-				id: input.relayId,
-				device: { apiKey: { userId: ctx.session.user.id } }
-			}
+			where: { id: input.relayId },
+			select: { id: true, pin: true, deviceId: true, state: true }
 		});
-		if (!relay) throw new TRPCError({ code: "FORBIDDEN" });
+		if (!relay) throw new TRPCError({ code: "NOT_FOUND" });
+
+		const access = await getDeviceAccess(ctx.db, relay.deviceId, ctx.session.user.id);
+		if (access === "none") throw new TRPCError({ code: "FORBIDDEN" });
 
 		// Always try to push to connected ESP32 first
 		const wsUrl = `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}/push-relay`;

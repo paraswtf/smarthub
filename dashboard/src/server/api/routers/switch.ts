@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
+import { getDeviceAccess } from "~/server/api/lib/permissions";
 
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY — ideal for switches
 
@@ -11,10 +12,10 @@ function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof i
 }
 
 export const switchRouter = createTRPCRouter({
-	/** List all switches for a device */
+	/** List all switches for a device (owner or shared user) */
 	list: protectedProcedure.input(z.object({ deviceId: z.string() })).query(async ({ ctx, input }) => {
-		const owned = await assertDeviceOwned(input.deviceId, ctx.session.user.id, ctx);
-		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+		const access = await getDeviceAccess(ctx.db, input.deviceId, ctx.session.user.id);
+		if (access === "none") throw new TRPCError({ code: "FORBIDDEN" });
 		return ctx.db.switch.findMany({
 			where: { deviceId: input.deviceId },
 			orderBy: { createdAt: "asc" }

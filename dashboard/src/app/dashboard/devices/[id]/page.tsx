@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle, Share2 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -261,9 +261,32 @@ export default function DeviceDetailPage() {
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
 	const [deleteRelayId, setDeleteRelayId] = useState<string | null>(null);
 
+	// Share device
+	const [shareOpen, setShareOpen] = useState(false);
+	const [shareEmail, setShareEmail] = useState("");
+	const [shareError, setShareError] = useState("");
+
+	const { data: deviceShares } = api.sharing.listDeviceShares.useQuery({ deviceId: id }, { enabled: !!device && device.accessLevel === "owner" });
+
+	const shareMutation = api.sharing.shareDevice.useMutation({
+		onSuccess: () => {
+			void utils.sharing.listDeviceShares.invalidate({ deviceId: id });
+			setShareOpen(false);
+			setShareEmail("");
+			setShareError("");
+		},
+		onError: (err) => setShareError(err.message)
+	});
+
+	const unshareMutation = api.sharing.unshareDevice.useMutation({
+		onSuccess: () => {
+			void utils.sharing.listDeviceShares.invalidate({ deviceId: id });
+		}
+	});
+
 	if (isLoading)
 		return (
-			<div className="p-6 lg:p-8 space-y-6">
+			<div className="p-6 lg:p-8 space-y-6 mt-14 lg:mt-0">
 				<Skeleton className="h-8 w-1/3" />
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 					{Array.from({ length: 4 }).map((_, i) => (
@@ -286,7 +309,7 @@ export default function DeviceDetailPage() {
 
 	if (!device)
 		return (
-			<div className="p-6 lg:p-8 text-center pt-20">
+			<div className="p-6 lg:p-8 text-center pt-20 mt-14 lg:mt-0">
 				<ServerCrash className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
 				<h2 className="font-sora font-bold text-xl text-foreground">Device not found</h2>
 				<Button
@@ -298,6 +321,8 @@ export default function DeviceDetailPage() {
 				</Button>
 			</div>
 		);
+
+	const isOwner = device.accessLevel === "owner";
 
 	const startEditDevice = () => {
 		setDeviceName(device.name);
@@ -311,9 +336,9 @@ export default function DeviceDetailPage() {
 	};
 
 	return (
-		<div className="p-6 lg:p-8 space-y-6 animate-fade-in">
+		<div className="p-6 lg:p-8 space-y-6 animate-fade-in mt-14 lg:mt-0">
 			{/* Breadcrumb + Header */}
-			<div className="pt-2 lg:pt-0">
+			<div>
 				<button
 					onClick={() => router.back()}
 					className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
@@ -357,28 +382,38 @@ export default function DeviceDetailPage() {
 						<div>
 							<div className="flex items-center gap-3 flex-wrap">
 								<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">{device.name}</h1>
+								{!isOwner && <Badge variant="outline" className="gap-1"><Share2 className="w-3 h-3" /> Shared</Badge>}
 								<Badge variant={isOnline ? "online" : "offline"}>{isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline"}</Badge>
 							</div>
 							<p className="text-sm text-muted-foreground mono mt-1">{device.macAddress}</p>
 							{device.notes && <p className="text-sm text-muted-foreground mt-1">{device.notes}</p>}
 						</div>
-						<div className="flex gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={startEditDevice}
-							>
-								<Pencil className="w-3.5 h-3.5" /> Edit
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								className="text-destructive hover:text-destructive"
-								onClick={() => setDeleteDeviceOpen(true)}
-							>
-								<Trash2 className="w-3.5 h-3.5" /> Delete
-							</Button>
-						</div>
+						{isOwner && (
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => { setShareError(""); setShareOpen(true); }}
+								>
+									<Share2 className="w-3.5 h-3.5" /> Share
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={startEditDevice}
+								>
+									<Pencil className="w-3.5 h-3.5" /> Edit
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									className="text-destructive hover:text-destructive"
+									onClick={() => setDeleteDeviceOpen(true)}
+								>
+									<Trash2 className="w-3.5 h-3.5" /> Delete
+								</Button>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -391,10 +426,10 @@ export default function DeviceDetailPage() {
 					{ label: "Network", value: device.ssid ?? "Unknown", icon: Wifi, colored: false }
 				].map(({ label, value, icon: Icon, colored }) => (
 					<Card key={label}>
-						<CardContent className="p-4">
+						<CardContent className="p-4 overflow-hidden">
 							<Icon className={cn("w-4 h-4 mb-2", colored ? "text-primary" : "text-muted-foreground")} />
 							<p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">{label}</p>
-							<p className={cn("text-sm font-semibold mt-0.5", colored ? "text-primary" : "text-foreground")}>{value}</p>
+							<p className={cn("text-sm font-semibold mt-0.5 truncate", colored ? "text-primary" : "text-foreground")}>{value}</p>
 						</CardContent>
 					</Card>
 				))}
@@ -529,12 +564,14 @@ export default function DeviceDetailPage() {
 													</button>
 												)}
 												{!relayStatus[relay.id] && <span className={cn("text-xs font-semibold", relay.state ? "text-primary" : "text-muted-foreground")}>{relay.state ? "● ON" : "○ OFF"}</span>}
-												<button
-													onClick={() => startEditRelay(relay)}
-													className="text-muted-foreground hover:text-foreground transition-colors"
-												>
-													<Pencil className="w-3.5 h-3.5" />
-												</button>
+												{isOwner && (
+													<button
+														onClick={() => startEditRelay(relay)}
+														className="text-muted-foreground hover:text-foreground transition-colors"
+													>
+														<Pencil className="w-3.5 h-3.5" />
+													</button>
+												)}
 											</div>
 										</>
 									)}
@@ -543,7 +580,7 @@ export default function DeviceDetailPage() {
 						})}
 
 						{/* Add relay card */}
-						{device.relays.length < appConfig.maxRelaysPerDevice && (
+						{isOwner && device.relays.length < appConfig.maxRelaysPerDevice && (
 							<div
 								className="relay-card p-4 border-dashed flex flex-col items-center justify-center min-h-[140px] hover:border-primary/50 hover:bg-primary/5"
 								onClick={() => !addingRelay && setAddingRelay(true)}
@@ -756,22 +793,24 @@ export default function DeviceDetailPage() {
 											})()}
 										</p>
 									</div>
-									<button
-										onClick={() => {
-											setEditingSwitchId(det.id);
-											setEditSwitch({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "two_way") as SwitchTypeValue, linkedRelayId: det.linkedRelayId });
-										}}
-										className="text-muted-foreground hover:text-foreground"
-									>
-										<Pencil className="w-3.5 h-3.5" />
-									</button>
+									{isOwner && (
+										<button
+											onClick={() => {
+												setEditingSwitchId(det.id);
+												setEditSwitch({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "two_way") as SwitchTypeValue, linkedRelayId: det.linkedRelayId });
+											}}
+											className="text-muted-foreground hover:text-foreground"
+										>
+											<Pencil className="w-3.5 h-3.5" />
+										</button>
+									)}
 								</div>
 							)}
 						</div>
 					))}
 
-					{/* Add switch */}
-					{addingSwitch ? (
+					{/* Add switch (owner only) */}
+					{isOwner && (addingSwitch ? (
 						<div className="relay-card p-4 space-y-2.5">
 							<Input
 								value={newSwitch.label}
@@ -866,7 +905,7 @@ export default function DeviceDetailPage() {
 							<Plus className="w-3.5 h-3.5" /> Add Switch
 							{device.relays.length === 0 && <span className="ml-2 text-muted-foreground">(add a relay to any device first)</span>}
 						</Button>
-					)}
+					))}
 				</TabsContent>
 
 				{/* CONFIG TAB */}
@@ -959,6 +998,62 @@ export default function DeviceDetailPage() {
 							{deleteRelay.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
 						</Button>
 					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Share device dialog */}
+			<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Share "{device.name}"</DialogTitle>
+						<DialogDescription>Share this device with another user so they can view and toggle relays.</DialogDescription>
+					</DialogHeader>
+					<form
+						onSubmit={(e) => {
+							e.preventDefault();
+							setShareError("");
+							if (shareEmail.trim()) shareMutation.mutate({ deviceId: id, email: shareEmail.trim() });
+						}}
+						className="space-y-4"
+					>
+						<div className="space-y-2">
+							<Label htmlFor="share-device-email">User email</Label>
+							<Input
+								id="share-device-email"
+								type="email"
+								placeholder="user@example.com"
+								value={shareEmail}
+								onChange={(e) => setShareEmail(e.target.value)}
+							/>
+							{shareError && <p className="text-sm text-destructive">{shareError}</p>}
+						</div>
+						<Button type="submit" disabled={!shareEmail.trim() || shareMutation.isPending} className="w-full">
+							{shareMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Share"}
+						</Button>
+					</form>
+
+					{(deviceShares?.length ?? 0) > 0 && (
+						<div className="space-y-2 pt-2 border-t">
+							<p className="text-sm font-medium">Shared with</p>
+							{deviceShares!.map((share) => (
+								<div key={share.id} className="flex items-center justify-between py-1">
+									<div className="min-w-0">
+										<p className="text-sm truncate">{share.user.name ?? share.user.email}</p>
+										{share.user.name && <p className="text-xs text-muted-foreground truncate">{share.user.email}</p>}
+									</div>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-7 w-7 text-destructive"
+										onClick={() => unshareMutation.mutate({ deviceId: id, userId: share.user.id })}
+										disabled={unshareMutation.isPending}
+									>
+										<X className="w-3.5 h-3.5" />
+									</Button>
+								</div>
+							))}
+						</div>
+					)}
 				</DialogContent>
 			</Dialog>
 		</div>

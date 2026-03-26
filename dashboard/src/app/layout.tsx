@@ -1,4 +1,4 @@
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import { Sora, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "~/styles/globals.css";
 import { TRPCReactProvider } from "~/trpc/react";
@@ -26,6 +26,12 @@ const jetbrainsMono = JetBrains_Mono({
 	variable: "--font-jetbrains-mono",
 	display: "swap"
 });
+
+export const viewport: Viewport = {
+	width: "device-width",
+	initialScale: 1,
+	maximumScale: 1
+};
 
 export const metadata: Metadata = {
 	title: "SmartHUB | Home Automation Control Center",

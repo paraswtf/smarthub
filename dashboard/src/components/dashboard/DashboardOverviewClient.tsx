@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight } from "lucide-react";
+import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight, Home } from "lucide-react";
 import Link from "next/link";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -59,6 +59,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const { data: apiKeys, isLoading: keysLoading } = api.apiKey.list.useQuery(undefined, {
 		refetchInterval: 60_000
 	});
+	const { data: homes } = api.home.list.useQuery();
 
 	const pingMutation = api.device.pingDevice.useMutation();
 
@@ -109,18 +110,19 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	const activeRelays = mergedDevices.reduce((n, d) => n + d.relays.filter((r) => r.state).length, 0);
 	const deviceCount = mergedDevices.length;
 	const apiKeyCount = (apiKeys ?? []).length;
+	const homeCount = (homes ?? []).length;
 
 	const STAT_CARDS = [
+		{ label: "Homes", value: homeCount, icon: Home, sub: `${deviceCount} devices` },
 		{ label: "Total Devices", value: deviceCount, icon: Cpu, sub: `${onlineCount} online` },
 		{ label: "Active Relays", value: activeRelays, icon: ToggleRight, sub: `of ${relayCount} configured` },
 		{ label: "Devices Online", value: onlineCount, icon: Wifi, sub: deviceCount > 0 ? `${Math.round((onlineCount / deviceCount) * 100)}% uptime` : "—" },
-		{ label: "API Keys", value: apiKeyCount, icon: Key, sub: "Active keys" }
 	];
 
 	return (
-		<div className="p-6 lg:p-8 space-y-8 animate-fade-in">
+		<div className="p-6 lg:p-8 space-y-8 animate-fade-in mt-14 lg:mt-0">
 			{/* Header */}
-			<div className="pt-2 lg:pt-0">
+			<div>
 				<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">
 					{greeting()}, {userName?.split(" ")[0] ?? "there"} 👋
 				</h1>
@@ -164,7 +166,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 								variant="outline"
 								asChild
 							>
-								<Link href="/dashboard/devices">View Devices</Link>
+								<Link href="/dashboard/homes">View Homes</Link>
 							</Button>
 						</div>
 					</CardContent>
@@ -193,7 +195,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							size="sm"
 							asChild
 						>
-							<Link href="/dashboard/devices">View all</Link>
+							<Link href="/dashboard/homes">View all</Link>
 						</Button>
 					</div>
 

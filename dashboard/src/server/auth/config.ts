@@ -1,7 +1,11 @@
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
+import { randomBytes } from "crypto";
 import { db } from "~/server/db";
 import bcrypt from "bcryptjs";
+import { sendVerificationEmail } from "~/server/email";
 
 declare module "next-auth" {
 	interface Session extends DefaultSession {
@@ -12,7 +16,13 @@ declare module "next-auth" {
 }
 
 export const authConfig = {
+	adapter: PrismaAdapter(db),
 	providers: [
+		GoogleProvider({
+			clientId: process.env.AUTH_GOOGLE_CLIENT_ID!,
+			clientSecret: process.env.AUTH_GOOGLE_CLIENT_SECRET!,
+			allowDangerousEmailAccountLinking: true,
+		}),
 		CredentialsProvider({
 			name: "credentials",
 			credentials: {
@@ -40,6 +50,36 @@ export const authConfig = {
 	// DB on every request and returns null if the user no longer exists.
 	session: { strategy: "jwt" },
 	callbacks: {
+		async signIn({ user, account, profile }) {
+			// Google users are always email-verified, save profile picture
+			if (account?.provider === "google" && user.id) {
+				await db.user.update({
+					where: { id: user.id },
+					data: {
+						emailVerified: new Date(),
+						...(profile?.picture ? { image: profile.picture as string } : {}),
+					},
+				});
+				return true;
+			}
+
+			// Block unverified credential users and resend verification email
+			if (account?.provider === "credentials" && user.email) {
+				const dbUser = await db.user.findUnique({ where: { email: user.email } });
+				if (dbUser && !dbUser.emailVerified) {
+					// Delete old tokens and send a fresh verification email
+					await db.verificationToken.deleteMany({ where: { identifier: user.email } });
+					const token = randomBytes(32).toString("hex");
+					const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+					await db.verificationToken.create({ data: { identifier: user.email, token, expires } });
+					await sendVerificationEmail(user.email, token);
+
+					return `/auth/verify?email=${encodeURIComponent(user.email)}`;
+				}
+			}
+
+			return true;
+		},
 		jwt: ({ token, user }) => {
 			if (user) {
 				token.id = user.id;
@@ -54,7 +94,7 @@ export const authConfig = {
 			// null and the session object will have no valid id.
 			const dbUser = await db.user.findUnique({
 				where: { id: userId },
-				select: { id: true, name: true, email: true }
+				select: { id: true, name: true, email: true, image: true }
 			});
 
 			if (!dbUser) {
@@ -69,7 +109,8 @@ export const authConfig = {
 					...session.user,
 					id: dbUser.id,
 					name: dbUser.name,
-					email: dbUser.email
+					email: dbUser.email,
+					image: dbUser.image
 				}
 			};
 		}
