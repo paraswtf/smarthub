@@ -89,18 +89,19 @@ public:
     // ── WebSocket connect ─────────────────────────────────────
     void connectWebSocket()
     {
-        uint16_t wsPort = WS_PORT_OVERRIDE > 0 ? WS_PORT_OVERRIDE : _cfg->serverPort;
-        DBG_WS("Connecting to %s:%d", _cfg->serverHost.c_str(), wsPort);
+        // Dev mode: use separate wsPort with WS. Production: use serverPort (443) with WSS.
+        uint16_t port = _cfg->devMode ? _cfg->wsPort : _cfg->serverPort;
+        DBG_WS("Connecting to %s:%d (devMode=%d)", _cfg->serverHost.c_str(), port, _cfg->devMode);
 
         _resetState();
 
         if (_cfg->serverSecure)
         {
-            _ws.beginSSL(_cfg->serverHost.c_str(), wsPort, "/");
+            _ws.beginSSL(_cfg->serverHost.c_str(), port, "/");
         }
         else
         {
-            _ws.begin(_cfg->serverHost.c_str(), wsPort, "/");
+            _ws.begin(_cfg->serverHost.c_str(), port, "/");
         }
 
         _ws.onEvent([this](WStype_t type, uint8_t *payload, size_t length)
@@ -178,7 +179,6 @@ public:
     }
 
 private:
-    static constexpr uint16_t WS_PORT_OVERRIDE = 0; // 0 = use port from captive portal config
     static constexpr const char *FIRMWARE_VERSION = "1.2.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 

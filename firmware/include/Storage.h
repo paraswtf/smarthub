@@ -15,6 +15,8 @@ struct DeviceConfig
     uint16_t serverPort;
     bool serverSecure;
     String deviceId;
+    bool devMode;
+    uint16_t wsPort; // separate WS port (dev mode only)
 };
 
 struct RelayConfig
@@ -41,14 +43,23 @@ public:
         cfg.serverPort = prefs.getUShort("srv_port", 3000);
         cfg.serverSecure = prefs.getBool("srv_tls", false);
         cfg.deviceId = prefs.getString("dev_id", "");
+        cfg.devMode = prefs.getBool("dev_mode", false);
+        cfg.wsPort = prefs.getUShort("ws_port", 4001);
 
         prefs.end();
 
+        // In production mode, force port 443 + WSS
+        if (!cfg.devMode)
+        {
+            cfg.serverPort = 443;
+            cfg.serverSecure = true;
+        }
+
         bool valid = cfg.wifiSSID.length() > 0 && cfg.apiKey.length() > 0 && cfg.serverHost.length() > 0;
 
-        DBG_STORAGE("load() — ssid=%s  host=%s  port=%d  tls=%d  deviceId=%s  valid=%d",
+        DBG_STORAGE("load() — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  wsPort=%d  deviceId=%s  valid=%d",
                     cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
-                    cfg.serverSecure, cfg.deviceId.c_str(), valid);
+                    cfg.serverSecure, cfg.devMode, cfg.wsPort, cfg.deviceId.c_str(), valid);
 
         return valid;
     }
@@ -65,10 +76,13 @@ public:
         prefs.putString("srv_host", cfg.serverHost);
         prefs.putUShort("srv_port", cfg.serverPort);
         prefs.putBool("srv_tls", cfg.serverSecure);
+        prefs.putBool("dev_mode", cfg.devMode);
+        prefs.putUShort("ws_port", cfg.wsPort);
 
         prefs.end();
-        DBG_STORAGE("save() — ssid=%s  host=%s:%d  tls=%d",
-                    cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort, cfg.serverSecure);
+        DBG_STORAGE("save() — ssid=%s  host=%s:%d  tls=%d  devMode=%d  wsPort=%d",
+                    cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
+                    cfg.serverSecure, cfg.devMode, cfg.wsPort);
     }
 
     static void saveDeviceId(const String &id)
