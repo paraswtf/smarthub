@@ -180,7 +180,7 @@ export default function SharedPage() {
 														</div>
 														<div>
 															<p className="font-semibold text-sm">{relay.label}</p>
-															<p className="text-xs text-muted-foreground">
+															<p className="text-xs text-muted-foreground truncate">
 																{relay.device.name} &middot; by {relay.owner.name ?? relay.owner.email}
 															</p>
 														</div>

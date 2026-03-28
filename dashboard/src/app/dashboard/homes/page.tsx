@@ -146,7 +146,7 @@ export default function HomesPage() {
 											<Cpu className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 											<CardTitle className="text-base font-semibold truncate">{device.name}</CardTitle>
 										</div>
-										<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
+										<p className="text-xs text-muted-foreground mono break-all">{device.macAddress}</p>
 									</CardHeader>
 									<CardContent className="pb-4">
 										<div className="flex items-center justify-between">

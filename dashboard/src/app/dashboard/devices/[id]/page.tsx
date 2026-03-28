@@ -386,7 +386,7 @@ export default function DeviceDetailPage() {
 								{!isOwner && <Badge variant="outline">Shared</Badge>}
 								<Badge variant={isOnline ? "online" : "offline"}>{isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline"}</Badge>
 							</div>
-							<p className="text-sm text-muted-foreground mono mt-1">{device.macAddress}</p>
+							<p className="text-sm text-muted-foreground mono mt-1 break-all">{device.macAddress}</p>
 							{device.notes && <p className="text-sm text-muted-foreground mt-1">{device.notes}</p>}
 						</div>
 						{isOwner && (
@@ -413,7 +413,7 @@ export default function DeviceDetailPage() {
 			</div>
 
 			{/* Info cards */}
-			<div className="grid grid-cols-3 gap-3">
+			<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 				{[
 					{ label: "Status", value: isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline", icon: isOnline ? Wifi : WifiOff, colored: !!isOnline },
 					{ label: "Firmware", value: device.firmwareVersion ?? "Unknown", icon: Radio, colored: false },
@@ -431,7 +431,7 @@ export default function DeviceDetailPage() {
 
 			{/* Tabs: Relays + Switches + Config */}
 			<Tabs defaultValue="relays">
-				<TabsList>
+				<TabsList className="w-full">
 					<TabsTrigger value="relays">
 						Relays ({device.relays.length}/{appConfig.maxRelaysPerDevice})
 					</TabsTrigger>
@@ -927,7 +927,7 @@ export default function DeviceDetailPage() {
 										className="flex flex-col sm:flex-row sm:items-center gap-1 py-2 border-b border-border last:border-0"
 									>
 										<span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide min-w-[130px]">{label}</span>
-										<span className="text-sm text-foreground mono">{value}</span>
+										<span className="text-sm text-foreground mono break-all">{value}</span>
 									</div>
 								))}
 							</div>

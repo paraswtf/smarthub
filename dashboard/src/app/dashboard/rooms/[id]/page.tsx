@@ -210,7 +210,7 @@ export default function RoomDetailPage() {
 							<Input
 								value={editName}
 								onChange={(e) => setEditName(e.target.value)}
-								className="h-9 w-48"
+								className="h-9 w-full sm:w-48"
 								autoFocus
 							/>
 							<Button size="sm" type="submit" disabled={updateRoom.isPending}>Save</Button>
@@ -231,7 +231,7 @@ export default function RoomDetailPage() {
 				</div>
 
 				{isOwner && (
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-2 flex-wrap">
 						{/* Share room */}
 						<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
 							<DialogTrigger asChild>
@@ -343,7 +343,7 @@ export default function RoomDetailPage() {
 			</div>
 
 			{/* Stats */}
-			<div className="flex gap-4">
+			<div className="flex gap-4 flex-wrap">
 				<Badge variant="outline" className="gap-1.5 px-3 py-1">
 					<ToggleRight className="w-3.5 h-3.5" /> {room.relays.length} {room.relays.length === 1 ? "relay" : "relays"}
 				</Badge>

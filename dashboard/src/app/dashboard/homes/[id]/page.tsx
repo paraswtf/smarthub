@@ -159,7 +159,7 @@ export default function HomeDetailPage() {
 							<Input
 								value={editName}
 								onChange={(e) => setEditName(e.target.value)}
-								className="h-9 w-48"
+								className="h-9 w-full sm:w-48"
 								autoFocus
 							/>
 							<Button size="sm" type="submit" disabled={updateHome.isPending}>Save</Button>
@@ -176,7 +176,7 @@ export default function HomeDetailPage() {
 					)}
 				</div>
 
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-2 flex-wrap">
 					{/* Share button */}
 					<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
 						<DialogTrigger asChild>
@@ -261,7 +261,7 @@ export default function HomeDetailPage() {
 											<Cpu className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 											<div className="min-w-0">
 												<p className="text-sm font-medium truncate">{device.name}</p>
-												<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
+												<p className="text-xs text-muted-foreground mono break-all">{device.macAddress}</p>
 											</div>
 										</button>
 									))}
@@ -323,7 +323,7 @@ export default function HomeDetailPage() {
 			</div>
 
 			{/* Stats */}
-			<div className="flex gap-4">
+			<div className="flex gap-4 flex-wrap">
 				<Badge variant="outline" className="gap-1.5 px-3 py-1">
 					<DoorOpen className="w-3.5 h-3.5" /> {home.rooms.length} {home.rooms.length === 1 ? "room" : "rooms"}
 				</Badge>
@@ -431,7 +431,7 @@ export default function HomeDetailPage() {
 												<Cpu className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 												<CardTitle className="text-base font-semibold truncate">{device.name}</CardTitle>
 											</div>
-											<p className="text-xs text-muted-foreground mono">{device.macAddress}</p>
+											<p className="text-xs text-muted-foreground mono break-all">{device.macAddress}</p>
 										</CardHeader>
 										<CardContent className="pb-4">
 											<div className="flex items-center justify-between">
