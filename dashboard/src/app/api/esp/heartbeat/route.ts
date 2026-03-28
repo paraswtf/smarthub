@@ -1,11 +1,12 @@
 /**
  * POST /api/esp/heartbeat
  *
- * Called periodically by ESP32 to report it's still alive
- * and to receive any pending relay-state changes from the dashboard.
+ * Called periodically by ESP32 to report it's still alive,
+ * sync its physical relay states to DB (ESP32 is authoritative),
+ * and receive the current desired relay states from the server.
  *
  * Body: { deviceId, apiKey, relayStates?: [{ id, state }] }
- * Returns: { relays: [{ id, pin, state }], pendingSync: boolean }
+ * Returns: { relays: [{ id, pin, state }], ok: boolean }
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "~/server/db";
@@ -16,6 +17,8 @@ const schema = z.object({
 	apiKey: z.string().min(1),
 	relayStates: z.array(z.object({ id: z.string(), state: z.boolean() })).optional()
 });
+
+const LAST_SEEN_THROTTLE_MS = 30_000;
 
 export async function POST(req: NextRequest) {
 	try {
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: "Device not found or key invalid" }, { status: 401 });
 		}
 
-		// If ESP32 is reporting current relay states, reconcile them
+		// ESP32 is authoritative for physical relay states — reconcile to DB
 		if (relayStates?.length) {
 			await Promise.all(
 				relayStates.map(({ id, state }) =>
@@ -48,19 +51,23 @@ export async function POST(req: NextRequest) {
 			);
 		}
 
-		await db.device.update({
-			where: { id: deviceId },
-			data: { lastSeenAt: new Date() }
-		});
+		// Rate-limit lastSeenAt updates
+		const shouldUpdateLastSeen = !device.lastSeenAt ||
+			(Date.now() - device.lastSeenAt.getTime() > LAST_SEEN_THROTTLE_MS);
+		if (shouldUpdateLastSeen) {
+			await db.device.update({
+				where: { id: deviceId },
+				data: { lastSeenAt: new Date() }
+			});
+		}
 
-		// Refresh relays after reconcile
-		const freshRelays = await db.relay.findMany({
-			where: { deviceId },
-			orderBy: { order: "asc" }
-		});
+		// Return current desired relay states (includes any pending scheduled changes)
+		const relays = relayStates?.length
+			? await db.relay.findMany({ where: { deviceId }, orderBy: { order: "asc" } })
+			: device.relays;
 
 		return NextResponse.json({
-			relays: freshRelays.map((r: { id: string; pin: number; state: boolean }) => ({ id: r.id, pin: r.pin, state: r.state })),
+			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })),
 			ok: true
 		});
 	} catch (err) {

@@ -597,6 +597,98 @@ function handleDeviceConnection(ws: WebSocket) {
 	ws.on("error", (err) => console.error("[WS] Device error:", err.message));
 }
 
+// ─── Schedule executor ───────────────────────────────────────
+
+const SCHEDULE_CHECK_INTERVAL = 60_000;
+
+/** Map short weekday name to day number (0=Sun..6=Sat) */
+function weekdayToNumber(wd: string): number {
+	const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+	return map[wd] ?? -1;
+}
+
+setInterval(async () => {
+	try {
+		const schedules = await db.relaySchedule.findMany({
+			where: { enabled: true },
+			include: {
+				relay: { select: { id: true, pin: true, deviceId: true, state: true } }
+			}
+		});
+
+		if (schedules.length === 0) return;
+		const now = new Date();
+
+		for (const schedule of schedules) {
+			// Get current time in the schedule's timezone
+			const parts = new Intl.DateTimeFormat("en-US", {
+				timeZone: schedule.timezone,
+				hour: "numeric",
+				minute: "numeric",
+				weekday: "short",
+				hour12: false
+			}).formatToParts(now);
+
+			const localHour = Number(parts.find((p) => p.type === "hour")?.value);
+			const localMinute = Number(parts.find((p) => p.type === "minute")?.value);
+			const localDay = weekdayToNumber(parts.find((p) => p.type === "weekday")?.value ?? "");
+
+			if (localHour !== schedule.hour || localMinute !== schedule.minute) continue;
+			if (!schedule.daysOfWeek.includes(localDay)) continue;
+
+			// Prevent double-fire in the same minute
+			if (schedule.lastFiredAt) {
+				const lastParts = new Intl.DateTimeFormat("en-US", {
+					timeZone: schedule.timezone,
+					hour: "numeric",
+					minute: "numeric",
+					hour12: false,
+					year: "numeric",
+					month: "numeric",
+					day: "numeric"
+				}).formatToParts(schedule.lastFiredAt);
+				const lastH = Number(lastParts.find((p) => p.type === "hour")?.value);
+				const lastM = Number(lastParts.find((p) => p.type === "minute")?.value);
+				const lastD = Number(lastParts.find((p) => p.type === "day")?.value);
+				const nowD = Number(new Intl.DateTimeFormat("en-US", {
+					timeZone: schedule.timezone, day: "numeric"
+				}).format(now));
+				if (lastH === localHour && lastM === localMinute && lastD === nowD) continue;
+			}
+
+			// Skip if relay is already in the desired state
+			if (schedule.relay.state === schedule.action) {
+				await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });
+				continue;
+			}
+
+			// Update relay state in DB (desired state for heartbeat sync)
+			await db.relay.update({
+				where: { id: schedule.relay.id },
+				data: { state: schedule.action }
+			});
+
+			// Push to ESP32 if online
+			pushRelayCommand(schedule.relay.deviceId, schedule.relay.id, schedule.relay.pin, schedule.action);
+
+			// Broadcast to browser subscribers
+			broadcastToDeviceSubscribers(schedule.relay.deviceId, {
+				type: "relay_update",
+				deviceId: schedule.relay.deviceId,
+				relayId: schedule.relay.id,
+				state: schedule.action
+			});
+
+			await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });
+			console.log(`[SCHEDULE] Fired: "${schedule.label}" → relay ${schedule.relay.id} → ${schedule.action ? "ON" : "OFF"}`);
+		}
+	} catch (err) {
+		console.error("[SCHEDULE] Error:", err);
+	}
+}, SCHEDULE_CHECK_INTERVAL);
+
+console.log(`[SCHEDULE] Executor started — checking every ${SCHEDULE_CHECK_INTERVAL / 1000}s`);
+
 // ─── Graceful shutdown ────────────────────────────────────────
 
 process.on("SIGTERM", async () => {

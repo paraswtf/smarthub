@@ -18,6 +18,7 @@ import { Switch } from "~/components/ui/switch";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
+import { RelayScheduleDialog } from "~/components/dashboard/RelayScheduleDialog";
 
 const RELAY_ICONS: Record<string, React.ElementType> = {
 	lightbulb: Lightbulb,
@@ -415,15 +416,22 @@ export default function RoomDetailPage() {
 											)}
 										</div>
 										{isOwner && (
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-7 w-7 text-muted-foreground hover:text-destructive"
-												onClick={() => unassignRelay.mutate({ relayId: relay.id })}
-												title="Remove from room"
-											>
-												<X className="w-3.5 h-3.5" />
-											</Button>
+											<div className="flex items-center gap-0.5">
+												<RelayScheduleDialog
+													relayId={relay.id}
+													relayLabel={relay.label}
+													scheduleCount={relay._count.schedules}
+												/>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-7 w-7 text-muted-foreground hover:text-destructive"
+													onClick={() => unassignRelay.mutate({ relayId: relay.id })}
+													title="Remove from room"
+												>
+													<X className="w-3.5 h-3.5" />
+												</Button>
+											</div>
 										)}
 									</div>
 								</CardContent>

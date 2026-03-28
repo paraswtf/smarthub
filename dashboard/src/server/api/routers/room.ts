@@ -42,7 +42,10 @@ export const roomRouter = createTRPCRouter({
 					home: { select: { id: true, name: true, ownerId: true } },
 					relays: {
 						orderBy: { order: "asc" },
-						include: { device: { select: { id: true, name: true, lastSeenAt: true } } }
+						include: {
+							device: { select: { id: true, name: true, lastSeenAt: true } },
+							_count: { select: { schedules: { where: { enabled: true } } } }
+						}
 					},
 					shares: {
 						include: { user: { select: { id: true, name: true, email: true } } }

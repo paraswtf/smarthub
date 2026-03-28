@@ -109,6 +109,7 @@ model Relay {
     roomId    String?      @db.ObjectId
     room      Room?        @relation(fields: [roomId], references: [id])
     shares    RelayShare[]
+    schedules RelaySchedule[]
 }
 
 // A switch monitors an input GPIO pin and toggles a linked relay on state change.
@@ -184,4 +185,21 @@ model RelayShare {
     user      User     @relation("SharedRelays", fields: [userId], references: [id], onDelete: Cascade)
 
     @@unique([relayId, userId])
+}
+
+model RelaySchedule {
+    id          String    @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    label       String    @default("Schedule")
+    hour        Int
+    minute      Int
+    daysOfWeek  Int[]
+    action      Boolean
+    enabled     Boolean   @default(true)
+    timezone    String    @default("Asia/Kolkata")
+    lastFiredAt DateTime?
+    relayId     String    @db.ObjectId
+    relay       Relay     @relation(fields: [relayId], references: [id], onDelete: Cascade)
+    createdById String    @db.ObjectId
 }
