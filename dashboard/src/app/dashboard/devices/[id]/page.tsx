@@ -25,7 +25,7 @@ const RELAY_ICONS: Record<string, React.ElementType> = {
 	tv: Tv,
 	coffee: Coffee,
 	thermometer: Thermometer,
-	radio: Radio
+	radio: Radio,
 };
 
 type SwitchTypeValue = "two_way" | "three_way" | "momentary";
@@ -61,7 +61,7 @@ const MomentaryIcon = ({ className }: { className?: string }) => (
 const SWITCH_TYPES: { value: SwitchTypeValue; label: string; desc: string; icon: React.ReactNode }[] = [
 	{ value: "two_way", label: "Two-way", desc: "Toggle switch (VCC \u2194 floating)", icon: <TwoWayIcon className="w-5 h-5" /> },
 	{ value: "three_way", label: "Three-way", desc: "SPDT switch (VCC \u2194 GND)", icon: <ThreeWayIcon className="w-5 h-5" /> },
-	{ value: "momentary", label: "Momentary", desc: "Push button (press to toggle)", icon: <MomentaryIcon className="w-5 h-5" /> }
+	{ value: "momentary", label: "Momentary", desc: "Push button (press to toggle)", icon: <MomentaryIcon className="w-5 h-5" /> },
 ];
 
 const ICON_OPTIONS = Object.keys(RELAY_ICONS);
@@ -77,8 +77,8 @@ export default function DeviceDetailPage() {
 	const { data: device, isLoading } = api.device.get.useQuery(
 		{ id },
 		{
-			refetchInterval: 30_000 // fallback poll — WS handles real-time
-		}
+			refetchInterval: 30_000, // fallback poll — WS handles real-time
+		},
 	);
 
 	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
@@ -93,7 +93,7 @@ export default function DeviceDetailPage() {
 		setIsOnline(null);
 		pingDevice.mutateAsync({ deviceId: id }).then(
 			(r) => setIsOnline(r.online),
-			() => setIsOnline(false)
+			() => setIsOnline(false),
 		);
 	}, [device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -115,7 +115,7 @@ export default function DeviceDetailPage() {
 				if (!old) return old;
 				return {
 					...old,
-					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === update.relayId ? { ...r, state: update.state } : r))
+					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === update.relayId ? { ...r, state: update.state } : r)),
 				};
 			});
 			setRelayStatus((s) => {
@@ -177,7 +177,7 @@ export default function DeviceDetailPage() {
 			void utils.device.list.invalidate();
 			if (device?.homeId) void utils.home.get.invalidate({ id: device.homeId });
 			setEditingDevice(false);
-		}
+		},
 	});
 	const deleteDevice = api.device.delete.useMutation({
 		onSuccess: () => {
@@ -189,7 +189,7 @@ export default function DeviceDetailPage() {
 			void utils.room.unassignedRelays.invalidate();
 			void utils.switch.listAllRelays.invalidate();
 			router.push("/dashboard/devices");
-		}
+		},
 	});
 
 	// Optimistic relay toggle — update UI immediately, roll back on error
@@ -201,7 +201,7 @@ export default function DeviceDetailPage() {
 				if (!old) return old;
 				return {
 					...old,
-					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === relayId ? { ...r, state } : r))
+					relays: old.relays.map((r: DeviceGetOutput["relays"][number]) => (r.id === relayId ? { ...r, state } : r)),
 				};
 			});
 			return { prev };
@@ -220,7 +220,7 @@ export default function DeviceDetailPage() {
 				// Command was pushed to ESP32 — wait for relay_ack via WS
 				setRelayPending(relayId);
 			}
-		}
+		},
 	});
 
 	const addRelay = api.device.addRelay.useMutation({
@@ -230,7 +230,7 @@ export default function DeviceDetailPage() {
 			void utils.room.unassignedRelays.invalidate();
 			setAddingRelay(false);
 			setNewRelay({ pin: 2, label: "", icon: "plug" });
-		}
+		},
 	});
 	const updateRelay = api.device.updateRelay.useMutation({
 		onSuccess: () => {
@@ -238,7 +238,7 @@ export default function DeviceDetailPage() {
 			void utils.switch.listAllRelays.invalidate();
 			void utils.room.get.invalidate();
 			setEditingRelayId(null);
-		}
+		},
 	});
 	const deleteRelay = api.device.deleteRelay.useMutation({
 		onSuccess: () => {
@@ -247,7 +247,7 @@ export default function DeviceDetailPage() {
 			void utils.room.get.invalidate();
 			void utils.room.unassignedRelays.invalidate();
 			setDeleteRelayId(null);
-		}
+		},
 	});
 
 	// ── Switch state & mutations ────────────────────────────
@@ -264,26 +264,25 @@ export default function DeviceDetailPage() {
 			void utils.switch.list.invalidate({ deviceId: id });
 			setAddingSwitch(false);
 			setNewSwitch({ pin: 36, label: "Switch", switchType: "two_way", linkedRelayId: "" });
-		}
+		},
 	});
 	const updateSwitch = api.switch.update.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.list.invalidate({ deviceId: id });
 			setEditingSwitchId(null);
-		}
+		},
 	});
 	const deleteSwitch = api.switch.delete.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.list.invalidate({ deviceId: id });
-		}
+		},
 	});
 
 	// Delete confirm
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
 	const [deleteRelayId, setDeleteRelayId] = useState<string | null>(null);
-
 
 	if (isLoading)
 		return (
@@ -291,18 +290,12 @@ export default function DeviceDetailPage() {
 				<Skeleton className="h-8 w-1/3" />
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 					{Array.from({ length: 4 }).map((_, i) => (
-						<Skeleton
-							key={i}
-							className="h-24 rounded-xl"
-						/>
+						<Skeleton key={i} className="h-24 rounded-xl" />
 					))}
 				</div>
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{Array.from({ length: 4 }).map((_, i) => (
-						<Skeleton
-							key={i}
-							className="h-36 rounded-xl"
-						/>
+						<Skeleton key={i} className="h-36 rounded-xl" />
 					))}
 				</div>
 			</div>
@@ -313,11 +306,7 @@ export default function DeviceDetailPage() {
 			<div className="p-6 lg:p-8 text-center pt-20 mt-14 lg:mt-0">
 				<ServerCrash className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
 				<h2 className="font-sora font-bold text-xl text-foreground">Device not found</h2>
-				<Button
-					variant="outline"
-					className="mt-4"
-					onClick={() => router.back()}
-				>
+				<Button variant="outline" className="mt-4" onClick={() => router.back()}>
 					Go back
 				</Button>
 			</div>
@@ -340,40 +329,22 @@ export default function DeviceDetailPage() {
 		<div className="p-6 lg:p-8 space-y-6 animate-fade-in mt-14 lg:mt-0">
 			{/* Breadcrumb + Header */}
 			<div>
-				<button
-					onClick={() => router.back()}
-					className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-				>
+				<button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
 					<ArrowLeft className="w-3.5 h-3.5" /> Back
 				</button>
 
 				{editingDevice ? (
 					<div className="flex flex-col sm:flex-row gap-3 items-start">
 						<div className="flex-1 space-y-2">
-							<Input
-								value={deviceName}
-								onChange={(e) => setDeviceName(e.target.value)}
-								className="font-sora font-bold text-xl h-12 text-foreground"
-								placeholder="Device name"
-							/>
-							<Input
-								value={deviceNotes}
-								onChange={(e) => setDeviceNotes(e.target.value)}
-								placeholder="Notes (optional)"
-							/>
+							<Input value={deviceName} onChange={(e) => setDeviceName(e.target.value)} className="font-sora font-bold text-xl h-12 text-foreground" placeholder="Device name" />
+							<Input value={deviceNotes} onChange={(e) => setDeviceNotes(e.target.value)} placeholder="Notes (optional)" />
 						</div>
 						<div className="flex gap-2">
-							<Button
-								onClick={() => updateDevice.mutate({ id, name: deviceName, notes: deviceNotes })}
-								disabled={updateDevice.isPending || !deviceName}
-							>
+							<Button onClick={() => updateDevice.mutate({ id, name: deviceName, notes: deviceNotes })} disabled={updateDevice.isPending || !deviceName}>
 								{updateDevice.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
 								Save
 							</Button>
-							<Button
-								variant="ghost"
-								onClick={() => setEditingDevice(false)}
-							>
+							<Button variant="ghost" onClick={() => setEditingDevice(false)}>
 								<X className="w-4 h-4" /> Cancel
 							</Button>
 						</div>
@@ -391,19 +362,10 @@ export default function DeviceDetailPage() {
 						</div>
 						{isOwner && (
 							<div className="flex gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={startEditDevice}
-								>
+								<Button variant="outline" size="sm" onClick={startEditDevice}>
 									<Pencil className="w-3.5 h-3.5" /> Edit
 								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									className="text-destructive hover:text-destructive"
-									onClick={() => setDeleteDeviceOpen(true)}
-								>
+								<Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteDeviceOpen(true)}>
 									<Trash2 className="w-3.5 h-3.5" /> Delete
 								</Button>
 							</div>
@@ -417,7 +379,7 @@ export default function DeviceDetailPage() {
 				{[
 					{ label: "Status", value: isOnline === null ? "Pinging…" : isOnline ? "Online" : "Offline", icon: isOnline ? Wifi : WifiOff, colored: !!isOnline },
 					{ label: "Firmware", value: device.firmwareVersion ?? "Unknown", icon: Radio, colored: false },
-					{ label: "Network", value: device.ssid ?? "Unknown", icon: Wifi, colored: false }
+					{ label: "Network", value: device.ssid ?? "Unknown", icon: Wifi, colored: false },
 				].map(({ label, value, icon: Icon, colored }) => (
 					<Card key={label}>
 						<CardContent className="p-4 overflow-hidden">
@@ -440,28 +402,17 @@ export default function DeviceDetailPage() {
 				</TabsList>
 
 				{/* RELAYS TAB */}
-				<TabsContent
-					value="relays"
-					className="mt-4"
-				>
+				<TabsContent value="relays" className="mt-4">
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 						{device.relays.map((relay: DeviceGetOutput["relays"][number]) => {
 							const IconComp = RELAY_ICONS[relay.icon] ?? Plug;
 							const isEditing = editingRelayId === relay.id;
 
 							return (
-								<div
-									key={relay.id}
-									className={cn("relay-card p-4", relay.state && "active")}
-								>
+								<div key={relay.id} className={cn("relay-card p-4", relay.state && "active")}>
 									{isEditing ? (
 										<div className="space-y-2.5">
-											<Input
-												value={editRelay.label}
-												onChange={(e) => setEditRelay((r) => ({ ...r, label: e.target.value }))}
-												placeholder="Label"
-												className="h-8 text-sm"
-											/>
+											<Input value={editRelay.label} onChange={(e) => setEditRelay((r) => ({ ...r, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" />
 											<div className="flex gap-2">
 												<div className="flex-1">
 													<Label className="text-[10px]">GPIO Pin</Label>
@@ -482,10 +433,7 @@ export default function DeviceDetailPage() {
 														className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
 													>
 														{ICON_OPTIONS.map((o) => (
-															<option
-																key={o}
-																value={o}
-															>
+															<option key={o} value={o}>
 																{o}
 															</option>
 														))}
@@ -501,20 +449,10 @@ export default function DeviceDetailPage() {
 												>
 													{updateRelay.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
 												</Button>
-												<Button
-													size="sm"
-													variant="ghost"
-													className="h-7 text-xs"
-													onClick={() => setEditingRelayId(null)}
-												>
+												<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingRelayId(null)}>
 													Cancel
 												</Button>
-												<Button
-													size="sm"
-													variant="ghost"
-													className="h-7 text-xs text-destructive hover:text-destructive"
-													onClick={() => setDeleteRelayId(relay.id)}
-												>
+												<Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setDeleteRelayId(relay.id)}>
 													<Trash2 className="w-3 h-3" />
 												</Button>
 											</div>
@@ -522,7 +460,12 @@ export default function DeviceDetailPage() {
 									) : (
 										<>
 											<div className="flex items-start justify-between mb-3">
-												<div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", relay.state ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
+												<div
+													className={cn(
+														"w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+														relay.state ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground",
+													)}
+												>
 													<IconComp className="w-5 h-5" />
 												</div>
 												<Switch
@@ -557,12 +500,11 @@ export default function DeviceDetailPage() {
 														Timed out
 													</button>
 												)}
-												{!relayStatus[relay.id] && <span className={cn("text-xs font-semibold", relay.state ? "text-primary" : "text-muted-foreground")}>{relay.state ? "● ON" : "○ OFF"}</span>}
+												{!relayStatus[relay.id] && (
+													<span className={cn("text-xs font-semibold", relay.state ? "text-primary" : "text-muted-foreground")}>{relay.state ? "● ON" : "○ OFF"}</span>
+												)}
 												{isOwner && (
-													<button
-														onClick={() => startEditRelay(relay)}
-														className="text-muted-foreground hover:text-foreground transition-colors"
-													>
+													<button onClick={() => startEditRelay(relay)} className="text-muted-foreground hover:text-foreground transition-colors">
 														<Pencil className="w-3.5 h-3.5" />
 													</button>
 												)}
@@ -580,10 +522,7 @@ export default function DeviceDetailPage() {
 								onClick={() => !addingRelay && setAddingRelay(true)}
 							>
 								{addingRelay ? (
-									<div
-										className="w-full space-y-2.5"
-										onClick={(e) => e.stopPropagation()}
-									>
+									<div className="w-full space-y-2.5" onClick={(e) => e.stopPropagation()}>
 										<Input
 											value={newRelay.label}
 											onChange={(e) => setNewRelay((r) => ({ ...r, label: e.target.value }))}
@@ -611,10 +550,7 @@ export default function DeviceDetailPage() {
 													className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
 												>
 													{ICON_OPTIONS.map((o) => (
-														<option
-															key={o}
-															value={o}
-														>
+														<option key={o} value={o}>
 															{o}
 														</option>
 													))}
@@ -636,12 +572,7 @@ export default function DeviceDetailPage() {
 													</>
 												)}
 											</Button>
-											<Button
-												size="sm"
-												variant="ghost"
-												className="h-7 text-xs"
-												onClick={() => setAddingRelay(false)}
-											>
+											<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingRelay(false)}>
 												Cancel
 											</Button>
 										</div>
@@ -667,28 +598,16 @@ export default function DeviceDetailPage() {
 				</TabsContent>
 
 				{/* SWITCHES TAB */}
-				<TabsContent
-					value="switches"
-					className="mt-4 space-y-3"
-				>
+				<TabsContent value="switches" className="mt-4 space-y-3">
 					<p className="text-xs text-muted-foreground">
-						Switches monitor input GPIO pins and toggle a linked relay when the switch state changes.
-						Pins 34–39 are input-only and ideal for switches.
+						Switches monitor input GPIO pins and toggle a linked relay when the switch state changes. Pins 34–39 are input-only and ideal for switches.
 					</p>
 
 					{switchList.map((det: SwitchItem) => (
-						<div
-							key={det.id}
-							className="relay-card p-4"
-						>
+						<div key={det.id} className="relay-card p-4">
 							{editingSwitchId === det.id ? (
 								<div className="space-y-2.5">
-									<Input
-										value={editSwitch.label}
-										onChange={(e) => setEditSwitch((d) => ({ ...d, label: e.target.value }))}
-										placeholder="Label"
-										className="h-8 text-sm"
-									/>
+									<Input value={editSwitch.label} onChange={(e) => setEditSwitch((d) => ({ ...d, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" />
 									<div className="flex gap-2">
 										<div className="flex-1">
 											<Label className="text-[10px]">GPIO Pin</Label>
@@ -729,10 +648,7 @@ export default function DeviceDetailPage() {
 											>
 												<option value="">— select —</option>
 												{allRelays.map((r: AllRelayItem) => (
-													<option
-														key={r.id}
-														value={r.id}
-													>
+													<option key={r.id} value={r.id}>
 														{r.deviceName} — {r.label} (GPIO {r.pin})
 													</option>
 												))}
@@ -754,20 +670,10 @@ export default function DeviceDetailPage() {
 												</>
 											)}
 										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											className="h-7 text-xs"
-											onClick={() => setEditingSwitchId(null)}
-										>
+										<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingSwitchId(null)}>
 											Cancel
 										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											className="h-7 text-xs text-destructive hover:text-destructive"
-											onClick={() => deleteSwitch.mutate({ switchId: det.id })}
-										>
+										<Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => deleteSwitch.mutate({ switchId: det.id })}>
 											<Trash2 className="w-3 h-3" />
 										</Button>
 									</div>
@@ -776,7 +682,10 @@ export default function DeviceDetailPage() {
 								<div className="flex items-center justify-between">
 									<div>
 										<div className="flex items-center gap-1.5">
-											{(() => { const st = SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way")); return st ? <span className="text-muted-foreground">{st.icon}</span> : null; })()}
+											{(() => {
+												const st = SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"));
+												return st ? <span className="text-muted-foreground">{st.icon}</span> : null;
+											})()}
 											<p className="font-semibold text-sm">{det.label}</p>
 										</div>
 										<p className="text-xs text-muted-foreground mono mt-0.5">
@@ -804,109 +713,87 @@ export default function DeviceDetailPage() {
 					))}
 
 					{/* Add switch (owner only) */}
-					{isOwner && (addingSwitch ? (
-						<div className="relay-card p-4 space-y-2.5">
-							<Input
-								value={newSwitch.label}
-								onChange={(e) => setNewSwitch((d) => ({ ...d, label: e.target.value }))}
-								placeholder="Switch label"
-								className="h-8 text-sm"
-								autoFocus
-							/>
-							<div className="flex gap-2">
-								<div className="flex-1">
-									<Label className="text-[10px]">GPIO Pin</Label>
-									<Input
-										type="number"
-										value={newSwitch.pin}
-										onChange={(e) => setNewSwitch((d) => ({ ...d, pin: Number(e.target.value) }))}
-										className="h-8 text-sm mt-0.5"
-										min={0}
-										max={39}
-									/>
-								</div>
-								<div className="flex-1">
-									<Label className="text-[10px]">Switch Type</Label>
-									<div className="flex gap-1 mt-0.5">
-										{SWITCH_TYPES.map((st) => (
-											<button
-												key={st.value}
-												type="button"
-												onClick={() => setNewSwitch((d) => ({ ...d, switchType: st.value }))}
-												className={`flex-1 flex flex-col items-center gap-0.5 rounded-md border px-1.5 py-1.5 text-[10px] transition-colors ${newSwitch.switchType === st.value ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground hover:border-primary/40"}`}
-												title={st.desc}
-											>
-												{st.icon}
-												<span className="font-medium">{st.label}</span>
-											</button>
-										))}
+					{isOwner &&
+						(addingSwitch ? (
+							<div className="relay-card p-4 space-y-2.5">
+								<Input value={newSwitch.label} onChange={(e) => setNewSwitch((d) => ({ ...d, label: e.target.value }))} placeholder="Switch label" className="h-8 text-sm" autoFocus />
+								<div className="flex gap-2">
+									<div className="flex-1">
+										<Label className="text-[10px]">GPIO Pin</Label>
+										<Input
+											type="number"
+											value={newSwitch.pin}
+											onChange={(e) => setNewSwitch((d) => ({ ...d, pin: Number(e.target.value) }))}
+											className="h-8 text-sm mt-0.5"
+											min={0}
+											max={39}
+										/>
+									</div>
+									<div className="flex-1">
+										<Label className="text-[10px]">Switch Type</Label>
+										<div className="flex gap-1 mt-0.5">
+											{SWITCH_TYPES.map((st) => (
+												<button
+													key={st.value}
+													type="button"
+													onClick={() => setNewSwitch((d) => ({ ...d, switchType: st.value }))}
+													className={`flex-1 flex flex-col items-center gap-0.5 rounded-md border px-1.5 py-1.5 text-[10px] transition-colors ${newSwitch.switchType === st.value ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground hover:border-primary/40"}`}
+													title={st.desc}
+												>
+													{st.icon}
+													<span className="font-medium">{st.label}</span>
+												</button>
+											))}
+										</div>
 									</div>
 								</div>
-							</div>
-							<div className="flex gap-2">
-								<div className="flex-1">
-									<Label className="text-[10px]">Linked Relay</Label>
-									<select
-										value={newSwitch.linkedRelayId}
-										onChange={(e) => setNewSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
-										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+								<div className="flex gap-2">
+									<div className="flex-1">
+										<Label className="text-[10px]">Linked Relay</Label>
+										<select
+											value={newSwitch.linkedRelayId}
+											onChange={(e) => setNewSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
+											className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+										>
+											<option value="">— select —</option>
+											{allRelays.map((r: AllRelayItem) => (
+												<option key={r.id} value={r.id}>
+													{r.deviceName} — {r.label} (GPIO {r.pin})
+												</option>
+											))}
+										</select>
+									</div>
+								</div>
+								<div className="flex gap-1.5">
+									<Button
+										size="sm"
+										className="flex-1 h-7 text-xs"
+										onClick={() => addSwitch.mutate({ deviceId: device.id, ...newSwitch })}
+										disabled={addSwitch.isPending || !newSwitch.label || !newSwitch.linkedRelayId}
 									>
-										<option value="">— select —</option>
-										{allRelays.map((r: AllRelayItem) => (
-											<option
-												key={r.id}
-												value={r.id}
-											>
-												{r.deviceName} — {r.label} (GPIO {r.pin})
-											</option>
-										))}
-									</select>
+										{addSwitch.isPending ? (
+											<Loader2 className="w-3 h-3 animate-spin" />
+										) : (
+											<>
+												<Plus className="w-3 h-3" /> Add Switch
+											</>
+										)}
+									</Button>
+									<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingSwitch(false)}>
+										Cancel
+									</Button>
 								</div>
 							</div>
-							<div className="flex gap-1.5">
-								<Button
-									size="sm"
-									className="flex-1 h-7 text-xs"
-									onClick={() => addSwitch.mutate({ deviceId: device.id, ...newSwitch })}
-									disabled={addSwitch.isPending || !newSwitch.label || !newSwitch.linkedRelayId}
-								>
-									{addSwitch.isPending ? (
-										<Loader2 className="w-3 h-3 animate-spin" />
-									) : (
-										<>
-											<Plus className="w-3 h-3" /> Add Switch
-										</>
-									)}
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									className="h-7 text-xs"
-									onClick={() => setAddingSwitch(false)}
-								>
-									Cancel
-								</Button>
-							</div>
-						</div>
-					) : (
-						<Button
-							variant="outline"
-							size="sm"
-							className="w-full"
-							onClick={() => setAddingSwitch(true)}
-							disabled={allRelays.length === 0}
-						>
-							<Plus className="w-3.5 h-3.5" /> Add Switch
-							{device.relays.length === 0 && <span className="ml-2 text-muted-foreground">(add a relay to any device first)</span>}
-						</Button>
-					))}
+						) : (
+							<Button variant="outline" size="sm" className="w-full" onClick={() => setAddingSwitch(true)} disabled={allRelays.length === 0}>
+								<Plus className="w-3.5 h-3.5" /> Add Switch
+								{device.relays.length === 0 && <span className="ml-2 text-muted-foreground">(add a relay to any device first)</span>}
+							</Button>
+						))}
 				</TabsContent>
 
 				{/* CONFIG TAB */}
-				<TabsContent
-					value="config"
-					className="mt-4"
-				>
+				<TabsContent value="config" className="mt-4">
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-base">Device Information</CardTitle>
@@ -920,12 +807,9 @@ export default function DeviceDetailPage() {
 									{ label: "WiFi Network", value: device.ssid ?? "Unknown" },
 									{ label: "Firmware", value: device.firmwareVersion ?? "Unknown" },
 									{ label: "Registered", value: new Date(device.createdAt).toLocaleDateString() },
-									{ label: "Last Updated", value: new Date(device.updatedAt).toLocaleString() }
+									{ label: "Last Updated", value: new Date(device.updatedAt).toLocaleString() },
 								].map(({ label, value }) => (
-									<div
-										key={label}
-										className="flex flex-col sm:flex-row sm:items-center gap-1 py-2 border-b border-border last:border-0"
-									>
+									<div key={label} className="flex flex-col sm:flex-row sm:items-center gap-1 py-2 border-b border-border last:border-0">
 										<span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide min-w-[130px]">{label}</span>
 										<span className="text-sm text-foreground mono break-all">{value}</span>
 									</div>
@@ -937,10 +821,7 @@ export default function DeviceDetailPage() {
 			</Tabs>
 
 			{/* Delete device dialog */}
-			<Dialog
-				open={deleteDeviceOpen}
-				onOpenChange={setDeleteDeviceOpen}
-			>
+			<Dialog open={deleteDeviceOpen} onOpenChange={setDeleteDeviceOpen}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Delete Device</DialogTitle>
@@ -949,17 +830,10 @@ export default function DeviceDetailPage() {
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setDeleteDeviceOpen(false)}
-						>
+						<Button variant="outline" onClick={() => setDeleteDeviceOpen(false)}>
 							Cancel
 						</Button>
-						<Button
-							variant="destructive"
-							onClick={() => deleteDevice.mutate({ id })}
-							disabled={deleteDevice.isPending}
-						>
+						<Button variant="destructive" onClick={() => deleteDevice.mutate({ id })} disabled={deleteDevice.isPending}>
 							{deleteDevice.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
 							Delete Device
 						</Button>
@@ -968,33 +842,22 @@ export default function DeviceDetailPage() {
 			</Dialog>
 
 			{/* Delete relay dialog */}
-			<Dialog
-				open={!!deleteRelayId}
-				onOpenChange={(o) => !o && setDeleteRelayId(null)}
-			>
+			<Dialog open={!!deleteRelayId} onOpenChange={(o) => !o && setDeleteRelayId(null)}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Delete Relay</DialogTitle>
 						<DialogDescription>Remove this relay from the device? The physical pin will no longer be controlled from the dashboard.</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setDeleteRelayId(null)}
-						>
+						<Button variant="outline" onClick={() => setDeleteRelayId(null)}>
 							Cancel
 						</Button>
-						<Button
-							variant="destructive"
-							onClick={() => deleteRelayId && deleteRelay.mutate({ relayId: deleteRelayId })}
-							disabled={deleteRelay.isPending}
-						>
+						<Button variant="destructive" onClick={() => deleteRelayId && deleteRelay.mutate({ relayId: deleteRelayId })} disabled={deleteRelay.isPending}>
 							{deleteRelay.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-
 		</div>
 	);
 }

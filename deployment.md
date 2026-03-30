@@ -19,15 +19,15 @@ cp .env.example .env
 
 Edit `.env` and fill in:
 
-| Variable | Description |
-|----------|-------------|
-| `AUTH_SECRET` | Session secret. Generate with `openssl rand -base64 32` |
-| `WS_SECRET` | Shared secret between Next.js and WS server. Generate with `openssl rand -base64 32` |
-| `NEXT_PUBLIC_API_URL` | `http://<YOUR_SERVER_IP>:3000` — the LAN IP of your server |
-| `NEXT_PUBLIC_WS_PORT` | `4001` (default) |
-| `WEBHOOK_SECRET` | Secret for GitHub webhook (see auto-deploy section) |
-| `BREVO_API_KEY` | Optional — for email notifications |
-| `BREVO_SENDER_EMAIL` | Optional — verified sender in Brevo |
+| Variable              | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `AUTH_SECRET`         | Session secret. Generate with `openssl rand -base64 32`                              |
+| `WS_SECRET`           | Shared secret between Next.js and WS server. Generate with `openssl rand -base64 32` |
+| `NEXT_PUBLIC_API_URL` | `http://<YOUR_SERVER_IP>:3000` — the LAN IP of your server                           |
+| `NEXT_PUBLIC_WS_PORT` | `4001` (default)                                                                     |
+| `WEBHOOK_SECRET`      | Secret for GitHub webhook (see auto-deploy section)                                  |
+| `BREVO_API_KEY`       | Optional — for email notifications                                                   |
+| `BREVO_SENDER_EMAIL`  | Optional — verified sender in Brevo                                                  |
 
 ### 2. Start services
 
@@ -36,6 +36,7 @@ docker compose up -d
 ```
 
 This starts 5 services:
+
 - **mongodb** — MongoDB 7 with replica set (required by Prisma)
 - **redis** — Redis 7 for rate limiting
 - **nextjs** — Dashboard on port 3000
@@ -73,13 +74,14 @@ The `webhook` container listens for GitHub push events and automatically rebuild
 
 1. Go to your GitHub repo **Settings > Webhooks > Add webhook**
 2. Set:
-   - **Payload URL**: `http://<YOUR_SERVER_IP>:9000/hooks/redeploy`
-   - **Content type**: `application/json`
-   - **Secret**: same value as `WEBHOOK_SECRET` in your `.env`
-   - **Events**: Just the push event
+    - **Payload URL**: `http://<YOUR_SERVER_IP>:9000/hooks/redeploy`
+    - **Content type**: `application/json`
+    - **Secret**: same value as `WEBHOOK_SECRET` in your `.env`
+    - **Events**: Just the push event
 3. Save
 
 On every push to `main`, the webhook triggers:
+
 ```
 git pull origin main
 docker compose up --build -d nextjs wsserver

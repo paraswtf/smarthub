@@ -17,7 +17,7 @@ const handler = (req: NextRequest) =>
 				? ({ path, error }: { path: string | undefined; error: TRPCError }) => {
 						console.error(`❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`);
 					}
-				: undefined
+				: undefined,
 	});
 
 export { handler as GET, handler as POST };

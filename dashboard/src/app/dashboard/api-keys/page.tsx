@@ -30,21 +30,21 @@ export default function ApiKeysPage() {
 			void utils.apiKey.list.invalidate();
 			setCreatedKey(data.key);
 			setNewLabel("");
-		}
+		},
 	});
 
 	const revokeKey = api.apiKey.revoke.useMutation({
 		onSuccess: () => {
 			void utils.apiKey.list.invalidate();
 			setRevokeId(null);
-		}
+		},
 	});
 
 	const deleteKey = api.apiKey.delete.useMutation({
 		onSuccess: () => {
 			void utils.apiKey.list.invalidate();
 			setDeleteId(null);
-		}
+		},
 	});
 
 	const copyToClipboard = async (text: string, id: string) => {
@@ -82,7 +82,8 @@ export default function ApiKeysPage() {
 					<Key className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
 					<div className="text-sm text-muted-foreground space-y-1">
 						<p>
-							<span className="font-semibold text-foreground">How it works:</span> Create an API key and give it a label. Enter it in your ESP32&apos;s captive portal. Multiple ESP32 devices can share the same key — they&apos;ll all appear under your account.
+							<span className="font-semibold text-foreground">How it works:</span> Create an API key and give it a label. Enter it in your ESP32&apos;s captive portal. Multiple ESP32
+							devices can share the same key — they&apos;ll all appear under your account.
 						</p>
 						<p>Keep your keys private. Revoking a key disconnects all devices using it.</p>
 					</div>
@@ -121,10 +122,7 @@ export default function ApiKeysPage() {
 						const revealed = revealedIds.has(k.id);
 						const copied = copiedId === k.id;
 						return (
-							<Card
-								key={k.id}
-								className={cn("transition-all duration-200", !k.active && "opacity-60")}
-							>
+							<Card key={k.id} className={cn("transition-all duration-200", !k.active && "opacity-60")}>
 								<CardContent className="p-5">
 									<div className="flex flex-col sm:flex-row sm:items-start gap-4">
 										{/* Key info */}
@@ -132,10 +130,7 @@ export default function ApiKeysPage() {
 											<div className="flex items-center gap-2 flex-wrap">
 												<span className="font-semibold text-foreground">{k.label}</span>
 												<Badge variant={k.active ? "online" : "offline"}>{k.active ? "Active" : "Revoked"}</Badge>
-												<Badge
-													variant="secondary"
-													className="text-xs"
-												>
+												<Badge variant="secondary" className="text-xs">
 													{k._count.devices} device{k._count.devices !== 1 ? "s" : ""}
 												</Badge>
 											</div>
@@ -165,10 +160,7 @@ export default function ApiKeysPage() {
 											</p>
 										</div>
 
-										<Separator
-											orientation="vertical"
-											className="hidden sm:block h-auto self-stretch"
-										/>
+										<Separator orientation="vertical" className="hidden sm:block h-auto self-stretch" />
 
 										{/* Actions */}
 										<div className="flex sm:flex-col gap-2 flex-shrink-0">
@@ -183,12 +175,7 @@ export default function ApiKeysPage() {
 													Revoke
 												</Button>
 											)}
-											<Button
-												variant="outline"
-												size="sm"
-												className="text-destructive hover:text-destructive hover:bg-destructive/10"
-												onClick={() => setDeleteId(k.id)}
-											>
+											<Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(k.id)}>
 												<Trash2 className="w-3.5 h-3.5" />
 												Delete
 											</Button>
@@ -229,7 +216,10 @@ export default function ApiKeysPage() {
 									<code className="mono text-xs bg-background px-3 py-2 rounded-md border flex-1 break-all text-foreground">{createdKey}</code>
 									<button
 										onClick={() => copyToClipboard(createdKey, "new")}
-										className={cn("p-2 rounded-md transition-colors flex-shrink-0", copiedId === "new" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
+										className={cn(
+											"p-2 rounded-md transition-colors flex-shrink-0",
+											copiedId === "new" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
+										)}
 									>
 										{copiedId === "new" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
 									</button>
@@ -261,16 +251,10 @@ export default function ApiKeysPage() {
 								/>
 							</div>
 							<DialogFooter>
-								<Button
-									variant="outline"
-									onClick={() => setCreateOpen(false)}
-								>
+								<Button variant="outline" onClick={() => setCreateOpen(false)}>
 									Cancel
 								</Button>
-								<Button
-									onClick={() => createKey.mutate({ label: newLabel })}
-									disabled={createKey.isPending || !newLabel.trim()}
-								>
+								<Button onClick={() => createKey.mutate({ label: newLabel })} disabled={createKey.isPending || !newLabel.trim()}>
 									{createKey.isPending ? (
 										<>
 											<Loader2 className="w-4 h-4 animate-spin" /> Generating…
@@ -288,27 +272,19 @@ export default function ApiKeysPage() {
 			</Dialog>
 
 			{/* Revoke dialog */}
-			<Dialog
-				open={!!revokeId}
-				onOpenChange={(o) => !o && setRevokeId(null)}
-			>
+			<Dialog open={!!revokeId} onOpenChange={(o) => !o && setRevokeId(null)}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Revoke API Key</DialogTitle>
-						<DialogDescription>This will immediately disconnect all ESP32 devices using this key. The key will be deactivated but kept for reference. You can delete it afterwards.</DialogDescription>
+						<DialogDescription>
+							This will immediately disconnect all ESP32 devices using this key. The key will be deactivated but kept for reference. You can delete it afterwards.
+						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setRevokeId(null)}
-						>
+						<Button variant="outline" onClick={() => setRevokeId(null)}>
 							Cancel
 						</Button>
-						<Button
-							className="bg-amber-600 hover:bg-amber-500 text-white"
-							onClick={() => revokeId && revokeKey.mutate({ id: revokeId })}
-							disabled={revokeKey.isPending}
-						>
+						<Button className="bg-amber-600 hover:bg-amber-500 text-white" onClick={() => revokeId && revokeKey.mutate({ id: revokeId })} disabled={revokeKey.isPending}>
 							{revokeKey.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
 							Revoke Key
 						</Button>
@@ -317,27 +293,17 @@ export default function ApiKeysPage() {
 			</Dialog>
 
 			{/* Delete dialog */}
-			<Dialog
-				open={!!deleteId}
-				onOpenChange={(o) => !o && setDeleteId(null)}
-			>
+			<Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Delete API Key</DialogTitle>
 						<DialogDescription>This will permanently delete the key and unlink all devices associated with it. This cannot be undone.</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setDeleteId(null)}
-						>
+						<Button variant="outline" onClick={() => setDeleteId(null)}>
 							Cancel
 						</Button>
-						<Button
-							variant="destructive"
-							onClick={() => deleteId && deleteKey.mutate({ id: deleteId })}
-							disabled={deleteKey.isPending}
-						>
+						<Button variant="destructive" onClick={() => deleteId && deleteKey.mutate({ id: deleteId })} disabled={deleteKey.isPending}>
 							{deleteKey.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
 							Delete Key
 						</Button>

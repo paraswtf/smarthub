@@ -17,7 +17,7 @@ const createContext = cache(async () => {
 	heads.set("x-trpc-source", "rsc");
 
 	return createTRPCContext({
-		req: { headers: heads } as Parameters<typeof createTRPCContext>[0]["req"]
+		req: { headers: heads } as Parameters<typeof createTRPCContext>[0]["req"],
 	});
 });
 

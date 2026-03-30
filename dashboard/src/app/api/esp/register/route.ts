@@ -18,7 +18,7 @@ const schema = z.object({
 	name: z.string().min(1).max(60).optional(),
 	ssid: z.string().max(64).optional(),
 	firmwareVersion: z.string().max(32).optional(),
-	factoryReset: z.boolean().optional() // true when ESP32 NVS was cleared
+	factoryReset: z.boolean().optional(), // true when ESP32 NVS was cleared
 });
 
 export async function POST(req: NextRequest) {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
 		// Validate API key
 		const key = await db.apiKey.findFirst({
-			where: { key: apiKey, active: true }
+			where: { key: apiKey, active: true },
 		});
 		if (!key) {
 			return NextResponse.json({ error: "Invalid or revoked API key" }, { status: 401 });
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 				...(ssid && { ssid }),
 				...(firmwareVersion && { firmwareVersion }),
 				apiKeyId: key.id,
-				lastSeenAt: new Date()
+				lastSeenAt: new Date(),
 			},
 			create: {
 				macAddress,
@@ -55,11 +55,11 @@ export async function POST(req: NextRequest) {
 				ssid: ssid ?? null,
 				firmwareVersion: firmwareVersion ?? null,
 				apiKeyId: key.id,
-				lastSeenAt: new Date()
+				lastSeenAt: new Date(),
 			},
 			include: {
-				relays: { orderBy: { order: "asc" } }
-			}
+				relays: { orderBy: { order: "asc" } },
+			},
 		});
 
 		// Factory reset: wipe all relays so the device starts clean
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 		// Update API key lastUsedAt
 		await db.apiKey.update({
 			where: { id: key.id },
-			data: { lastUsedAt: new Date() }
+			data: { lastUsedAt: new Date() },
 		});
 
 		return NextResponse.json({
@@ -83,8 +83,8 @@ export async function POST(req: NextRequest) {
 						pin: r.pin,
 						label: r.label,
 						state: r.state,
-						icon: r.icon
-					}))
+						icon: r.icon,
+					})),
 		});
 	} catch (err) {
 		console.error("[ESP Register]", err);

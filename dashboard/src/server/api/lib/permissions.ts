@@ -7,19 +7,19 @@ export async function getDeviceAccess(db: PrismaClient, deviceId: string, userId
 	// 1. Check ownership via apiKey chain
 	const owned = await db.device.findFirst({
 		where: { id: deviceId, apiKey: { userId } },
-		select: { id: true }
+		select: { id: true },
 	});
 	if (owned) return "owner";
 
 	// 2. Check home share (device's home shared with this user)
 	const device = await db.device.findFirst({
 		where: { id: deviceId },
-		select: { homeId: true }
+		select: { homeId: true },
 	});
 	if (device?.homeId) {
 		const homeShare = await db.homeShare.findFirst({
 			where: { homeId: device.homeId, userId },
-			select: { id: true }
+			select: { id: true },
 		});
 		if (homeShare) return "shared";
 	}
@@ -38,10 +38,10 @@ export async function getRelayAccess(db: PrismaClient, relayId: string, userId: 
 			device: {
 				select: {
 					homeId: true,
-					apiKey: { select: { userId: true } }
-				}
-			}
-		}
+					apiKey: { select: { userId: true } },
+				},
+			},
+		},
 	});
 	if (!relay) return "none";
 	if (relay.device.apiKey.userId === userId) return "owner";
@@ -49,7 +49,7 @@ export async function getRelayAccess(db: PrismaClient, relayId: string, userId: 
 	// 2. Direct relay share
 	const relayShare = await db.relayShare.findFirst({
 		where: { relayId, userId },
-		select: { id: true }
+		select: { id: true },
 	});
 	if (relayShare) return "shared";
 
@@ -57,19 +57,19 @@ export async function getRelayAccess(db: PrismaClient, relayId: string, userId: 
 	if (relay.roomId) {
 		const roomShare = await db.roomShare.findFirst({
 			where: { roomId: relay.roomId, userId },
-			select: { id: true }
+			select: { id: true },
 		});
 		if (roomShare) return "shared";
 
 		// 4. Home share via room's home
 		const room = await db.room.findFirst({
 			where: { id: relay.roomId },
-			select: { homeId: true }
+			select: { homeId: true },
 		});
 		if (room) {
 			const homeShare = await db.homeShare.findFirst({
 				where: { homeId: room.homeId, userId },
-				select: { id: true }
+				select: { id: true },
 			});
 			if (homeShare) return "shared";
 		}
@@ -79,7 +79,7 @@ export async function getRelayAccess(db: PrismaClient, relayId: string, userId: 
 	if (relay.device.homeId) {
 		const homeShare = await db.homeShare.findFirst({
 			where: { homeId: relay.device.homeId, userId },
-			select: { id: true }
+			select: { id: true },
 		});
 		if (homeShare) return "shared";
 	}

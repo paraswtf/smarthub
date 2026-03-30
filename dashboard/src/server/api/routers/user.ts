@@ -7,8 +7,8 @@ export const userRouter = createTRPCRouter({
 		.input(
 			z.object({
 				name: z.string().min(1).optional(),
-				password: z.string().min(8).optional()
-			})
+				password: z.string().min(8).optional(),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { password, ...rest } = input;
@@ -17,7 +17,7 @@ export const userRouter = createTRPCRouter({
 			return ctx.db.user.update({
 				where: { id: ctx.session.user.id },
 				data,
-				select: { id: true, name: true, email: true }
+				select: { id: true, name: true, email: true },
 			});
-		})
+		}),
 });

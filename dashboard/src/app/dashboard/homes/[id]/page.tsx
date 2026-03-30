@@ -3,10 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-	Home, ArrowLeft, Cpu, Users, Plus, Trash2, Pencil, Share2,
-	DoorOpen, ToggleRight, ChevronRight, Loader2, X
-} from "lucide-react";
+import { Home, ArrowLeft, Cpu, Users, Plus, Trash2, Pencil, Share2, DoorOpen, ToggleRight, ChevronRight, Loader2, X } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -36,14 +33,14 @@ export default function HomeDetailPage() {
 			void utils.home.get.invalidate({ id });
 			void utils.home.list.invalidate();
 			setEditing(false);
-		}
+		},
 	});
 
 	const deleteHome = api.home.delete.useMutation({
 		onSuccess: () => {
 			void utils.home.list.invalidate();
 			router.push("/dashboard/homes");
-		}
+		},
 	});
 
 	// ── Sharing ────────────────────────────────────────────────
@@ -59,14 +56,14 @@ export default function HomeDetailPage() {
 			setShareEmail("");
 			setShareError("");
 		},
-		onError: (err) => setShareError(err.message)
+		onError: (err) => setShareError(err.message),
 	});
 
 	const unshareMutation = api.sharing.unshareHome.useMutation({
 		onSuccess: () => {
 			void utils.home.get.invalidate({ id });
 			void utils.home.list.invalidate();
-		}
+		},
 	});
 
 	// ── Assign device ──────────────────────────────────────────
@@ -77,7 +74,7 @@ export default function HomeDetailPage() {
 			void utils.home.get.invalidate({ id });
 			void utils.home.list.invalidate();
 			void utils.home.unassignedDevices.invalidate();
-		}
+		},
 	});
 
 	const unassignDevice = api.home.assignDevice.useMutation({
@@ -87,7 +84,7 @@ export default function HomeDetailPage() {
 			void utils.home.unassignedDevices.invalidate();
 			void utils.room.get.invalidate();
 			void utils.room.unassignedRelays.invalidate();
-		}
+		},
 	});
 
 	// ── Create room ────────────────────────────────────────────
@@ -100,7 +97,7 @@ export default function HomeDetailPage() {
 			void utils.home.list.invalidate();
 			setCreateRoomOpen(false);
 			setNewRoomName("");
-		}
+		},
 	});
 
 	// ── Live relay states ──────────────────────────────────────
@@ -110,7 +107,9 @@ export default function HomeDetailPage() {
 		return onDeviceUpdate((msg) => {
 			setLiveRelayStates((p) => {
 				const next = { ...p };
-				msg.relays.forEach((r) => { next[r.id] = r.state; });
+				msg.relays.forEach((r) => {
+					next[r.id] = r.state;
+				});
 				return next;
 			});
 		});
@@ -135,7 +134,11 @@ export default function HomeDetailPage() {
 		return (
 			<div className="p-6 lg:p-8 mt-14 lg:mt-0">
 				<p className="text-muted-foreground">Home not found.</p>
-				<Button variant="ghost" asChild className="mt-4"><Link href="/dashboard/homes"><ArrowLeft className="w-4 h-4" /> Back</Link></Button>
+				<Button variant="ghost" asChild className="mt-4">
+					<Link href="/dashboard/homes">
+						<ArrowLeft className="w-4 h-4" /> Back
+					</Link>
+				</Button>
 			</div>
 		);
 	}
@@ -146,7 +149,9 @@ export default function HomeDetailPage() {
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div className="flex items-center gap-3">
 					<Button variant="ghost" size="icon" asChild>
-						<Link href="/dashboard/homes"><ArrowLeft className="w-4 h-4" /></Link>
+						<Link href="/dashboard/homes">
+							<ArrowLeft className="w-4 h-4" />
+						</Link>
 					</Button>
 					{editing ? (
 						<form
@@ -156,20 +161,27 @@ export default function HomeDetailPage() {
 							}}
 							className="flex items-center gap-2"
 						>
-							<Input
-								value={editName}
-								onChange={(e) => setEditName(e.target.value)}
-								className="h-9 w-full sm:w-48"
-								autoFocus
-							/>
-							<Button size="sm" type="submit" disabled={updateHome.isPending}>Save</Button>
-							<Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+							<Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 w-full sm:w-48" autoFocus />
+							<Button size="sm" type="submit" disabled={updateHome.isPending}>
+								Save
+							</Button>
+							<Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+								Cancel
+							</Button>
 						</form>
 					) : (
 						<div className="flex items-center gap-2">
 							<Home className="w-5 h-5 text-primary" />
 							<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">{home.name}</h1>
-							<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditName(home.name); setEditing(true); }}>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7"
+								onClick={() => {
+									setEditName(home.name);
+									setEditing(true);
+								}}
+							>
 								<Pencil className="w-3.5 h-3.5" />
 							</Button>
 						</div>
@@ -178,9 +190,17 @@ export default function HomeDetailPage() {
 
 				<div className="flex items-center gap-2 flex-wrap">
 					{/* Share button */}
-					<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
+					<Dialog
+						open={shareOpen}
+						onOpenChange={(o) => {
+							setShareOpen(o);
+							setShareError("");
+						}}
+					>
 						<DialogTrigger asChild>
-							<Button variant="outline"><Share2 className="w-4 h-4" /> Share</Button>
+							<Button variant="outline">
+								<Share2 className="w-4 h-4" /> Share
+							</Button>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
@@ -196,13 +216,7 @@ export default function HomeDetailPage() {
 							>
 								<div className="space-y-2">
 									<Label htmlFor="share-email">User email</Label>
-									<Input
-										id="share-email"
-										type="email"
-										placeholder="user@example.com"
-										value={shareEmail}
-										onChange={(e) => setShareEmail(e.target.value)}
-									/>
+									<Input id="share-email" type="email" placeholder="user@example.com" value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} />
 									{shareError && <p className="text-sm text-destructive">{shareError}</p>}
 								</div>
 								<Button type="submit" disabled={!shareEmail.trim() || shareMutation.isPending} className="w-full">
@@ -239,7 +253,9 @@ export default function HomeDetailPage() {
 					{/* Assign device */}
 					<Dialog open={assignOpen} onOpenChange={setAssignOpen}>
 						<DialogTrigger asChild>
-							<Button variant="outline"><Cpu className="w-4 h-4" /> Assign Device</Button>
+							<Button variant="outline">
+								<Cpu className="w-4 h-4" /> Assign Device
+							</Button>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
@@ -273,7 +289,9 @@ export default function HomeDetailPage() {
 					{/* Create room */}
 					<Dialog open={createRoomOpen} onOpenChange={setCreateRoomOpen}>
 						<DialogTrigger asChild>
-							<Button><Plus className="w-4 h-4" /> Add Room</Button>
+							<Button>
+								<Plus className="w-4 h-4" /> Add Room
+							</Button>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
@@ -288,13 +306,7 @@ export default function HomeDetailPage() {
 							>
 								<div className="space-y-2">
 									<Label htmlFor="room-name">Name</Label>
-									<Input
-										id="room-name"
-										placeholder="e.g. Living Room"
-										value={newRoomName}
-										onChange={(e) => setNewRoomName(e.target.value)}
-										maxLength={60}
-									/>
+									<Input id="room-name" placeholder="e.g. Living Room" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} maxLength={60} />
 								</div>
 								<Button type="submit" disabled={!newRoomName.trim() || createRoom.isPending} className="w-full">
 									{createRoom.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
@@ -364,7 +376,7 @@ export default function HomeDetailPage() {
 						{home.rooms.map((room) => {
 							const relays = room.relays.map((r) => ({
 								...r,
-								state: liveRelayStates[r.id] ?? r.state
+								state: liveRelayStates[r.id] ?? r.state,
 							}));
 							const activeRelays = relays.filter((r) => r.state).length;
 
@@ -387,9 +399,7 @@ export default function HomeDetailPage() {
 										<CardContent className="pb-4 space-y-3">
 											<div className="flex items-center gap-2">
 												<ToggleRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-												<span className="text-xs text-muted-foreground">
-													{relays.length === 0 ? "No relays" : `${activeRelays} / ${relays.length} relays active`}
-												</span>
+												<span className="text-xs text-muted-foreground">{relays.length === 0 ? "No relays" : `${activeRelays} / ${relays.length} relays active`}</span>
 											</div>
 											{relays.length > 0 && (
 												<div className="flex flex-wrap gap-1.5">
@@ -398,7 +408,10 @@ export default function HomeDetailPage() {
 															key={relay.id}
 															className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${relay.state ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
 														>
-															<span className="w-1.5 h-1.5 rounded-full" style={{ background: relay.state ? "hsl(var(--status-online))" : "hsl(var(--status-offline))" }} />
+															<span
+																className="w-1.5 h-1.5 rounded-full"
+																style={{ background: relay.state ? "hsl(var(--status-online))" : "hsl(var(--status-offline))" }}
+															/>
 															{relay.label}
 														</span>
 													))}

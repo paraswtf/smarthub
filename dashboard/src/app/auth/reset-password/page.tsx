@@ -31,9 +31,7 @@ export default function ResetPasswordPage() {
 					<div className="rounded-2xl border bg-card p-8 shadow-sm text-center">
 						<AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
 						<h1 className="font-sora font-extrabold text-xl text-foreground mb-2">Invalid reset link</h1>
-						<p className="text-sm text-muted-foreground mb-6">
-							This password reset link is invalid or incomplete.
-						</p>
+						<p className="text-sm text-muted-foreground mb-6">This password reset link is invalid or incomplete.</p>
 						<Button asChild className="w-full">
 							<Link href="/auth/forgot-password">Request a new link</Link>
 						</Button>
@@ -86,27 +84,14 @@ export default function ResetPasswordPage() {
 
 				<div className="rounded-2xl border bg-card p-8 shadow-sm">
 					<h1 className="font-sora font-extrabold text-xl text-foreground mb-1">Set new password</h1>
-					<p className="text-sm text-muted-foreground mb-6">
-						Enter a new password for your account.
-					</p>
+					<p className="text-sm text-muted-foreground mb-6">Enter a new password for your account.</p>
 
-					{error && (
-						<div className="mb-5 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-							{error}
-						</div>
-					)}
+					{error && <div className="mb-5 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">{error}</div>}
 
 					<div className="space-y-4">
 						<div className="space-y-1.5">
 							<Label htmlFor="password">New Password</Label>
-							<Input
-								id="password"
-								type="password"
-								value={password}
-								onChange={(e) => setPassword(e.target.value)}
-								placeholder="Min. 8 characters"
-								autoComplete="new-password"
-							/>
+							<Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" />
 						</div>
 						<div className="space-y-1.5">
 							<Label htmlFor="confirm">Confirm Password</Label>
@@ -121,13 +106,11 @@ export default function ResetPasswordPage() {
 							/>
 						</div>
 
-						<Button
-							className="w-full"
-							onClick={handleReset}
-							disabled={isPending || !password || !confirm}
-						>
+						<Button className="w-full" onClick={handleReset} disabled={isPending || !password || !confirm}>
 							{isPending ? (
-								<><Loader2 className="w-4 h-4 animate-spin" /> Resetting...</>
+								<>
+									<Loader2 className="w-4 h-4 animate-spin" /> Resetting...
+								</>
 							) : (
 								"Reset Password"
 							)}

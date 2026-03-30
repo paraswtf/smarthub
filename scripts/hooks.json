@@ -1,18 +1,18 @@
 [
-  {
-    "id": "redeploy",
-    "execute-command": "/scripts/redeploy.sh",
-    "command-working-directory": "/repo",
-    "pass-arguments-to-command": [],
-    "trigger-rule": {
-      "match": {
-        "type": "value",
-        "value": "refs/heads/main",
-        "parameter": {
-          "source": "payload",
-          "name": "ref"
-        }
-      }
-    }
-  }
+	{
+		"id": "redeploy",
+		"execute-command": "/scripts/redeploy.sh",
+		"command-working-directory": "/repo",
+		"pass-arguments-to-command": [],
+		"trigger-rule": {
+			"match": {
+				"type": "value",
+				"value": "refs/heads/main",
+				"parameter": {
+					"source": "payload",
+					"name": "ref"
+				}
+			}
+		}
+	}
 ]

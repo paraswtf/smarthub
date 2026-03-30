@@ -8,7 +8,7 @@ import { sendVerificationEmail } from "~/server/email";
 const schema = z.object({
 	name: z.string().min(1).max(80),
 	email: z.string().email(),
-	password: z.string().min(8)
+	password: z.string().min(8),
 });
 
 export async function POST(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
 		const passwordHash = await bcrypt.hash(password, 12);
 		await db.user.create({
-			data: { name, email, passwordHash }
+			data: { name, email, passwordHash },
 		});
 
 		// Generate verification token and send email
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 		const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
 		await db.verificationToken.create({
-			data: { identifier: email, token, expires }
+			data: { identifier: email, token, expires },
 		});
 
 		await sendVerificationEmail(email, token);

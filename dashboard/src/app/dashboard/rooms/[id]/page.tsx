@@ -3,11 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-	ArrowLeft, DoorOpen, Pencil, Trash2, Plus, Share2, Users,
-	Loader2, X, ToggleRight, CheckCircle2, AlertCircle,
-	Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio
-} from "lucide-react";
+import { ArrowLeft, DoorOpen, Pencil, Trash2, Plus, Share2, Users, Loader2, X, ToggleRight, CheckCircle2, AlertCircle, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -41,10 +37,7 @@ export default function RoomDetailPage() {
 	utilsRef.current = utils;
 
 	const { data: room, isLoading } = api.room.get.useQuery({ id });
-	const { data: unassignedRelays } = api.room.unassignedRelays.useQuery(
-		{ homeId: room?.homeId ?? "" },
-		{ enabled: !!room && room.accessLevel === "owner" }
-	);
+	const { data: unassignedRelays } = api.room.unassignedRelays.useQuery({ homeId: room?.homeId ?? "" }, { enabled: !!room && room.accessLevel === "owner" });
 	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
 	// ── Live relay states ──────────────────────────────────────
@@ -57,7 +50,9 @@ export default function RoomDetailPage() {
 			setOnlineDevices((p) => ({ ...p, [msg.deviceId]: true }));
 			setLiveRelayStates((p) => {
 				const next = { ...p };
-				msg.relays.forEach((r) => { next[r.id] = r.state; });
+				msg.relays.forEach((r) => {
+					next[r.id] = r.state;
+				});
 				return next;
 			});
 		});
@@ -85,7 +80,7 @@ export default function RoomDetailPage() {
 		deviceIds.forEach((deviceId) => {
 			pingMutation.mutateAsync({ deviceId }).then(
 				(r) => setOnlineDevices((p) => ({ ...p, [deviceId]: r.online })),
-				() => setOnlineDevices((p) => ({ ...p, [deviceId]: false }))
+				() => setOnlineDevices((p) => ({ ...p, [deviceId]: false })),
 			);
 		});
 	}, [room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -99,7 +94,7 @@ export default function RoomDetailPage() {
 			void utils.room.get.invalidate({ id });
 			if (room?.homeId) void utils.home.get.invalidate({ id: room.homeId });
 			setEditing(false);
-		}
+		},
 	});
 
 	const deleteRoom = api.room.delete.useMutation({
@@ -110,7 +105,7 @@ export default function RoomDetailPage() {
 			}
 			void utils.home.list.invalidate();
 			if (room) router.push(`/dashboard/homes/${room.homeId}`);
-		}
+		},
 	});
 
 	// ── Relay toggle ───────────────────────────────────────────
@@ -133,7 +128,7 @@ export default function RoomDetailPage() {
 			// Revert on error
 			void utils.room.get.invalidate({ id });
 			setRelayStatuses((p) => ({ ...p, [relayId]: "idle" }));
-		}
+		},
 	});
 
 	// ── Sharing ────────────────────────────────────────────────
@@ -148,11 +143,11 @@ export default function RoomDetailPage() {
 			setShareEmail("");
 			setShareError("");
 		},
-		onError: (err) => setShareError(err.message)
+		onError: (err) => setShareError(err.message),
 	});
 
 	const unshareRoomMutation = api.sharing.unshareRoom.useMutation({
-		onSuccess: () => void utils.room.get.invalidate({ id })
+		onSuccess: () => void utils.room.get.invalidate({ id }),
 	});
 
 	// ── Assign relay ───────────────────────────────────────────
@@ -162,14 +157,14 @@ export default function RoomDetailPage() {
 		onSuccess: () => {
 			void utils.room.get.invalidate({ id });
 			void utils.room.unassignedRelays.invalidate({ homeId: room?.homeId ?? "" });
-		}
+		},
 	});
 
 	const unassignRelay = api.room.unassignRelay.useMutation({
 		onSuccess: () => {
 			void utils.room.get.invalidate({ id });
 			void utils.room.unassignedRelays.invalidate({ homeId: room?.homeId ?? "" });
-		}
+		},
 	});
 
 	if (isLoading) {
@@ -185,7 +180,11 @@ export default function RoomDetailPage() {
 		return (
 			<div className="p-6 lg:p-8 mt-14 lg:mt-0">
 				<p className="text-muted-foreground">Room not found.</p>
-				<Button variant="ghost" asChild className="mt-4"><Link href="/dashboard/homes"><ArrowLeft className="w-4 h-4" /> Back</Link></Button>
+				<Button variant="ghost" asChild className="mt-4">
+					<Link href="/dashboard/homes">
+						<ArrowLeft className="w-4 h-4" /> Back
+					</Link>
+				</Button>
 			</div>
 		);
 	}
@@ -198,7 +197,9 @@ export default function RoomDetailPage() {
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div className="flex items-center gap-3">
 					<Button variant="ghost" size="icon" asChild>
-						<Link href={`/dashboard/homes/${room.homeId}`}><ArrowLeft className="w-4 h-4" /></Link>
+						<Link href={`/dashboard/homes/${room.homeId}`}>
+							<ArrowLeft className="w-4 h-4" />
+						</Link>
 					</Button>
 					{editing ? (
 						<form
@@ -208,25 +209,36 @@ export default function RoomDetailPage() {
 							}}
 							className="flex items-center gap-2"
 						>
-							<Input
-								value={editName}
-								onChange={(e) => setEditName(e.target.value)}
-								className="h-9 w-full sm:w-48"
-								autoFocus
-							/>
-							<Button size="sm" type="submit" disabled={updateRoom.isPending}>Save</Button>
-							<Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+							<Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 w-full sm:w-48" autoFocus />
+							<Button size="sm" type="submit" disabled={updateRoom.isPending}>
+								Save
+							</Button>
+							<Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+								Cancel
+							</Button>
 						</form>
 					) : (
 						<div className="flex items-center gap-2">
 							<DoorOpen className="w-5 h-5 text-primary" />
 							<h1 className="font-sora font-extrabold text-2xl lg:text-3xl text-foreground">{room.name}</h1>
 							{isOwner && (
-								<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditName(room.name); setEditing(true); }}>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-7 w-7"
+									onClick={() => {
+										setEditName(room.name);
+										setEditing(true);
+									}}
+								>
 									<Pencil className="w-3.5 h-3.5" />
 								</Button>
 							)}
-							{!isOwner && <Badge variant="outline" className="gap-1"><Share2 className="w-3 h-3" /> Shared</Badge>}
+							{!isOwner && (
+								<Badge variant="outline" className="gap-1">
+									<Share2 className="w-3 h-3" /> Shared
+								</Badge>
+							)}
 						</div>
 					)}
 				</div>
@@ -234,9 +246,17 @@ export default function RoomDetailPage() {
 				{isOwner && (
 					<div className="flex items-center gap-2 flex-wrap">
 						{/* Share room */}
-						<Dialog open={shareOpen} onOpenChange={(o) => { setShareOpen(o); setShareError(""); }}>
+						<Dialog
+							open={shareOpen}
+							onOpenChange={(o) => {
+								setShareOpen(o);
+								setShareError("");
+							}}
+						>
 							<DialogTrigger asChild>
-								<Button variant="outline"><Share2 className="w-4 h-4" /> Share</Button>
+								<Button variant="outline">
+									<Share2 className="w-4 h-4" /> Share
+								</Button>
 							</DialogTrigger>
 							<DialogContent>
 								<DialogHeader>
@@ -252,13 +272,7 @@ export default function RoomDetailPage() {
 								>
 									<div className="space-y-2">
 										<Label htmlFor="share-room-email">User email</Label>
-										<Input
-											id="share-room-email"
-											type="email"
-											placeholder="user@example.com"
-											value={shareEmail}
-											onChange={(e) => setShareEmail(e.target.value)}
-										/>
+										<Input id="share-room-email" type="email" placeholder="user@example.com" value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} />
 										{shareError && <p className="text-sm text-destructive">{shareError}</p>}
 									</div>
 									<Button type="submit" disabled={!shareEmail.trim() || shareRoomMutation.isPending} className="w-full">
@@ -294,7 +308,9 @@ export default function RoomDetailPage() {
 						{/* Add relay */}
 						<Dialog open={assignRelayOpen} onOpenChange={setAssignRelayOpen}>
 							<DialogTrigger asChild>
-								<Button><Plus className="w-4 h-4" /> Add Relay</Button>
+								<Button>
+									<Plus className="w-4 h-4" /> Add Relay
+								</Button>
 							</DialogTrigger>
 							<DialogContent>
 								<DialogHeader>
@@ -316,7 +332,9 @@ export default function RoomDetailPage() {
 												<ToggleRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 												<div className="min-w-0">
 													<p className="text-sm font-medium truncate">{relay.label}</p>
-													<p className="text-xs text-muted-foreground">GPIO {relay.pin} &middot; {relay.device.name}</p>
+													<p className="text-xs text-muted-foreground">
+														GPIO {relay.pin} &middot; {relay.device.name}
+													</p>
 												</div>
 											</button>
 										))}
@@ -354,7 +372,10 @@ export default function RoomDetailPage() {
 					</Badge>
 				)}
 				<span className="text-xs text-muted-foreground self-center">
-					in <Link href={`/dashboard/homes/${room.homeId}`} className="text-primary hover:underline">{room.home.name}</Link>
+					in{" "}
+					<Link href={`/dashboard/homes/${room.homeId}`} className="text-primary hover:underline">
+						{room.home.name}
+					</Link>
 				</span>
 			</div>
 
@@ -385,14 +406,12 @@ export default function RoomDetailPage() {
 											</div>
 											<div>
 												<p className="font-semibold text-foreground">{relay.label}</p>
-												<p className="text-xs text-muted-foreground">GPIO {relay.pin} &middot; {relay.device.name}</p>
+												<p className="text-xs text-muted-foreground">
+													GPIO {relay.pin} &middot; {relay.device.name}
+												</p>
 											</div>
 										</div>
-										<Switch
-											checked={state}
-											onCheckedChange={(checked) => toggleRelay.mutate({ relayId: relay.id, state: checked })}
-											disabled={!deviceOnline}
-										/>
+										<Switch checked={state} onCheckedChange={(checked) => toggleRelay.mutate({ relayId: relay.id, state: checked })} disabled={!deviceOnline} />
 									</div>
 									<div className="flex items-center justify-between">
 										<div className="flex items-center gap-2">
@@ -411,17 +430,11 @@ export default function RoomDetailPage() {
 													<AlertCircle className="w-3 h-3" /> No response
 												</span>
 											)}
-											{status === "idle" && !deviceOnline && (
-												<span className="text-xs text-muted-foreground">Device offline</span>
-											)}
+											{status === "idle" && !deviceOnline && <span className="text-xs text-muted-foreground">Device offline</span>}
 										</div>
 										{isOwner && (
 											<div className="flex items-center gap-0.5">
-												<RelayScheduleDialog
-													relayId={relay.id}
-													relayLabel={relay.label}
-													scheduleCount={relay._count.schedules}
-												/>
+												<RelayScheduleDialog relayId={relay.id} relayLabel={relay.label} scheduleCount={relay._count.schedules} />
 												<Button
 													variant="ghost"
 													size="icon"

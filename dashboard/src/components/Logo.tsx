@@ -13,48 +13,17 @@ export default function Logo({ theme = "dark", height = 36, className }: LogoPro
 	const width = Math.round(height * aspect);
 
 	return (
-		<svg
-			width={width}
-			height={height}
-			viewBox="0 0 323 70"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-			className={className}
-			aria-label="Blockphrase"
-		>
+		<svg width={width} height={height} viewBox="0 0 323 70" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-label="Blockphrase">
 			{/* ── Icon mark ── */}
-			<mask
-				id="bp-mask"
-				style={{ maskType: "alpha" }}
-				maskUnits="userSpaceOnUse"
-				x="0"
-				y="0"
-				width="70"
-				height="70"
-			>
+			<mask id="bp-mask" style={{ maskType: "alpha" }} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="70">
 				<g clipPath="url(#bp-icon-clip)">
-					<path
-						d="M56.9211 68.2544V12.4824H1.14917L1.17404 68.2544H56.9211Z"
-						stroke="#37B6FF"
-						strokeWidth="1.5"
-					/>
-					<path
-						d="M62.5877 62.5877V6.8158H6.8158L6.84067 62.5877H62.5877Z"
-						stroke="#37B6FF"
-						strokeWidth="1.5"
-					/>
-					<path
-						d="M68.2544 56.9211V1.14917H12.4824L12.5073 56.9211H68.2544Z"
-						stroke="#37B6FF"
-						strokeWidth="1.5"
-					/>
+					<path d="M56.9211 68.2544V12.4824H1.14917L1.17404 68.2544H56.9211Z" stroke="#37B6FF" strokeWidth="1.5" />
+					<path d="M62.5877 62.5877V6.8158H6.8158L6.84067 62.5877H62.5877Z" stroke="#37B6FF" strokeWidth="1.5" />
+					<path d="M68.2544 56.9211V1.14917H12.4824L12.5073 56.9211H68.2544Z" stroke="#37B6FF" strokeWidth="1.5" />
 				</g>
 			</mask>
 			<g mask="url(#bp-mask)">
-				<path
-					d="M73 75H-7V-5H73V75ZM51.4473 22.5391V46.9385H70.125V39.9033H59.3984V22.5391H51.4473Z"
-					fill={theme === "light" ? "#37B6FF" : "#14A9FF"}
-				/>
+				<path d="M73 75H-7V-5H73V75ZM51.4473 22.5391V46.9385H70.125V39.9033H59.3984V22.5391H51.4473Z" fill={theme === "light" ? "#37B6FF" : "#14A9FF"} />
 			</g>
 
 			{/* ── Wordmark ── */}
@@ -110,10 +79,7 @@ export default function Logo({ theme = "dark", height = 36, className }: LogoPro
 					fill={theme === "light" ? "white" : "#0B2E5B"}
 				/>
 				{/* L */}
-				<path
-					d="M52.9646 45.4386V24.0394H57.917V41.4033H68.6471V45.4386H52.9646Z"
-					fill={theme === "light" ? "white" : "#0B2E5B"}
-				/>
+				<path d="M52.9646 45.4386V24.0394H57.917V41.4033H68.6471V45.4386H52.9646Z" fill={theme === "light" ? "white" : "#0B2E5B"} />
 				{/* B */}
 				<path
 					d="M25.3093 45.4386V24.0394H35.7643C38.4545 24.0394 40.4721 24.5489 41.8172 25.5679C43.1827 26.5869 43.8654 27.932 43.8654 29.6032C43.8654 30.7241 43.5903 31.7024 43.04 32.5379C42.4898 33.3531 41.7357 33.9849 40.7778 34.4333C39.82 34.8817 38.7194 35.1058 37.4763 35.1058L38.0571 33.8525C39.4022 33.8525 40.5944 34.0766 41.6338 34.525C42.6732 34.953 43.4782 35.595 44.0488 36.4509C44.6399 37.3069 44.9354 38.3565 44.9354 39.5997C44.9354 41.4339 44.2119 42.8707 42.7649 43.91C41.3179 44.9291 39.1882 45.4386 36.3757 45.4386H25.3093ZM30.2311 41.709H36.0089C37.2928 41.709 38.2609 41.5052 38.9131 41.0976C39.5856 40.6696 39.9219 39.9971 39.9219 39.08C39.9219 38.1832 39.5856 37.5209 38.9131 37.0929C38.2609 36.6445 37.2928 36.4204 36.0089 36.4204H29.8643V32.8131H35.1529C36.3554 32.8131 37.2725 32.6093 37.9042 32.2017C38.5564 31.7737 38.8825 31.1317 38.8825 30.2757C38.8825 29.4402 38.5564 28.8186 37.9042 28.411C37.2725 27.983 36.3554 27.769 35.1529 27.769H30.2311V41.709Z"
@@ -123,19 +89,10 @@ export default function Logo({ theme = "dark", height = 36, className }: LogoPro
 
 			<defs>
 				<clipPath id="bp-icon-clip">
-					<rect
-						width="70"
-						height="70"
-						fill="white"
-					/>
+					<rect width="70" height="70" fill="white" />
 				</clipPath>
 				<clipPath id="bp-text-clip">
-					<rect
-						width="296.789"
-						height="22.1328"
-						fill="white"
-						transform="translate(25.3093 23.6726)"
-					/>
+					<rect width="296.789" height="22.1328" fill="white" transform="translate(25.3093 23.6726)" />
 				</clipPath>
 			</defs>
 		</svg>

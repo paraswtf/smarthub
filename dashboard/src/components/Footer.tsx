@@ -9,39 +9,33 @@ const SECTIONS: { heading: string; links: FooterLink[] }[] = [
 		links: [
 			{ label: "Features", href: "/#features" },
 			{ label: "How it works", href: "/#how-it-works" },
-			{ label: "Dashboard", href: "/dashboard" }
-		]
+			{ label: "Dashboard", href: "/dashboard" },
+		],
 	},
 	{
 		heading: "Account",
 		links: [
 			{ label: "Sign In", href: "/auth/login" },
-			{ label: "Register", href: "/auth/register" }
-		]
+			{ label: "Register", href: "/auth/register" },
+		],
 	},
 	{
 		heading: "Open Source",
 		links: [
 			{ label: "GitHub", href: "https://github.com/paraswtf/esp-hub", external: true },
-			{ label: "Report an issue", href: "https://github.com/paraswtf/esp-hub/issues", external: true }
-		]
-	}
+			{ label: "Report an issue", href: "https://github.com/paraswtf/esp-hub/issues", external: true },
+		],
+	},
 ];
 
 export default function Footer() {
 	return (
 		<footer style={{ background: "#040c06", borderTop: "1px solid rgba(18,201,132,0.08)" }}>
 			<div className="max-w-[1200px] mx-auto px-6 md:px-[60px] py-12">
-				<div
-					className="flex flex-col md:flex-row items-start justify-between gap-10 pb-10"
-					style={{ borderBottom: "1px solid rgba(18,201,132,0.08)" }}
-				>
+				<div className="flex flex-col md:flex-row items-start justify-between gap-10 pb-10" style={{ borderBottom: "1px solid rgba(18,201,132,0.08)" }}>
 					{/* Brand */}
 					<div className="max-w-[260px]">
-						<Link
-							href="/"
-							className="flex items-center gap-2.5 no-underline mb-4"
-						>
+						<Link href="/" className="flex items-center gap-2.5 no-underline mb-4">
 							<div className="w-8 h-8 rounded-lg bg-[#12c984] flex items-center justify-center">
 								<Zap className="w-4 h-4 text-[#040c06]" />
 							</div>
@@ -68,10 +62,7 @@ export default function Footer() {
 													{item.label}
 												</a>
 											) : (
-												<Link
-													href={item.href}
-													className="text-[14px] no-underline text-[#7a9080] hover:text-[#e8f0ea] transition-colors"
-												>
+												<Link href={item.href} className="text-[14px] no-underline text-[#7a9080] hover:text-[#e8f0ea] transition-colors">
 													{item.label}
 												</Link>
 											)}

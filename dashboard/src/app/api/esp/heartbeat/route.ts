@@ -15,7 +15,7 @@ import { z } from "zod";
 const schema = z.object({
 	deviceId: z.string().min(1),
 	apiKey: z.string().min(1),
-	relayStates: z.array(z.object({ id: z.string(), state: z.boolean() })).optional()
+	relayStates: z.array(z.object({ id: z.string(), state: z.boolean() })).optional(),
 });
 
 const LAST_SEEN_THROTTLE_MS = 30_000;
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 		// Validate key owns the device
 		const device = await db.device.findFirst({
 			where: { id: deviceId, apiKey: { key: apiKey, active: true } },
-			include: { relays: { orderBy: { order: "asc" } } }
+			include: { relays: { orderBy: { order: "asc" } } },
 		});
 		if (!device) {
 			return NextResponse.json({ error: "Device not found or key invalid" }, { status: 401 });
@@ -45,30 +45,27 @@ export async function POST(req: NextRequest) {
 				relayStates.map(({ id, state }) =>
 					db.relay.updateMany({
 						where: { id, deviceId },
-						data: { state }
-					})
-				)
+						data: { state },
+					}),
+				),
 			);
 		}
 
 		// Rate-limit lastSeenAt updates
-		const shouldUpdateLastSeen = !device.lastSeenAt ||
-			(Date.now() - device.lastSeenAt.getTime() > LAST_SEEN_THROTTLE_MS);
+		const shouldUpdateLastSeen = !device.lastSeenAt || Date.now() - device.lastSeenAt.getTime() > LAST_SEEN_THROTTLE_MS;
 		if (shouldUpdateLastSeen) {
 			await db.device.update({
 				where: { id: deviceId },
-				data: { lastSeenAt: new Date() }
+				data: { lastSeenAt: new Date() },
 			});
 		}
 
 		// Return current desired relay states (includes any pending scheduled changes)
-		const relays = relayStates?.length
-			? await db.relay.findMany({ where: { deviceId }, orderBy: { order: "asc" } })
-			: device.relays;
+		const relays = relayStates?.length ? await db.relay.findMany({ where: { deviceId }, orderBy: { order: "asc" } }) : device.relays;
 
 		return NextResponse.json({
 			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })),
-			ok: true
+			ok: true,
 		});
 	} catch (err) {
 		console.error("[ESP Heartbeat]", err);

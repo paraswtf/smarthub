@@ -24,7 +24,7 @@ export const appConfig = {
 	/** Milliseconds after last heartbeat before a device is considered offline (2.5× heartbeat) */
 	deviceOnlineThresholdMs: 150_000,
 	/** API base URL for ESP32 → server communication */
-	apiBaseUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
+	apiBaseUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000",
 };
 
 // ─── Light Theme ─────────────────────────────────────────────
@@ -62,7 +62,7 @@ export const lightTheme = {
 	// Status colors
 	statusOnline: "161 94% 30%", // green
 	statusOffline: "215 16% 55%", // muted slate
-	statusRelay: "38 92% 50%" // amber for active relay
+	statusRelay: "38 92% 50%", // amber for active relay
 };
 
 // ─── Dark Theme ──────────────────────────────────────────────
@@ -100,13 +100,13 @@ export const darkTheme = {
 	// Status colors
 	statusOnline: "161 69% 42%", // electric green
 	statusOffline: "148 20% 35%", // muted
-	statusRelay: "38 92% 55%" // amber
+	statusRelay: "38 92% 55%", // amber
 };
 
 // ─── Border Radius ───────────────────────────────────────────
 export const radiusConfig = {
 	/** Base radius used by shadcn components */
-	base: "0.5rem"
+	base: "0.5rem",
 };
 
 // ─── Typography ──────────────────────────────────────────────
@@ -116,5 +116,5 @@ export const typographyConfig = {
 	/** CSS variable for the body font */
 	fontSans: "var(--font-dm-sans)",
 	/** CSS variable for monospaced technical data */
-	fontMono: "var(--font-jetbrains-mono)"
+	fontMono: "var(--font-jetbrains-mono)",
 };

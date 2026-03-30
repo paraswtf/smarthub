@@ -40,12 +40,12 @@ esp32/
 5. Your device should automatically open the config portal. If not, navigate to
    **http://192.168.4.1** manually.
 6. Fill in:
-   - **WiFi SSID / Password** — your home network
-   - **Device Name** — a friendly label shown in the dashboard
-   - **API Key** — copy from the ESP Hub dashboard → API Keys page
-   - **Server Host** — your ESP Hub server hostname (e.g. `myserver.com`)
-   - **Server Port** — usually `3000` (Next.js) for HTTP and `4001` for WebSocket
-   - **Secure** — enable if your server uses HTTPS/WSS
+    - **WiFi SSID / Password** — your home network
+    - **Device Name** — a friendly label shown in the dashboard
+    - **API Key** — copy from the ESP Hub dashboard → API Keys page
+    - **Server Host** — your ESP Hub server hostname (e.g. `myserver.com`)
+    - **Server Port** — usually `3000` (Next.js) for HTTP and `4001` for WebSocket
+    - **Secure** — enable if your server uses HTTPS/WSS
 7. Click **Save & Connect**. The ESP32 reboots, connects to WiFi, registers with the
    server, and appears in your dashboard.
 
@@ -74,11 +74,11 @@ digitalWrite(relays[i].pin, relays[i].state ? HIGH : LOW);  // active-HIGH
 
 Uses the onboard LED (GPIO 2 by default, active-LOW). Configure in `Config.h`.
 
-| Pattern | Meaning |
-|---|---|
-| Fast blink (200 ms) | AP / captive portal mode |
-| Slow blink (1 s) | Connecting to WiFi or WebSocket |
-| Solid ON | Connected and authenticated |
+| Pattern             | Meaning                         |
+| ------------------- | ------------------------------- |
+| Fast blink (200 ms) | AP / captive portal mode        |
+| Slow blink (1 s)    | Connecting to WiFi or WebSocket |
+| Solid ON            | Connected and authenticated     |
 
 ---
 
@@ -107,11 +107,11 @@ See `src/server/ws-server.ts` in the ESP Hub project for the full protocol spec.
 
 Quick reference:
 
-| Direction | Message |
-|---|---|
-| ESP32 → Server | `{ type: "auth", apiKey, macAddress, deviceId? }` |
-| ESP32 → Server | `{ type: "heartbeat", deviceId, relayStates: [{id, state}] }` |
-| ESP32 → Server | `{ type: "relay_ack", relayId, state }` |
+| Direction      | Message                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| ESP32 → Server | `{ type: "auth", apiKey, macAddress, deviceId? }`                  |
+| ESP32 → Server | `{ type: "heartbeat", deviceId, relayStates: [{id, state}] }`      |
+| ESP32 → Server | `{ type: "relay_ack", relayId, state }`                            |
 | Server → ESP32 | `{ type: "auth_ok", deviceId, relays: [{id, pin, label, state}] }` |
-| Server → ESP32 | `{ type: "relay_cmd", relayId, pin, state }` |
-| Server → ESP32 | `{ type: "ping" }` |
+| Server → ESP32 | `{ type: "relay_cmd", relayId, pin, state }`                       |
+| Server → ESP32 | `{ type: "ping" }`                                                 |

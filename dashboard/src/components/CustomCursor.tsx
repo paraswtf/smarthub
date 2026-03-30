@@ -126,7 +126,7 @@ export default function CustomCursor() {
 					backgroundColor: "rgba(14,165,233,0.45)",
 					transform: "translate(-50%,-50%)",
 					imageRendering: "pixelated",
-					transition: "opacity 0.1s"
+					transition: "opacity 0.1s",
 				}}
 			/>
 
@@ -139,7 +139,7 @@ export default function CustomCursor() {
 					height: "28px",
 					border: "1.5px solid rgba(29,107,212,0.55)",
 					transform: "translate(-50%,-50%)",
-					transition: "width 0.25s cubic-bezier(.22,1,.36,1), height 0.25s cubic-bezier(.22,1,.36,1), border-color 0.2s, background-color 0.2s, transform 0.15s cubic-bezier(.22,1,.36,1)"
+					transition: "width 0.25s cubic-bezier(.22,1,.36,1), height 0.25s cubic-bezier(.22,1,.36,1), border-color 0.2s, background-color 0.2s, transform 0.15s cubic-bezier(.22,1,.36,1)",
 				}}
 			/>
 
@@ -153,7 +153,7 @@ export default function CustomCursor() {
 					backgroundColor: "rgba(29,107,212,1)",
 					transform: "translate(-50%,-50%) scale(1)",
 					imageRendering: "pixelated",
-					transition: "transform 0.12s cubic-bezier(.22,1,.36,1)"
+					transition: "transform 0.12s cubic-bezier(.22,1,.36,1)",
 				}}
 			/>
 		</>

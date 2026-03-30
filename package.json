@@ -10,6 +10,17 @@
 		"build": "npm run --workspace=dashboard build",
 		"ws": "npm run --workspace=dashboard ws",
 		"db:push": "npm run --workspace=dashboard db:push",
-		"db:studio": "npm run --workspace=dashboard db:studio"
+		"db:studio": "npm run --workspace=dashboard db:studio",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"prepare": "husky"
+	},
+	"lint-staged": {
+		"*.{ts,tsx,js,jsx,json,css,md,prisma}": "prettier --write"
+	},
+	"devDependencies": {
+		"husky": "^9.1.7",
+		"lint-staged": "^16.4.0",
+		"prettier": "^3.8.1"
 	}
 }

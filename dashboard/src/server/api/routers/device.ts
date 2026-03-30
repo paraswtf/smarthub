@@ -9,7 +9,7 @@ function validateRelayPin(pin: number | undefined) {
 	if (pin !== undefined && INPUT_ONLY_PINS.includes(pin)) {
 		throw new TRPCError({
 			code: "BAD_REQUEST",
-			message: `GPIO${pin} is input-only on ESP32 (pins 34–39 cannot drive outputs). Use pins 2, 4, 5, 12–27, or 32–33.`
+			message: `GPIO${pin} is input-only on ESP32 (pins 34–39 cannot drive outputs). Use pins 2, 4, 5, 12–27, or 32–33.`,
 		});
 	}
 }
@@ -22,9 +22,9 @@ export const deviceRouter = createTRPCRouter({
 			include: {
 				devices: {
 					include: { relays: { orderBy: { order: "asc" } } },
-					orderBy: { updatedAt: "desc" }
-				}
-			}
+					orderBy: { updatedAt: "desc" },
+				},
+			},
 		});
 		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices);
 	}),
@@ -36,7 +36,7 @@ export const deviceRouter = createTRPCRouter({
 
 		const device = await ctx.db.device.findFirst({
 			where: { id: input.id },
-			include: { relays: { orderBy: { order: "asc" } } }
+			include: { relays: { orderBy: { order: "asc" } } },
 		});
 		if (!device) throw new TRPCError({ code: "NOT_FOUND" });
 		return { ...device, accessLevel };
@@ -54,7 +54,7 @@ export const deviceRouter = createTRPCRouter({
 				method: "POST",
 				headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
 				body: JSON.stringify({ deviceId: input.deviceId, timeoutMs: 3000 }),
-				signal: AbortSignal.timeout(5000) // outer timeout > inner ping timeout
+				signal: AbortSignal.timeout(5000), // outer timeout > inner ping timeout
 			});
 			const data = (await res.json()) as { online?: boolean };
 			if (data.online === true) {
@@ -72,13 +72,13 @@ export const deviceRouter = createTRPCRouter({
 			z.object({
 				id: z.string(),
 				name: z.string().min(1).max(60).optional(),
-				notes: z.string().max(500).optional()
-			})
+				notes: z.string().max(500).optional(),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { id, ...data } = input;
 			const owned = await ctx.db.device.findFirst({
-				where: { id, apiKey: { userId: ctx.session.user.id } }
+				where: { id, apiKey: { userId: ctx.session.user.id } },
 			});
 			if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
 			return ctx.db.device.update({ where: { id }, data });
@@ -87,7 +87,7 @@ export const deviceRouter = createTRPCRouter({
 	/** Delete a device */
 	delete: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
 		const owned = await ctx.db.device.findFirst({
-			where: { id: input.id, apiKey: { userId: ctx.session.user.id } }
+			where: { id: input.id, apiKey: { userId: ctx.session.user.id } },
 		});
 		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
 		return ctx.db.device.delete({ where: { id: input.id } });
@@ -97,7 +97,7 @@ export const deviceRouter = createTRPCRouter({
 	toggleRelay: protectedProcedure.input(z.object({ relayId: z.string(), state: z.boolean() })).mutation(async ({ ctx, input }) => {
 		const relay = await ctx.db.relay.findFirst({
 			where: { id: input.relayId },
-			select: { id: true, pin: true, deviceId: true, state: true }
+			select: { id: true, pin: true, deviceId: true, state: true },
 		});
 		if (!relay) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -112,15 +112,15 @@ export const deviceRouter = createTRPCRouter({
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"x-internal-secret": process.env.WS_SECRET ?? ""
+					"x-internal-secret": process.env.WS_SECRET ?? "",
 				},
 				body: JSON.stringify({
 					deviceId: relay.deviceId,
 					relayId: input.relayId,
 					pin: relay.pin,
-					state: input.state
+					state: input.state,
 				}),
-				signal: AbortSignal.timeout(2000)
+				signal: AbortSignal.timeout(2000),
 			});
 			const data = (await res.json()) as { pushed?: boolean };
 			pushed = data.pushed === true;
@@ -136,7 +136,7 @@ export const deviceRouter = createTRPCRouter({
 		// Not connected — write DB so it syncs on next ping
 		return ctx.db.relay.update({
 			where: { id: input.relayId },
-			data: { state: input.state, updatedAt: new Date() }
+			data: { state: input.state, updatedAt: new Date() },
 		});
 	}),
 
@@ -148,8 +148,8 @@ export const deviceRouter = createTRPCRouter({
 				label: z.string().min(1).max(40).optional(),
 				icon: z.string().optional(),
 				pin: z.number().int().min(0).max(39).optional(),
-				order: z.number().int().optional()
-			})
+				order: z.number().int().optional(),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { relayId, ...data } = input;
@@ -157,8 +157,8 @@ export const deviceRouter = createTRPCRouter({
 			const relay = await ctx.db.relay.findFirst({
 				where: {
 					id: relayId,
-					device: { apiKey: { userId: ctx.session.user.id } }
-				}
+					device: { apiKey: { userId: ctx.session.user.id } },
+				},
 			});
 			if (!relay) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -171,13 +171,13 @@ export const deviceRouter = createTRPCRouter({
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						"x-internal-secret": process.env.WS_SECRET ?? ""
+						"x-internal-secret": process.env.WS_SECRET ?? "",
 					},
 					body: JSON.stringify({
 						deviceId: relay.deviceId,
-						relay: { id: updated.id, pin: updated.pin, label: updated.label, state: updated.state, icon: updated.icon }
+						relay: { id: updated.id, pin: updated.pin, label: updated.label, state: updated.state, icon: updated.icon },
 					}),
-					signal: AbortSignal.timeout(2000)
+					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
 				// WS server unreachable — ESP32 picks up changes on next reconnect
@@ -193,14 +193,14 @@ export const deviceRouter = createTRPCRouter({
 				deviceId: z.string(),
 				pin: z.number().int().min(0).max(39),
 				label: z.string().min(1).max(40),
-				icon: z.string().default("plug")
-			})
+				icon: z.string().default("plug"),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			validateRelayPin(input.pin);
 			const owned = await ctx.db.device.findFirst({
 				where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } },
-				include: { _count: { select: { relays: true } } }
+				include: { _count: { select: { relays: true } } },
 			});
 			if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
 			if (owned._count.relays >= 8) throw new TRPCError({ code: "BAD_REQUEST", message: "Maximum 8 relays per device" });
@@ -210,8 +210,8 @@ export const deviceRouter = createTRPCRouter({
 					pin: input.pin,
 					label: input.label,
 					icon: input.icon,
-					order: owned._count.relays
-				}
+					order: owned._count.relays,
+				},
 			});
 
 			// Notify connected ESP32 so it can init the GPIO without rebooting
@@ -221,13 +221,13 @@ export const deviceRouter = createTRPCRouter({
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						"x-internal-secret": process.env.WS_SECRET ?? ""
+						"x-internal-secret": process.env.WS_SECRET ?? "",
 					},
 					body: JSON.stringify({
 						deviceId: input.deviceId,
-						relay: { id: relay.id, pin: relay.pin, label: relay.label, state: relay.state, icon: relay.icon }
+						relay: { id: relay.id, pin: relay.pin, label: relay.label, state: relay.state, icon: relay.icon },
 					}),
-					signal: AbortSignal.timeout(2000)
+					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
 				// WS server unreachable — ESP32 will pick up new relay on next reconnect
@@ -241,10 +241,10 @@ export const deviceRouter = createTRPCRouter({
 		const relay = await ctx.db.relay.findFirst({
 			where: {
 				id: input.relayId,
-				device: { apiKey: { userId: ctx.session.user.id } }
-			}
+				device: { apiKey: { userId: ctx.session.user.id } },
+			},
 		});
 		if (!relay) throw new TRPCError({ code: "FORBIDDEN" });
 		return ctx.db.relay.delete({ where: { id: input.relayId } });
-	})
+	}),
 });

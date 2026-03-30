@@ -77,10 +77,10 @@ async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 				select: {
 					id: true,
 					roomId: true,
-					shares: { select: { userId: true } }
-				}
-			}
-		}
+					shares: { select: { userId: true } },
+				},
+			},
+		},
 	});
 	if (!device) return new Set();
 
@@ -96,7 +96,7 @@ async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 	if (roomIds.length > 0) {
 		const roomShares = await db.roomShare.findMany({
 			where: { roomId: { in: roomIds } },
-			select: { userId: true }
+			select: { userId: true },
 		});
 		for (const s of roomShares) subscribers.add(s.userId);
 	}
@@ -105,7 +105,7 @@ async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 	if (device.homeId) {
 		const homeShares = await db.homeShare.findMany({
 			where: { homeId: device.homeId },
-			select: { userId: true }
+			select: { userId: true },
 		});
 		for (const s of homeShares) subscribers.add(s.userId);
 	}
@@ -149,13 +149,13 @@ async function sendPingWithState(deviceId: string): Promise<boolean> {
 	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
 	const relays = await db.relay.findMany({
 		where: { deviceId },
-		orderBy: { order: "asc" }
+		orderBy: { order: "asc" },
 	});
 	ws.send(
 		JSON.stringify({
 			type: "ping",
-			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state }))
-		})
+			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })),
+		}),
 	);
 	return true;
 }
@@ -302,7 +302,7 @@ const httpServer = createServer((req, res) => {
 					const typeMap: Record<string, string> = {
 						"/push-switch-add": "switch_add",
 						"/push-switch-update": "switch_update_config",
-						"/push-switch-delete": "switch_delete"
+						"/push-switch-delete": "switch_delete",
 					};
 					const pushed = pushToDevice(data.deviceId, { type: typeMap[url], ...data });
 					res.writeHead(200, { "Content-Type": "application/json" });
@@ -468,7 +468,7 @@ function handleDeviceConnection(ws: WebSocket) {
 			const { apiKey, macAddress } = msg;
 			const key = await db.apiKey.findFirst({
 				where: { key: apiKey, active: true },
-				select: { id: true, userId: true }
+				select: { id: true, userId: true },
 			});
 			if (!key) {
 				ws.send(JSON.stringify({ type: "auth_fail", reason: "Invalid API key" }));
@@ -482,8 +482,8 @@ function handleDeviceConnection(ws: WebSocket) {
 				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id, lastSeenAt: new Date() },
 				include: {
 					relays: { orderBy: { order: "asc" } },
-					switches: { orderBy: { createdAt: "asc" } }
-				}
+					switches: { orderBy: { createdAt: "asc" } },
+				},
 			});
 
 			authenticatedDeviceId = device.id;
@@ -501,15 +501,15 @@ function handleDeviceConnection(ws: WebSocket) {
 					type: "auth_ok",
 					deviceId: device.id,
 					relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
-					switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId }))
-				})
+					switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
+				}),
 			);
 
 			broadcastToDeviceSubscribers(device.id, {
 				type: "device_update",
 				deviceId: device.id,
 				lastSeenAt: new Date().toISOString(),
-				relays: device.relays.map((r) => ({ id: r.id, state: r.state }))
+				relays: device.relays.map((r) => ({ id: r.id, state: r.state })),
 			});
 
 			console.log(`[WS] Device authenticated: ${device.name} (${macAddress}) id=${device.id} — sockets: ${deviceSockets.size}`);
@@ -529,7 +529,7 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			const relay = await db.relay.findFirst({
 				where: { id: linkedRelayId },
-				include: { device: { include: { apiKey: true } } }
+				include: { device: { include: { apiKey: true } } },
 			});
 			if (!relay) {
 				console.log(`[WS] switch_trigger: relay ${linkedRelayId} not found`);
@@ -538,7 +538,7 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			const triggeringDevice = await db.device.findUnique({
 				where: { id: authenticatedDeviceId },
-				include: { apiKey: true }
+				include: { apiKey: true },
 			});
 			if (relay.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
 				console.log(`[WS] switch_trigger: cross-user relay access denied`);
@@ -549,7 +549,7 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			await db.relay.update({
 				where: { id: linkedRelayId },
-				data: { state: newState, updatedAt: new Date() }
+				data: { state: newState, updatedAt: new Date() },
 			});
 			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
@@ -567,7 +567,7 @@ function handleDeviceConnection(ws: WebSocket) {
 		if (msg.type === "relay_ack" && authenticatedDeviceId) {
 			await db.relay.updateMany({
 				where: { id: msg.relayId, deviceId: authenticatedDeviceId },
-				data: { state: msg.state, updatedAt: new Date() }
+				data: { state: msg.state, updatedAt: new Date() },
 			});
 			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
@@ -575,7 +575,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				type: "relay_update",
 				deviceId: authenticatedDeviceId,
 				relayId: msg.relayId,
-				state: msg.state
+				state: msg.state,
 			});
 			console.log(`[WS] Relay ack: ${msg.relayId} → ${msg.state ? "ON" : "OFF"}`);
 		}
@@ -612,8 +612,8 @@ setInterval(async () => {
 		const schedules = await db.relaySchedule.findMany({
 			where: { enabled: true },
 			include: {
-				relay: { select: { id: true, pin: true, deviceId: true, state: true } }
-			}
+				relay: { select: { id: true, pin: true, deviceId: true, state: true } },
+			},
 		});
 
 		if (schedules.length === 0) return;
@@ -626,7 +626,7 @@ setInterval(async () => {
 				hour: "numeric",
 				minute: "numeric",
 				weekday: "short",
-				hour12: false
+				hour12: false,
 			}).formatToParts(now);
 
 			const localHour = Number(parts.find((p) => p.type === "hour")?.value);
@@ -645,14 +645,17 @@ setInterval(async () => {
 					hour12: false,
 					year: "numeric",
 					month: "numeric",
-					day: "numeric"
+					day: "numeric",
 				}).formatToParts(schedule.lastFiredAt);
 				const lastH = Number(lastParts.find((p) => p.type === "hour")?.value);
 				const lastM = Number(lastParts.find((p) => p.type === "minute")?.value);
 				const lastD = Number(lastParts.find((p) => p.type === "day")?.value);
-				const nowD = Number(new Intl.DateTimeFormat("en-US", {
-					timeZone: schedule.timezone, day: "numeric"
-				}).format(now));
+				const nowD = Number(
+					new Intl.DateTimeFormat("en-US", {
+						timeZone: schedule.timezone,
+						day: "numeric",
+					}).format(now),
+				);
 				if (lastH === localHour && lastM === localMinute && lastD === nowD) continue;
 			}
 
@@ -665,7 +668,7 @@ setInterval(async () => {
 			// Update relay state in DB (desired state for heartbeat sync)
 			await db.relay.update({
 				where: { id: schedule.relay.id },
-				data: { state: schedule.action }
+				data: { state: schedule.action },
 			});
 
 			// Push to ESP32 if online
@@ -676,7 +679,7 @@ setInterval(async () => {
 				type: "relay_update",
 				deviceId: schedule.relay.deviceId,
 				relayId: schedule.relay.id,
-				state: schedule.action
+				state: schedule.action,
 			});
 
 			await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });

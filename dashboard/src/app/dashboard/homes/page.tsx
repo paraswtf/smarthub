@@ -25,7 +25,7 @@ export default function HomesPage() {
 			void utils.home.list.invalidate();
 			setCreateOpen(false);
 			setNewName("");
-		}
+		},
 	});
 
 	return (
@@ -38,7 +38,9 @@ export default function HomesPage() {
 				</div>
 				<Dialog open={createOpen} onOpenChange={setCreateOpen}>
 					<DialogTrigger asChild>
-						<Button><Plus className="w-4 h-4" /> Create Home</Button>
+						<Button>
+							<Plus className="w-4 h-4" /> Create Home
+						</Button>
 					</DialogTrigger>
 					<DialogContent>
 						<DialogHeader>
@@ -53,13 +55,7 @@ export default function HomesPage() {
 						>
 							<div className="space-y-2">
 								<Label htmlFor="home-name">Name</Label>
-								<Input
-									id="home-name"
-									placeholder="e.g. Main House"
-									value={newName}
-									onChange={(e) => setNewName(e.target.value)}
-									maxLength={60}
-								/>
+								<Input id="home-name" placeholder="e.g. Main House" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} />
 							</div>
 							<Button type="submit" disabled={!newName.trim() || createHome.isPending} className="w-full">
 								{createHome.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}

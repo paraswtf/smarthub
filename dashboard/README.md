@@ -4,14 +4,14 @@ Built with the [T3 Stack](https://create.t3.gg/) — Next.js App Router, TypeScr
 
 ## Stack
 
-| Technology | Purpose |
-|---|---|
-| **Next.js 14** (App Router) | Framework & routing |
-| **TypeScript** | Type safety |
-| **Tailwind CSS** | Styling (preserves original design tokens) |
-| **tRPC** | End-to-end type-safe API |
-| **Prisma** | Database ORM (SQLite in dev, Postgres in prod) |
-| **NextAuth v5** | Admin authentication |
+| Technology                  | Purpose                                        |
+| --------------------------- | ---------------------------------------------- |
+| **Next.js 14** (App Router) | Framework & routing                            |
+| **TypeScript**              | Type safety                                    |
+| **Tailwind CSS**            | Styling (preserves original design tokens)     |
+| **tRPC**                    | End-to-end type-safe API                       |
+| **Prisma**                  | Database ORM (SQLite in dev, Postgres in prod) |
+| **NextAuth v5**             | Admin authentication                           |
 
 ## Quick Start
 
@@ -76,6 +76,7 @@ src/
 ## Admin Access
 
 Navigate to `/admin/login` and sign in with:
+
 - **Email**: `admin@blockphrase.com` (or value of `ADMIN_EMAIL` env var)
 - **Password**: `blockphrase2026` (or value of `ADMIN_PASSWORD` env var)
 
@@ -83,20 +84,21 @@ Navigate to `/admin/login` and sign in with:
 
 ## Features Converted from HTML
 
-| Original HTML | T3 Stack equivalent |
-|---|---|
-| `window.storage` for partners | Prisma `Partner` model + tRPC CRUD |
-| Hardcoded password modal | NextAuth credentials provider |
-| Inline JavaScript routing | Next.js App Router pages |
-| Contact form (no backend) | tRPC `contact.submit` mutation → DB |
-| Blog posts (static) | Prisma `Post` model + tRPC queries |
-| Case studies + email gate | Prisma `CaseStudy` + tRPC `requestAccess` |
-| Inline CSS variables | Tailwind config + globals.css tokens |
-| Single HTML file | ~25 TypeScript files, fully typed |
+| Original HTML                 | T3 Stack equivalent                       |
+| ----------------------------- | ----------------------------------------- |
+| `window.storage` for partners | Prisma `Partner` model + tRPC CRUD        |
+| Hardcoded password modal      | NextAuth credentials provider             |
+| Inline JavaScript routing     | Next.js App Router pages                  |
+| Contact form (no backend)     | tRPC `contact.submit` mutation → DB       |
+| Blog posts (static)           | Prisma `Post` model + tRPC queries        |
+| Case studies + email gate     | Prisma `CaseStudy` + tRPC `requestAccess` |
+| Inline CSS variables          | Tailwind config + globals.css tokens      |
+| Single HTML file              | ~25 TypeScript files, fully typed         |
 
 ## Deployment
 
 ### Vercel (recommended)
+
 ```bash
 # Set these env vars in Vercel dashboard:
 # DATABASE_URL (Postgres)
@@ -106,6 +108,7 @@ Navigate to `/admin/login` and sign in with:
 ```
 
 For production, swap the `datasource` in `prisma/schema.prisma` to:
+
 ```prisma
 datasource db {
   provider = "postgresql"

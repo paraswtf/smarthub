@@ -21,7 +21,9 @@ export default function SharedPage() {
 		return onDeviceUpdate((msg) => {
 			setLiveRelayStates((p) => {
 				const next = { ...p };
-				msg.relays.forEach((r) => { next[r.id] = r.state; });
+				msg.relays.forEach((r) => {
+					next[r.id] = r.state;
+				});
 				return next;
 			});
 		});
@@ -48,7 +50,12 @@ export default function SharedPage() {
 			{isLoading ? (
 				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 					{Array.from({ length: 2 }).map((_, i) => (
-						<Card key={i}><CardContent className="p-5 space-y-3"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-4 w-1/2" /></CardContent></Card>
+						<Card key={i}>
+							<CardContent className="p-5 space-y-3">
+								<Skeleton className="h-5 w-2/3" />
+								<Skeleton className="h-4 w-1/2" />
+							</CardContent>
+						</Card>
 					))}
 				</div>
 			) : isEmpty ? (
@@ -90,17 +97,19 @@ export default function SharedPage() {
 													home.rooms.map((room) => {
 														const relays = room.relays.map((r) => ({
 															...r,
-															state: liveRelayStates[r.id] ?? r.state
+															state: liveRelayStates[r.id] ?? r.state,
 														}));
 														const active = relays.filter((r) => r.state).length;
 														return (
-															<Link key={room.id} href={`/dashboard/rooms/${room.id}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors no-underline">
+															<Link
+																key={room.id}
+																href={`/dashboard/rooms/${room.id}`}
+																className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors no-underline"
+															>
 																<div className="flex items-center gap-2">
 																	<DoorOpen className="w-3.5 h-3.5 text-muted-foreground" />
 																	<span className="text-sm">{room.name}</span>
-																	<span className="text-xs text-muted-foreground">
-																		{relays.length > 0 && `${active}/${relays.length} active`}
-																	</span>
+																	<span className="text-xs text-muted-foreground">{relays.length > 0 && `${active}/${relays.length} active`}</span>
 																</div>
 																<ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
 															</Link>
@@ -125,7 +134,7 @@ export default function SharedPage() {
 								{data!.rooms.map((room) => {
 									const relays = room.relays.map((r) => ({
 										...r,
-										state: liveRelayStates[r.id] ?? r.state
+										state: liveRelayStates[r.id] ?? r.state,
 									}));
 									const active = relays.filter((r) => r.state).length;
 									return (
@@ -147,9 +156,7 @@ export default function SharedPage() {
 												</CardHeader>
 												<CardContent className="pb-4">
 													<div className="flex items-center justify-between">
-														<span className="text-xs text-muted-foreground">
-															{relays.length === 0 ? "No relays" : `${active} / ${relays.length} relays active`}
-														</span>
+														<span className="text-xs text-muted-foreground">{relays.length === 0 ? "No relays" : `${active} / ${relays.length} relays active`}</span>
 														<ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
 													</div>
 												</CardContent>

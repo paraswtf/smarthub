@@ -6,7 +6,7 @@ import { z } from "zod";
 
 const schema = z.object({
 	current: z.string().min(1),
-	next: z.string().min(8)
+	next: z.string().min(8),
 });
 
 export async function POST(req: NextRequest) {

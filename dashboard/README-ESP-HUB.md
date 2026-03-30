@@ -80,23 +80,24 @@ npx tsx src/server/ws-server.ts
 ```ts
 // globals.config.ts
 export const appConfig = {
-  name: "ESP Hub",               // App name shown in sidebar + auth pages
-  maxRelaysPerDevice: 8,         // UI cap on relays per device
-  wsReconnectInterval: 5000,     // ESP32 reconnect interval hint (ms)
+	name: "ESP Hub", // App name shown in sidebar + auth pages
+	maxRelaysPerDevice: 8, // UI cap on relays per device
+	wsReconnectInterval: 5000, // ESP32 reconnect interval hint (ms)
 };
 
 export const lightTheme = {
-  primary: "161 94% 30%",        // HSL → emerald green
-  // ...all shadcn CSS variable tokens
+	primary: "161 94% 30%", // HSL → emerald green
+	// ...all shadcn CSS variable tokens
 };
 
 export const darkTheme = {
-  primary: "161 69% 42%",        // electric emerald on dark bg
-  // ...
+	primary: "161 69% 42%", // electric emerald on dark bg
+	// ...
 };
 ```
 
 To change the entire app's accent color (e.g. to blue):
+
 ```ts
 primary: "217 91% 60%",   // HSL for #3b82f6
 ```
@@ -147,7 +148,7 @@ ws.send({ type: "auth", apiKey: "ehk_...", macAddress: "AA:BB:CC:DD:EE:FF" });
 // Handle relay_cmd → digitalWrite(pin, state)
 
 // Send heartbeat every 30s
-ws.send({ type: "heartbeat", deviceId: "...", relayStates: [{id, state}] });
+ws.send({ type: "heartbeat", deviceId: "...", relayStates: [{ id, state }] });
 ```
 
 ### Step 4 — Heartbeat fallback (offline sync)
@@ -169,28 +170,28 @@ Response includes the authoritative state for all relays.
 
 ## Dashboard Pages
 
-| Route | Description |
-|---|---|
-| `/auth/login` | Sign in with email + password |
-| `/auth/register` | Create new account |
-| `/dashboard` | Overview: stats, device grid, setup guide |
-| `/dashboard/devices` | All devices with online/offline status |
+| Route                     | Description                                               |
+| ------------------------- | --------------------------------------------------------- |
+| `/auth/login`             | Sign in with email + password                             |
+| `/auth/register`          | Create new account                                        |
+| `/dashboard`              | Overview: stats, device grid, setup guide                 |
+| `/dashboard/devices`      | All devices with online/offline status                    |
 | `/dashboard/devices/[id]` | Device detail: relay toggle grid, edit, add/remove relays |
-| `/dashboard/api-keys` | Create, reveal, copy, revoke, delete API keys |
-| `/dashboard/settings` | Change name, password, appearance |
+| `/dashboard/api-keys`     | Create, reveal, copy, revoke, delete API keys             |
+| `/dashboard/settings`     | Change name, password, appearance                         |
 
 ---
 
 ## API Routes
 
-| Route | Auth | Purpose |
-|---|---|---|
-| `POST /api/auth/register` | Public | Create user account |
-| `POST /api/esp/register` | API key | ESP32 first-boot registration |
-| `POST /api/esp/heartbeat` | API key | Periodic state sync |
-| `POST /api/esp/ws-relay` | Session | Push relay command to live device |
-| `POST /api/user/update-name` | Session | Update display name |
-| `POST /api/user/change-password` | Session | Change password |
+| Route                            | Auth    | Purpose                           |
+| -------------------------------- | ------- | --------------------------------- |
+| `POST /api/auth/register`        | Public  | Create user account               |
+| `POST /api/esp/register`         | API key | ESP32 first-boot registration     |
+| `POST /api/esp/heartbeat`        | API key | Periodic state sync               |
+| `POST /api/esp/ws-relay`         | Session | Push relay command to live device |
+| `POST /api/user/update-name`     | Session | Update display name               |
+| `POST /api/user/change-password` | Session | Change password                   |
 
 ---
 

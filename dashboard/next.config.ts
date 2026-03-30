@@ -13,10 +13,10 @@ const config = {
 		remotePatterns: [
 			{
 				protocol: "https",
-				hostname: "**"
-			}
-		]
-	}
+				hostname: "**",
+			},
+		],
+	},
 };
 
 export default config;

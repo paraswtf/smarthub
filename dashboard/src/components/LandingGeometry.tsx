@@ -16,7 +16,7 @@ const RAW_VERTS: [number, number, number][] = [
 	[PHI, 0, 1],
 	[-PHI, 0, 1],
 	[PHI, 0, -1],
-	[-PHI, 0, -1]
+	[-PHI, 0, -1],
 ];
 const VERTS: [number, number, number][] = RAW_VERTS.map(([x, y, z]) => {
 	const l = Math.sqrt(x * x + y * y + z * z);
@@ -107,7 +107,7 @@ export default function LandingGeometry() {
 			const R = h * 0.38;
 			const shapes = [
 				{ ox: w * 0.82, oy: h * 0.42, radius: R, offRx: 0.3, offRy: 0.6 },
-				{ ox: w * 0.12, oy: h * 0.68, radius: R * 0.48, offRx: 1.1, offRy: 0.2 }
+				{ ox: w * 0.12, oy: h * 0.68, radius: R * 0.48, offRx: 1.1, offRy: 0.2 },
 			];
 
 			shapes.forEach(({ ox, oy, radius, offRx, offRy }) => {
@@ -122,7 +122,7 @@ export default function LandingGeometry() {
 				EDGES.map(([a, b]) => ({
 					a,
 					b,
-					avgZ: (transformed[a]![2] + transformed[b]![2]) / 2
+					avgZ: (transformed[a]![2] + transformed[b]![2]) / 2,
 				}))
 					.sort((x, y) => x.avgZ - y.avgZ)
 					.forEach(({ a, b, avgZ }) => {
@@ -168,11 +168,5 @@ export default function LandingGeometry() {
 		};
 	}, []);
 
-	return (
-		<canvas
-			ref={canvasRef}
-			className="absolute inset-0 w-full h-full pointer-events-none"
-			aria-hidden
-		/>
-	);
+	return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden />;
 }

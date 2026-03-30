@@ -16,7 +16,7 @@ export const env = createEnv({
 		// WebSocket server
 		WS_PORT: z.string().optional(),
 		WS_SECRET: z.string().optional(),
-		WS_INTERNAL_URL: z.string().url().optional()
+		WS_INTERNAL_URL: z.string().url().optional(),
 	},
 	client: {},
 	runtimeEnv: {
@@ -30,8 +30,8 @@ export const env = createEnv({
 		REDIS_URL: process.env.REDIS_URL,
 		WS_PORT: process.env.WS_PORT,
 		WS_SECRET: process.env.WS_SECRET,
-		WS_INTERNAL_URL: process.env.WS_INTERNAL_URL
+		WS_INTERNAL_URL: process.env.WS_INTERNAL_URL,
 	},
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,
-	emptyStringAsUndefined: true
+	emptyStringAsUndefined: true,
 });

@@ -51,7 +51,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 	}, [onDeviceUpdate]);
 
 	const { data: devices, isLoading: devicesLoading } = api.device.list.useQuery(undefined, {
-		refetchInterval: wsConnected ? false : 30_000
+		refetchInterval: wsConnected ? false : 30_000,
 	});
 	const { data: homes, isLoading: homesLoading } = api.home.list.useQuery();
 
@@ -67,7 +67,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 				} catch {
 					setOnlineStatus((p) => ({ ...p, [d.id]: false }));
 				}
-			})
+			}),
 		);
 	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,8 +92,8 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 		online: onlineStatus[d.id] ?? false,
 		relays: d.relays.map((r: RelayItem) => ({
 			...r,
-			state: liveRelayStates[r.id] ?? r.state
-		}))
+			state: liveRelayStates[r.id] ?? r.state,
+		})),
 	}));
 
 	const onlineCount = mergedDevices.filter((d) => d.online).length;
@@ -123,10 +123,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 			{/* Stat cards */}
 			<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 				{STAT_CARDS.map(({ label, value, icon: Icon, sub }) => (
-					<Card
-						key={label}
-						className="relative overflow-hidden"
-					>
+					<Card key={label} className="relative overflow-hidden">
 						<CardContent className="p-5">
 							<div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
 								<Icon className="w-4 h-4 text-primary" />
@@ -153,10 +150,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							<Button asChild>
 								<Link href="/dashboard/api-keys">Generate API Key</Link>
 							</Button>
-							<Button
-								variant="outline"
-								asChild
-							>
+							<Button variant="outline" asChild>
 								<Link href="/dashboard/homes">View Homes</Link>
 							</Button>
 						</div>
@@ -181,22 +175,14 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 				<div>
 					<div className="flex items-center justify-between mb-4">
 						<h2 className="font-sora font-bold text-lg text-foreground">Your Homes</h2>
-						<Button
-							variant="outline"
-							size="sm"
-							asChild
-						>
+						<Button variant="outline" size="sm" asChild>
 							<Link href="/dashboard/homes">View all</Link>
 						</Button>
 					</div>
 
 					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 						{(homes ?? []).slice(0, 6).map((home) => (
-							<Link
-								key={home.id}
-								href={`/dashboard/homes/${home.id}`}
-								className="no-underline group"
-							>
+							<Link key={home.id} href={`/dashboard/homes/${home.id}`} className="no-underline group">
 								<Card className="transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer">
 									<CardHeader className="pb-3">
 										<div className="flex items-center justify-between">
@@ -240,12 +226,9 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							{ n: 3, text: "Connect to the ESP32 WiFi and open the captive portal (192.168.4.1)" },
 							{ n: 4, text: "Enter your home WiFi credentials, give the device a name, and paste your API key" },
 							{ n: 5, text: "Save — the ESP32 will reboot, connect, and appear in your dashboard" },
-							{ n: 6, text: "Create a home, add rooms, and assign relays to organize your controls" }
+							{ n: 6, text: "Create a home, add rooms, and assign relays to organize your controls" },
 						].map(({ n, text }) => (
-							<li
-								key={n}
-								className="flex items-start gap-3"
-							>
+							<li key={n} className="flex items-start gap-3">
 								<span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">{n}</span>
 								<span className="text-sm text-muted-foreground">{text}</span>
 							</li>

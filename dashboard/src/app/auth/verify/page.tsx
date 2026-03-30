@@ -52,9 +52,7 @@ export default function VerifyPage() {
 						<>
 							<AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
 							<h1 className="font-sora font-extrabold text-xl text-foreground mb-2">Invalid verification link</h1>
-							<p className="text-sm text-muted-foreground mb-6">
-								This link is invalid or has already been used.
-							</p>
+							<p className="text-sm text-muted-foreground mb-6">This link is invalid or has already been used.</p>
 							<Button asChild className="w-full">
 								<Link href="/auth/login">Back to Sign In</Link>
 							</Button>
@@ -65,13 +63,13 @@ export default function VerifyPage() {
 						<>
 							<AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
 							<h1 className="font-sora font-extrabold text-xl text-foreground mb-2">Link expired</h1>
-							<p className="text-sm text-muted-foreground mb-6">
-								This verification link has expired. Request a new one below.
-							</p>
+							<p className="text-sm text-muted-foreground mb-6">This verification link has expired. Request a new one below.</p>
 							{email && !resent && (
 								<Button className="w-full" onClick={handleResend} disabled={resending}>
 									{resending ? (
-										<><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+										<>
+											<Loader2 className="w-4 h-4 animate-spin" /> Sending...
+										</>
 									) : (
 										"Resend verification email"
 									)}
@@ -90,23 +88,17 @@ export default function VerifyPage() {
 						<>
 							<Mail className="w-12 h-12 text-primary mx-auto mb-4" />
 							<h1 className="font-sora font-extrabold text-xl text-foreground mb-2">Check your email</h1>
-							<p className="text-sm text-muted-foreground mb-1">
-								We sent a verification link to
-							</p>
-							{email && (
-								<p className="text-sm font-medium text-foreground mb-6">{email}</p>
-							)}
-							{!email && (
-								<p className="text-sm text-muted-foreground mb-6">your email address.</p>
-							)}
-							<p className="text-xs text-muted-foreground mb-6">
-								Click the link in the email to verify your account. The link expires in 24 hours.
-							</p>
+							<p className="text-sm text-muted-foreground mb-1">We sent a verification link to</p>
+							{email && <p className="text-sm font-medium text-foreground mb-6">{email}</p>}
+							{!email && <p className="text-sm text-muted-foreground mb-6">your email address.</p>}
+							<p className="text-xs text-muted-foreground mb-6">Click the link in the email to verify your account. The link expires in 24 hours.</p>
 
 							{email && !resent && (
 								<Button variant="outline" className="w-full mb-3" onClick={handleResend} disabled={resending}>
 									{resending ? (
-										<><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+										<>
+											<Loader2 className="w-4 h-4 animate-spin" /> Sending...
+										</>
 									) : (
 										"Resend verification email"
 									)}

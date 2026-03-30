@@ -18,7 +18,7 @@ const CONFIG = {
 	LIT_BOOST: 0.55, // opacity added when pixel is lit by cursor
 	EDGE_FADE_PX: 60, // fade-in/out zone at top & bottom edges (px)
 	PIXELS_PER_COL: [2, 2, 3], // randomly pick from this array per column
-	SIZE_OPTIONS: [2, 2, 3, 3, 4] // randomly pick pixel size (px)
+	SIZE_OPTIONS: [2, 2, 3, 3, 4], // randomly pick pixel size (px)
 } as const;
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ export default function HeroPixelRain() {
 				size,
 				vx: 0,
 				vy: 0,
-				lit: 0
+				lit: 0,
 			};
 		}
 
@@ -195,12 +195,5 @@ export default function HeroPixelRain() {
 		};
 	}, []);
 
-	return (
-		<canvas
-			ref={canvasRef}
-			className="absolute inset-0 w-full h-full pointer-events-none"
-			style={{ imageRendering: "pixelated" }}
-			aria-hidden
-		/>
-	);
+	return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ imageRendering: "pixelated" }} aria-hidden />;
 }

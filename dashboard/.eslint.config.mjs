@@ -13,7 +13,7 @@ export default [
 		rules: {
 			"@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
 			"@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports", fixStyle: "inline-type-imports" }],
-			"@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }]
-		}
-	}
+			"@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
+		},
+	},
 ];

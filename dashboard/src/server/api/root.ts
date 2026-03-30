@@ -16,7 +16,7 @@ export const appRouter = createTRPCRouter({
 	home: homeRouter,
 	room: roomRouter,
 	sharing: sharingRouter,
-	schedule: scheduleRouter
+	schedule: scheduleRouter,
 });
 
 export type AppRouter = typeof appRouter;

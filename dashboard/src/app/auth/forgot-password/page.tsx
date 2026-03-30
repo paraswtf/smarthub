@@ -47,13 +47,9 @@ export default function ForgotPasswordPage() {
 						<div className="text-center">
 							<Mail className="w-12 h-12 text-primary mx-auto mb-4" />
 							<h1 className="font-sora font-extrabold text-xl text-foreground mb-2">Check your email</h1>
-							<p className="text-sm text-muted-foreground mb-1">
-								If an account exists for
-							</p>
+							<p className="text-sm text-muted-foreground mb-1">If an account exists for</p>
 							<p className="text-sm font-medium text-foreground mb-4">{email}</p>
-							<p className="text-xs text-muted-foreground mb-6">
-								you&apos;ll receive a password reset link. The link expires in 1 hour.
-							</p>
+							<p className="text-xs text-muted-foreground mb-6">you&apos;ll receive a password reset link. The link expires in 1 hour.</p>
 							<Button variant="ghost" asChild className="w-full">
 								<Link href="/auth/login">Back to Sign In</Link>
 							</Button>
@@ -61,9 +57,7 @@ export default function ForgotPasswordPage() {
 					) : (
 						<>
 							<h1 className="font-sora font-extrabold text-xl text-foreground mb-1">Forgot password?</h1>
-							<p className="text-sm text-muted-foreground mb-6">
-								Enter your email and we&apos;ll send you a reset link.
-							</p>
+							<p className="text-sm text-muted-foreground mb-6">Enter your email and we&apos;ll send you a reset link.</p>
 
 							<div className="space-y-4">
 								<div className="space-y-1.5">
@@ -79,13 +73,11 @@ export default function ForgotPasswordPage() {
 									/>
 								</div>
 
-								<Button
-									className="w-full"
-									onClick={handleSubmit}
-									disabled={isPending || !email}
-								>
+								<Button className="w-full" onClick={handleSubmit} disabled={isPending || !email}>
 									{isPending ? (
-										<><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+										<>
+											<Loader2 className="w-4 h-4 animate-spin" /> Sending...
+										</>
 									) : (
 										"Send reset link"
 									)}

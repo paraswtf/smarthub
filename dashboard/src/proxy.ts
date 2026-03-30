@@ -10,14 +10,14 @@ const { auth } = NextAuth({
 		CredentialsProvider({
 			credentials: {
 				email: { type: "email" },
-				password: { type: "password" }
+				password: { type: "password" },
 			},
 			async authorize() {
 				// Actual auth logic runs in the API route, not here.
 				// Middleware only checks the JWT session cookie.
 				return null;
-			}
-		})
+			},
+		}),
 	],
 	session: { strategy: "jwt" },
 	callbacks: {
@@ -30,11 +30,11 @@ const { auth } = NextAuth({
 			user: {
 				...session.user,
 				id: token.sub ?? "",
-				role: (token.role as string) ?? "editor"
-			}
-		})
+				role: (token.role as string) ?? "editor",
+			},
+		}),
 	},
-	pages: { signIn: "/admin/login" }
+	pages: { signIn: "/admin/login" },
 });
 
 export default auth((req) => {
@@ -52,5 +52,5 @@ export default auth((req) => {
 });
 
 export const config = {
-	matcher: ["/admin/:path*"]
+	matcher: ["/admin/:path*"],
 };

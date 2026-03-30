@@ -25,7 +25,13 @@ export function RelayScheduleDialog({ relayId, relayLabel, scheduleCount }: Prop
 	const [editing, setEditing] = useState<string | null>(null); // schedule ID or "new"
 
 	return (
-		<Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
+		<Dialog
+			open={open}
+			onOpenChange={(o) => {
+				setOpen(o);
+				if (!o) setEditing(null);
+			}}
+		>
 			<DialogTrigger asChild>
 				<Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary relative" title="Schedules">
 					<Clock className="w-3.5 h-3.5" />
@@ -41,17 +47,9 @@ export function RelayScheduleDialog({ relayId, relayLabel, scheduleCount }: Prop
 					<DialogTitle className="text-base">Schedules — {relayLabel}</DialogTitle>
 				</DialogHeader>
 				{editing ? (
-					<ScheduleForm
-						relayId={relayId}
-						scheduleId={editing === "new" ? null : editing}
-						onDone={() => setEditing(null)}
-					/>
+					<ScheduleForm relayId={relayId} scheduleId={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
 				) : (
-					<ScheduleList
-						relayId={relayId}
-						onEdit={(id) => setEditing(id)}
-						onAdd={() => setEditing("new")}
-					/>
+					<ScheduleList relayId={relayId} onEdit={(id) => setEditing(id)} onAdd={() => setEditing("new")} />
 				)}
 			</DialogContent>
 		</Dialog>
@@ -63,14 +61,14 @@ function ScheduleList({ relayId, onEdit, onAdd }: { relayId: string; onEdit: (id
 	const { data: schedules, isLoading } = api.schedule.list.useQuery({ relayId });
 
 	const toggleMutation = api.schedule.toggle.useMutation({
-		onSuccess: () => void utils.schedule.list.invalidate({ relayId })
+		onSuccess: () => void utils.schedule.list.invalidate({ relayId }),
 	});
 
 	const deleteMutation = api.schedule.delete.useMutation({
 		onSuccess: () => {
 			void utils.schedule.list.invalidate({ relayId });
 			void utils.room.get.invalidate();
-		}
+		},
 	});
 
 	if (isLoading) {
@@ -88,7 +86,9 @@ function ScheduleList({ relayId, onEdit, onAdd }: { relayId: string; onEdit: (id
 			<div className="text-center py-6">
 				<Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
 				<p className="text-sm text-muted-foreground mb-4">No schedules yet</p>
-				<Button onClick={onAdd} size="sm"><Plus className="w-3.5 h-3.5" /> Add Schedule</Button>
+				<Button onClick={onAdd} size="sm">
+					<Plus className="w-3.5 h-3.5" /> Add Schedule
+				</Button>
 			</div>
 		);
 	}
@@ -112,34 +112,20 @@ function ScheduleList({ relayId, onEdit, onAdd }: { relayId: string; onEdit: (id
 									key={i}
 									className={cn(
 										"w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center",
-										s.daysOfWeek.includes(i)
-											? "bg-primary text-primary-foreground"
-											: "bg-muted text-muted-foreground"
+										s.daysOfWeek.includes(i) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
 									)}
 								>
 									{label}
 								</span>
 							))}
-							{s.label !== "Schedule" && (
-								<span className="text-xs text-muted-foreground ml-2 truncate">{s.label}</span>
-							)}
+							{s.label !== "Schedule" && <span className="text-xs text-muted-foreground ml-2 truncate">{s.label}</span>}
 						</div>
 					</div>
-					<Switch
-						checked={s.enabled}
-						onCheckedChange={(enabled) => toggleMutation.mutate({ id: s.id, enabled })}
-						className="flex-shrink-0"
-					/>
+					<Switch checked={s.enabled} onCheckedChange={(enabled) => toggleMutation.mutate({ id: s.id, enabled })} className="flex-shrink-0" />
 					<Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => onEdit(s.id)}>
 						<Pencil className="w-3 h-3" />
 					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-7 w-7 flex-shrink-0 text-destructive"
-						onClick={() => deleteMutation.mutate({ id: s.id })}
-						disabled={deleteMutation.isPending}
-					>
+					<Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0 text-destructive" onClick={() => deleteMutation.mutate({ id: s.id })} disabled={deleteMutation.isPending}>
 						<Trash2 className="w-3 h-3" />
 					</Button>
 				</div>
@@ -163,7 +149,7 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 	const [action, setAction] = useState(existing?.action ?? true);
 
 	const toggleDay = (d: number) => {
-		setDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+		setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
 	};
 
 	const createMutation = api.schedule.create.useMutation({
@@ -171,14 +157,14 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 			void utils.schedule.list.invalidate({ relayId });
 			void utils.room.get.invalidate();
 			onDone();
-		}
+		},
 	});
 
 	const updateMutation = api.schedule.update.useMutation({
 		onSuccess: () => {
 			void utils.schedule.list.invalidate({ relayId });
 			onDone();
-		}
+		},
 	});
 
 	const isPending = createMutation.isPending || updateMutation.isPending;
@@ -204,7 +190,9 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 						className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
 					>
 						{Array.from({ length: 24 }, (_, i) => (
-							<option key={i} value={i}>{String(i).padStart(2, "0")}</option>
+							<option key={i} value={i}>
+								{String(i).padStart(2, "0")}
+							</option>
 						))}
 					</select>
 					<span className="text-lg font-bold text-muted-foreground">:</span>
@@ -214,7 +202,9 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 						className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
 					>
 						{Array.from({ length: 60 }, (_, i) => (
-							<option key={i} value={i}>{String(i).padStart(2, "0")}</option>
+							<option key={i} value={i}>
+								{String(i).padStart(2, "0")}
+							</option>
 						))}
 					</select>
 				</div>
@@ -231,9 +221,7 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 							onClick={() => toggleDay(i)}
 							className={cn(
 								"w-9 h-9 rounded-full text-xs font-semibold transition-colors",
-								days.includes(i)
-									? "bg-primary text-primary-foreground"
-									: "bg-muted text-muted-foreground hover:bg-accent"
+								days.includes(i) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent",
 							)}
 						>
 							{DAY_LABELS[i]}
@@ -247,22 +235,10 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 			<div className="space-y-2">
 				<Label>Action</Label>
 				<div className="flex gap-2">
-					<Button
-						type="button"
-						variant={action ? "default" : "outline"}
-						size="sm"
-						onClick={() => setAction(true)}
-						className="flex-1"
-					>
+					<Button type="button" variant={action ? "default" : "outline"} size="sm" onClick={() => setAction(true)} className="flex-1">
 						<Power className="w-3.5 h-3.5" /> Turn ON
 					</Button>
-					<Button
-						type="button"
-						variant={!action ? "default" : "outline"}
-						size="sm"
-						onClick={() => setAction(false)}
-						className="flex-1"
-					>
+					<Button type="button" variant={!action ? "default" : "outline"} size="sm" onClick={() => setAction(false)} className="flex-1">
 						<PowerOff className="w-3.5 h-3.5" /> Turn OFF
 					</Button>
 				</div>
@@ -271,12 +247,7 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 			{/* Label */}
 			<div className="space-y-2">
 				<Label>Label (optional)</Label>
-				<Input
-					value={label}
-					onChange={(e) => setLabel(e.target.value)}
-					placeholder="e.g. Morning lights"
-					maxLength={60}
-				/>
+				<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Morning lights" maxLength={60} />
 			</div>
 
 			{/* Actions */}
@@ -284,7 +255,9 @@ function ScheduleForm({ relayId, scheduleId, onDone }: { relayId: string; schedu
 				<Button onClick={handleSubmit} disabled={isPending || days.length === 0} className="flex-1">
 					{isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : scheduleId ? "Save" : "Create"}
 				</Button>
-				<Button variant="outline" onClick={onDone} className="flex-1">Cancel</Button>
+				<Button variant="outline" onClick={onDone} className="flex-1">
+					Cancel
+				</Button>
 			</div>
 		</div>
 	);

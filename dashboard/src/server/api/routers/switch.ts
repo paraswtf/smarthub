@@ -7,7 +7,7 @@ const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY — id
 
 function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof import("~/server/db").db }) {
 	return ctx.db.device.findFirst({
-		where: { id: deviceId, apiKey: { userId } }
+		where: { id: deviceId, apiKey: { userId } },
 	});
 }
 
@@ -18,7 +18,7 @@ export const switchRouter = createTRPCRouter({
 		if (access === "none") throw new TRPCError({ code: "FORBIDDEN" });
 		return ctx.db.switch.findMany({
 			where: { deviceId: input.deviceId },
-			orderBy: { createdAt: "asc" }
+			orderBy: { createdAt: "asc" },
 		});
 	}),
 
@@ -29,9 +29,9 @@ export const switchRouter = createTRPCRouter({
 			include: {
 				devices: {
 					include: { relays: { orderBy: { order: "asc" } } },
-					orderBy: { name: "asc" }
-				}
-			}
+					orderBy: { name: "asc" },
+				},
+			},
 		});
 		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices.flatMap((d: (typeof k.devices)[number]) => d.relays.map((r: (typeof d.relays)[number]) => ({ ...r, deviceName: d.name }))));
 	}),
@@ -44,8 +44,8 @@ export const switchRouter = createTRPCRouter({
 				pin: z.number().int().min(0).max(39),
 				label: z.string().min(1).max(40).default("Switch"),
 				switchType: z.enum(["two_way", "three_way", "momentary"]).default("two_way"),
-				linkedRelayId: z.string()
-			})
+				linkedRelayId: z.string(),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			const owned = await assertDeviceOwned(input.deviceId, ctx.session.user.id, ctx);
@@ -53,7 +53,7 @@ export const switchRouter = createTRPCRouter({
 
 			// Verify linked relay belongs to the same user (any of their devices)
 			const relay = await ctx.db.relay.findFirst({
-				where: { id: input.linkedRelayId, device: { apiKey: { userId: ctx.session.user.id } } }
+				where: { id: input.linkedRelayId, device: { apiKey: { userId: ctx.session.user.id } } },
 			});
 			if (!relay) throw new TRPCError({ code: "BAD_REQUEST", message: "Linked relay not found" });
 
@@ -63,8 +63,8 @@ export const switchRouter = createTRPCRouter({
 					pin: input.pin,
 					label: input.label,
 					switchType: input.switchType,
-					linkedRelayId: input.linkedRelayId
-				}
+					linkedRelayId: input.linkedRelayId,
+				},
 			});
 
 			// Push to connected ESP32
@@ -74,7 +74,7 @@ export const switchRouter = createTRPCRouter({
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
 					body: JSON.stringify({ deviceId: input.deviceId, switch: { id: sw.id, pin: sw.pin, label: sw.label, switchType: sw.switchType, linkedRelayId: sw.linkedRelayId } }),
-					signal: AbortSignal.timeout(2000)
+					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
 				/* offline — picks up on reconnect */
@@ -91,13 +91,13 @@ export const switchRouter = createTRPCRouter({
 				pin: z.number().int().min(0).max(39).optional(),
 				label: z.string().min(1).max(40).optional(),
 				switchType: z.enum(["two_way", "three_way", "momentary"]).optional(),
-				linkedRelayId: z.string().optional()
-			})
+				linkedRelayId: z.string().optional(),
+			}),
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { switchId, ...data } = input;
 			const sw = await ctx.db.switch.findFirst({
-				where: { id: switchId, device: { apiKey: { userId: ctx.session.user.id } } }
+				where: { id: switchId, device: { apiKey: { userId: ctx.session.user.id } } },
 			});
 			if (!sw) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -108,8 +108,11 @@ export const switchRouter = createTRPCRouter({
 				await fetch(wsUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
-					body: JSON.stringify({ deviceId: updated.deviceId, switch: { id: updated.id, pin: updated.pin, label: updated.label, switchType: updated.switchType, linkedRelayId: updated.linkedRelayId } }),
-					signal: AbortSignal.timeout(2000)
+					body: JSON.stringify({
+						deviceId: updated.deviceId,
+						switch: { id: updated.id, pin: updated.pin, label: updated.label, switchType: updated.switchType, linkedRelayId: updated.linkedRelayId },
+					}),
+					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
 				/* offline */
@@ -121,7 +124,7 @@ export const switchRouter = createTRPCRouter({
 	/** Delete a switch */
 	delete: protectedProcedure.input(z.object({ switchId: z.string() })).mutation(async ({ ctx, input }) => {
 		const sw = await ctx.db.switch.findFirst({
-			where: { id: input.switchId, device: { apiKey: { userId: ctx.session.user.id } } }
+			where: { id: input.switchId, device: { apiKey: { userId: ctx.session.user.id } } },
 		});
 		if (!sw) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -133,12 +136,12 @@ export const switchRouter = createTRPCRouter({
 				method: "POST",
 				headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
 				body: JSON.stringify({ deviceId: sw.deviceId, switchId: input.switchId }),
-				signal: AbortSignal.timeout(2000)
+				signal: AbortSignal.timeout(2000),
 			});
 		} catch {
 			/* offline */
 		}
 
 		return { ok: true };
-	})
+	}),
 });

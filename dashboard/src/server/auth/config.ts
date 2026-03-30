@@ -27,7 +27,7 @@ export const authConfig = {
 			name: "credentials",
 			credentials: {
 				email: { label: "Email", type: "email" },
-				password: { label: "Password", type: "password" }
+				password: { label: "Password", type: "password" },
 			},
 			async authorize(credentials) {
 				if (!credentials?.email || !credentials?.password) return null;
@@ -42,8 +42,8 @@ export const authConfig = {
 				if (!valid) return null;
 
 				return { id: user.id, email: user.email ?? "", name: user.name ?? "" };
-			}
-		})
+			},
+		}),
 	],
 	// CredentialsProvider requires JWT strategy — this is a NextAuth constraint.
 	// To prevent stale/forged tokens from working, the session callback hits the
@@ -96,7 +96,7 @@ export const authConfig = {
 			// null and the session object will have no valid id.
 			const dbUser = await db.user.findUnique({
 				where: { id: userId },
-				select: { id: true, name: true, email: true, image: true }
+				select: { id: true, name: true, email: true, image: true },
 			});
 
 			if (!dbUser) {
@@ -112,12 +112,12 @@ export const authConfig = {
 					id: dbUser.id,
 					name: dbUser.name,
 					email: dbUser.email,
-					image: dbUser.image
-				}
+					image: dbUser.image,
+				},
 			};
-		}
+		},
 	},
 	pages: {
-		signIn: "/auth/login"
-	}
+		signIn: "/auth/login",
+	},
 } satisfies NextAuthConfig;
