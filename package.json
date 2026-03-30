@@ -1,5 +1,5 @@
 {
-	"name": "home-automation",
+	"name": "smarthub",
 	"version": "1.2.0",
 	"private": true,
 	"workspaces": [
