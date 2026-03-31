@@ -134,10 +134,7 @@ export const deviceRouter = createTRPCRouter({
 		}
 
 		// Not connected — write DB so it syncs on next ping
-		return ctx.db.relay.update({
-			where: { id: input.relayId },
-			data: { state: input.state, updatedAt: new Date() },
-		});
+		return ctx.db.relay.update({ where: { id: input.relayId }, data: { state: input.state, updatedAt: new Date() } });
 	}),
 
 	/** Update relay label / icon / pin */
@@ -175,7 +172,13 @@ export const deviceRouter = createTRPCRouter({
 					},
 					body: JSON.stringify({
 						deviceId: relay.deviceId,
-						relay: { id: updated.id, pin: updated.pin, label: updated.label, state: updated.state, icon: updated.icon },
+						relay: {
+							id: updated.id,
+							pin: updated.pin,
+							label: updated.label,
+							state: updated.state,
+							icon: updated.icon,
+						},
 					}),
 					signal: AbortSignal.timeout(2000),
 				});
@@ -225,7 +228,13 @@ export const deviceRouter = createTRPCRouter({
 					},
 					body: JSON.stringify({
 						deviceId: input.deviceId,
-						relay: { id: relay.id, pin: relay.pin, label: relay.label, state: relay.state, icon: relay.icon },
+						relay: {
+							id: relay.id,
+							pin: relay.pin,
+							label: relay.label,
+							state: relay.state,
+							icon: relay.icon,
+						},
 					}),
 					signal: AbortSignal.timeout(2000),
 				});

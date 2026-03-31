@@ -76,7 +76,11 @@ public:
         {
             if (rCount >= MAX_RELAYS)
                 break;
-            rBuf[rCount++] = {r["id"], r["pin"], r["label"], r["state"]};
+            rBuf[rCount].id = r["id"].as<String>();
+            rBuf[rCount].pin = r["pin"].as<uint8_t>();
+            rBuf[rCount].label = r["label"].as<String>();
+            rBuf[rCount].state = r["state"].as<bool>();
+            rCount++;
         }
         _relays->applyServerConfig(rBuf, rCount);
         _relays->printAll();
@@ -156,10 +160,7 @@ public:
     }
 
     // Public so main.cpp switch callback can send acks directly
-    void sendRelayAck(const String &relayId, bool state)
-    {
-        _sendRelayAck(relayId, state);
-    }
+    void sendRelayAck(const String &relayId, bool state) { _sendRelayAck(relayId, state); }
 
     // Send switch trigger to server — server resolves cross-device relay
     void sendSwitchTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
@@ -317,7 +318,11 @@ private:
             {
                 if (rCount >= MAX_RELAYS)
                     break;
-                rBuf[rCount++] = {r["id"], r["pin"], r["label"], r["state"]};
+                rBuf[rCount].id = r["id"].as<String>();
+                rBuf[rCount].pin = r["pin"].as<uint8_t>();
+                rBuf[rCount].label = r["label"].as<String>();
+                rBuf[rCount].state = r["state"].as<bool>();
+                rCount++;
             }
             _relays->applyServerConfig(rBuf, rCount);
             _relays->printAll();
@@ -333,7 +338,12 @@ private:
                 swBuf[swCount].id = d["id"].as<String>();
                 swBuf[swCount].pin = d["pin"].as<uint8_t>();
                 swBuf[swCount].label = d["label"].as<String>();
-                swBuf[swCount].switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
+                swBuf[swCount].switchType = [&]() {
+                    String st = d["switchType"] | "two_way";
+                    if (st == "momentary") return SWITCH_MOMENTARY;
+                    if (st == "three_way") return SWITCH_THREE_WAY;
+                    return SWITCH_TWO_WAY;
+                }();
                 swBuf[swCount].linkedRelayId = d["linkedRelayId"].as<String>();
                 swCount++;
             }
@@ -414,7 +424,11 @@ private:
                 return;
             }
             JsonObject r = doc["relay"].as<JsonObject>();
-            RelayConfig nr = {r["id"], r["pin"], r["label"], r["state"]};
+            RelayConfig nr;
+            nr.id = r["id"].as<String>();
+            nr.pin = r["pin"].as<uint8_t>();
+            nr.label = r["label"].as<String>();
+            nr.state = r["state"].as<bool>();
             _relays->relays[_relays->count] = nr;
             _relays->count++;
             _relays->applyServerConfig(_relays->relays, _relays->count);
@@ -439,16 +453,11 @@ private:
                 if (_relays->relays[i].id == id)
                 {
                     uint8_t oldPin = _relays->relays[i].pin;
-                    // If pin changed: set old pin HIGH (off) before reassigning
-                    if (oldPin != newPin && oldPin != 0)
-                    {
-                        pinMode(oldPin, INPUT); // release old pin
-                        DBG_RELAY("relay_update_config: released GPIO%d", oldPin);
-                    }
+                    _relays->releasePinAt(i);
+                    DBG_RELAY("relay_update_config: released GPIO%d", oldPin);
                     _relays->relays[i].pin = newPin;
                     _relays->relays[i].label = newLabel;
                     _relays->relays[i].state = newState;
-                    // Re-init with new pin
                     _relays->reinitPin(i);
                     Storage::saveRelays(_relays->relays, _relays->count);
                     DBG_WS("relay_update_config: id=%s pin=%d→%d label=%s",
@@ -471,7 +480,12 @@ private:
             nd.id = d["id"].as<String>();
             nd.pin = d["pin"].as<uint8_t>();
             nd.label = d["label"].as<String>();
-            nd.switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
+            nd.switchType = [&]() {
+                String st = d["switchType"] | "two_way";
+                if (st == "momentary") return SWITCH_MOMENTARY;
+                if (st == "three_way") return SWITCH_THREE_WAY;
+                return SWITCH_TWO_WAY;
+            }();
             nd.linkedRelayId = d["linkedRelayId"].as<String>();
             _switches->add(nd);
             DBG_WS("switch_add: id=%s pin=%d", nd.id.c_str(), nd.pin);
@@ -489,7 +503,12 @@ private:
             updated.id = d["id"].as<String>();
             updated.pin = d["pin"].as<uint8_t>();
             updated.label = d["label"].as<String>();
-            updated.switchType = [&]() { String st = d["switchType"] | "two_way"; return st == "momentary" ? SWITCH_MOMENTARY : st == "three_way" ? SWITCH_THREE_WAY : SWITCH_TWO_WAY; }();
+            updated.switchType = [&]() {
+                String st = d["switchType"] | "two_way";
+                if (st == "momentary") return SWITCH_MOMENTARY;
+                if (st == "three_way") return SWITCH_THREE_WAY;
+                return SWITCH_TWO_WAY;
+            }();
             updated.linkedRelayId = d["linkedRelayId"].as<String>();
             _switches->updateById(updated.id, updated);
             DBG_WS("switch_update_config: id=%s pin=%d", updated.id.c_str(), updated.pin);

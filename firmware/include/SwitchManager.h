@@ -105,7 +105,8 @@ public:
         count++;
         Storage::saveSwitches(switches, count);
         DBG_RELAY("Switch added: id=%s pin=%d type=%s", d.id.c_str(), d.pin,
-                  d.switchType == SWITCH_MOMENTARY ? "momentary" : d.switchType == SWITCH_THREE_WAY ? "three_way" : "two_way");
+                  d.switchType == SWITCH_MOMENTARY ? "momentary" : d.switchType == SWITCH_THREE_WAY ? "three_way"
+                                                                                                    : "two_way");
     }
 
     // Update an existing switch by id

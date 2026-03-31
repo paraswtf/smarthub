@@ -62,10 +62,11 @@ export async function POST(req: NextRequest) {
 			},
 		});
 
-		// Factory reset: wipe all relays so the device starts clean
+		// Factory reset: wipe relays and unassign from home so the device starts clean
 		if (factoryReset) {
 			await db.relay.deleteMany({ where: { deviceId: device.id } });
-			console.log(`[Register] Factory reset for device ${device.id} — relays cleared`);
+			await db.device.update({ where: { id: device.id }, data: { homeId: null } });
+			console.log(`[Register] Factory reset for device ${device.id} — relays cleared, home unassigned`);
 		}
 
 		// Update API key lastUsedAt
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
 			deviceId: device.id,
 			relays: factoryReset
 				? []
-				: device.relays.map((r: { id: string; pin: number; label: string; state: boolean; icon: string }) => ({
+				: device.relays.map((r) => ({
 						id: r.id,
 						pin: r.pin,
 						label: r.label,

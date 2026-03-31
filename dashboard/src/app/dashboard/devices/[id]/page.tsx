@@ -254,9 +254,9 @@ export default function DeviceDetailPage() {
 	const { data: switchList = [] } = api.switch.list.useQuery({ deviceId: id });
 	const { data: allRelays = [] } = api.switch.listAllRelays.useQuery();
 	const [addingSwitch, setAddingSwitch] = useState(false);
-	const [newSwitch, setNewSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as "two_way" | "three_way" | "momentary", linkedRelayId: "" });
+	const [newSwitch, setNewSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as SwitchTypeValue, linkedRelayId: "" });
 	const [editingSwitchId, setEditingSwitchId] = useState<string | null>(null);
-	const [editSwitch, setEditSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as "two_way" | "three_way" | "momentary", linkedRelayId: "" });
+	const [editSwitch, setEditSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as SwitchTypeValue, linkedRelayId: "" });
 
 	const addSwitch = api.switch.add.useMutation({
 		onSuccess: () => {
@@ -689,7 +689,7 @@ export default function DeviceDetailPage() {
 											<p className="font-semibold text-sm">{det.label}</p>
 										</div>
 										<p className="text-xs text-muted-foreground mono mt-0.5">
-											GPIO {det.pin} · {SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"))?.label ?? det.switchType} · →{" "}
+											{`GPIO ${det.pin} · ${SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"))?.label ?? det.switchType}`} · →{" "}
 											{(() => {
 												const r = allRelays.find((x: AllRelayItem) => x.id === det.linkedRelayId);
 												return r ? `${r.deviceName} — ${r.label}` : "unknown";

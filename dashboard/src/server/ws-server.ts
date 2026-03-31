@@ -500,7 +500,13 @@ function handleDeviceConnection(ws: WebSocket) {
 				JSON.stringify({
 					type: "auth_ok",
 					deviceId: device.id,
-					relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
+					relays: device.relays.map((r) => ({
+						id: r.id,
+						pin: r.pin,
+						label: r.label,
+						state: r.state,
+						icon: r.icon,
+					})),
 					switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
 				}),
 			);

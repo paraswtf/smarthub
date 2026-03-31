@@ -38,9 +38,9 @@ model Session {
 }
 
 model User {
-    id            String    @id @default(auto()) @map("_id") @db.ObjectId
+    id            String       @id @default(auto()) @map("_id") @db.ObjectId
     name          String?
-    email         String?   @unique
+    email         String?      @unique
     emailVerified DateTime?
     image         String?
     passwordHash  String?
@@ -48,9 +48,9 @@ model User {
     sessions      Session[]
     apiKeys       ApiKey[]
     homes         Home[]
-    sharedHomes   HomeShare[]    @relation("SharedHomes")
-    sharedRooms   RoomShare[]    @relation("SharedRooms")
-    sharedRelays  RelayShare[]   @relation("SharedRelays")
+    sharedHomes   HomeShare[]  @relation("SharedHomes")
+    sharedRooms   RoomShare[]  @relation("SharedRooms")
+    sharedRelays  RelayShare[] @relation("SharedRelays")
 }
 
 model VerificationToken {
@@ -78,36 +78,36 @@ model ApiKey {
 }
 
 model Device {
-    id              String     @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt       DateTime   @default(now())
-    updatedAt       DateTime   @updatedAt
-    name            String     @default("ESP32 Device")
-    macAddress      String     @unique
+    id              String    @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
+    name            String    @default("ESP32 Device")
+    macAddress      String    @unique
     firmwareVersion String?
     ssid            String?
     notes           String?
     lastSeenAt      DateTime?
-    apiKeyId        String     @db.ObjectId
-    apiKey          ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-    homeId          String?    @db.ObjectId
-    home            Home?      @relation(fields: [homeId], references: [id])
+    apiKeyId        String    @db.ObjectId
+    apiKey          ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+    homeId          String?   @db.ObjectId
+    home            Home?     @relation(fields: [homeId], references: [id])
     relays          Relay[]
     switches        Switch[]
 }
 
 model Relay {
-    id        String       @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt DateTime     @default(now())
-    updatedAt DateTime     @updatedAt
+    id        String          @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt DateTime        @default(now())
+    updatedAt DateTime        @updatedAt
     pin       Int
-    label     String       @default("Relay")
-    state     Boolean      @default(false)
-    order     Int          @default(0)
-    icon      String       @default("plug")
-    deviceId  String       @db.ObjectId
-    device    Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-    roomId    String?      @db.ObjectId
-    room      Room?        @relation(fields: [roomId], references: [id])
+    label     String          @default("Relay")
+    state     Boolean         @default(false)
+    order     Int             @default(0)
+    icon      String          @default("plug")
+    deviceId  String          @db.ObjectId
+    device    Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+    roomId    String?         @db.ObjectId
+    room      Room?           @relation(fields: [roomId], references: [id])
     shares    RelayShare[]
     schedules RelaySchedule[]
 }
@@ -143,13 +143,13 @@ model Home {
 }
 
 model Room {
-    id        String       @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt DateTime     @default(now())
-    updatedAt DateTime     @updatedAt
-    name      String       @default("Room")
-    order     Int          @default(0)
-    homeId    String       @db.ObjectId
-    home      Home         @relation(fields: [homeId], references: [id], onDelete: Cascade)
+    id        String      @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt DateTime    @default(now())
+    updatedAt DateTime    @updatedAt
+    name      String      @default("Room")
+    order     Int         @default(0)
+    homeId    String      @db.ObjectId
+    home      Home        @relation(fields: [homeId], references: [id], onDelete: Cascade)
     relays    Relay[]
     shares    RoomShare[]
 }

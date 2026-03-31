@@ -101,18 +101,23 @@ export const homeRouter = createTRPCRouter({
 		});
 	}),
 
-	/** List unassigned devices (no home) for current user */
+	/** List unassigned devices (no home, or orphaned homeId) for current user */
 	unassignedDevices: protectedProcedure.query(async ({ ctx }) => {
-		const apiKeys = await ctx.db.apiKey.findMany({
-			where: { userId: ctx.session.user.id, active: true },
-			include: {
-				devices: {
-					where: { OR: [{ homeId: null }, { homeId: { isSet: false } }] },
-					include: { relays: { orderBy: { order: "asc" } } },
-					orderBy: { updatedAt: "desc" },
+		const [apiKeys, ownedHomes] = await Promise.all([
+			ctx.db.apiKey.findMany({
+				where: { userId: ctx.session.user.id, active: true },
+				include: {
+					devices: {
+						include: { relays: { orderBy: { order: "asc" } } },
+						orderBy: { updatedAt: "desc" },
+					},
 				},
-			},
-		});
-		return apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices);
+			}),
+			ctx.db.home.findMany({ where: { ownerId: ctx.session.user.id }, select: { id: true } }),
+		]);
+		const ownedHomeIds = new Set(ownedHomes.map((h: { id: string }) => h.id));
+		const allDevices = apiKeys.flatMap((k: (typeof apiKeys)[number]) => k.devices);
+		// Include devices with no home OR whose homeId no longer belongs to this user (orphaned)
+		return allDevices.filter((d: (typeof allDevices)[number]) => !d.homeId || !ownedHomeIds.has(d.homeId));
 	}),
 });

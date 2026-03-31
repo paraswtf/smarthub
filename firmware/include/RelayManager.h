@@ -45,8 +45,6 @@ public:
                 relays[i].state = state;
                 _lastChanged[i] = millis();
                 _applyState(i);
-                // Write only this relay's state to NVS — survives power cuts,
-                // minimal flash wear (one bool per toggle vs full array).
                 Storage::saveRelayState(i, state);
                 return true;
             }
@@ -80,7 +78,18 @@ public:
         if (i >= count)
             return;
         _initPin(i);
+        _applyState(i);
         DBG_RELAY("reinitPin[%d] GPIO%d → %s", i, relays[i].pin, relays[i].state ? "ON" : "OFF");
+    }
+
+    // Release a relay's GPIO — call with OLD config BEFORE updating fields
+    void releasePinAt(uint8_t i)
+    {
+        if (i >= count || relays[i].pin == 0)
+            return;
+        if (_isOutputCapable(relays[i].pin))
+            digitalWrite(relays[i].pin, HIGH); // active-LOW → OFF
+        pinMode(relays[i].pin, INPUT);
     }
 
     // Explicitly flush current states to NVS — call before reboot or on disconnect
@@ -125,7 +134,8 @@ public:
     }
 
 private:
-    uint32_t _lastChanged[MAX_RELAYS] = {}; // millis() of last setById/setByPin call per relay
+    uint32_t _lastChanged[MAX_RELAYS] = {};
+
     // GPIO 34–39 are input-only on all ESP32 variants — reject them as relay pins
     static bool _isOutputCapable(uint8_t pin)
     {
