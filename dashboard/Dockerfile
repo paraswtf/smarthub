@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY dashboard/package.json ./dashboard/
 COPY dashboard/prisma ./dashboard/prisma/
-RUN npm ci --workspace=dashboard
+RUN HUSKY=0 npm ci --workspace=dashboard
 RUN cd dashboard && npx prisma generate
 
 # ── Stage 2: Build Next.js ──
@@ -20,9 +20,7 @@ COPY dashboard/ ./dashboard/
 
 # NEXT_PUBLIC_ vars are inlined at build time
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
-ARG NEXT_PUBLIC_WS_PORT=4001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_WS_PORT=$NEXT_PUBLIC_WS_PORT
 ENV SKIP_ENV_VALIDATION=1
 ENV NEXT_TELEMETRY_DISABLED=1
 
