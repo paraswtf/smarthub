@@ -5,7 +5,7 @@ services:
         image: mongo:7
         restart: unless-stopped
         ports:
-            - "27017:27017"
+            - "127.0.0.1:27017:27017"
         volumes:
             - mongodb_data:/data/db
         command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
@@ -24,7 +24,7 @@ services:
         image: redis:7-alpine
         restart: unless-stopped
         ports:
-            - "6379:6379"
+            - "127.0.0.1:6379:6379"
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
             interval: 10s
@@ -32,16 +32,16 @@ services:
             retries: 5
 
     nextjs:
+        image: ghcr.io/paraswtf/smarthub/nextjs:${IMAGE_TAG:-latest}
         build:
             context: .
             dockerfile: dashboard/Dockerfile
             target: nextjs
             args:
                 - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
-                - NEXT_PUBLIC_WS_PORT=${NEXT_PUBLIC_WS_PORT:-}
         restart: unless-stopped
         ports:
-            - "3000:3000"
+            - "127.0.0.1:3002:3000"
         environment:
             - DATABASE_URL=mongodb://mongodb:27017/esphub?replicaSet=rs0&directConnection=true
             - WS_INTERNAL_URL=http://wsserver:4001
@@ -61,13 +61,14 @@ services:
                 condition: service_healthy
 
     wsserver:
+        image: ghcr.io/paraswtf/smarthub/wsserver:${IMAGE_TAG:-latest}
         build:
             context: .
             dockerfile: dashboard/Dockerfile
             target: wsserver
         restart: unless-stopped
         ports:
-            - "4001:4001"
+            - "127.0.0.1:4002:4001"
         environment:
             - DATABASE_URL=mongodb://mongodb:27017/esphub?replicaSet=rs0&directConnection=true
             - WS_PORT=4001
@@ -76,23 +77,6 @@ services:
         depends_on:
             mongodb:
                 condition: service_healthy
-
-    webhook:
-        build:
-            context: .
-            dockerfile: scripts/Dockerfile.webhook
-        restart: unless-stopped
-        ports:
-            - "9000:9000"
-        volumes:
-            - ./scripts/hooks.json:/etc/webhook/hooks.json:ro
-            - ./scripts/redeploy.sh:/scripts/redeploy.sh:ro
-            - /var/run/docker.sock:/var/run/docker.sock
-            - /usr/local/lib/docker/cli-plugins:/usr/local/lib/docker/cli-plugins:ro
-            - .:/repo
-        command: ["-verbose", "-hooks", "/etc/webhook/hooks.json", "-hotreload"]
-        environment:
-            - WEBHOOK_SECRET=${WEBHOOK_SECRET:-changeme}
 
 volumes:
     mongodb_data:
