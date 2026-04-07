@@ -12,8 +12,8 @@ Self-hosted deployment using Docker Compose. Runs the Next.js dashboard, WebSock
 ### 1. Clone and configure
 
 ```bash
-git clone <your-repo-url> home-automation
-cd home-automation
+git clone <your-repo-url> smarthub
+cd smarthub
 cp .env.example .env
 ```
 

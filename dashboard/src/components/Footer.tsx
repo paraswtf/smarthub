@@ -22,8 +22,8 @@ const SECTIONS: { heading: string; links: FooterLink[] }[] = [
 	{
 		heading: "Open Source",
 		links: [
-			{ label: "GitHub", href: "https://github.com/paraswtf/esp-hub", external: true },
-			{ label: "Report an issue", href: "https://github.com/paraswtf/esp-hub/issues", external: true },
+			{ label: "GitHub", href: "https://github.com/paraswtf/smarthub", external: true },
+			{ label: "Report an issue", href: "https://github.com/paraswtf/smarthub/issues", external: true },
 		],
 	},
 ];

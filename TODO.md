@@ -1,0 +1,2 @@
+- Use Mermaid in Readme
+- Switch to User Permissions model from our old project
