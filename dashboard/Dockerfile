@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY dashboard/package.json ./dashboard/
 COPY dashboard/prisma ./dashboard/prisma/
-RUN HUSKY=0 npm ci --workspace=dashboard
+RUN npm ci --workspace=dashboard --ignore-scripts
 RUN cd dashboard && npx prisma generate
 
 # ── Stage 2: Build Next.js ──
