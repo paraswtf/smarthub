@@ -64,6 +64,14 @@ model VerificationToken {
 
 // ─── SmartHUB ────────────────────────────────────────────────
 
+// Additional WiFi networks pushed to the ESP32 from the dashboard.
+// wn0 (captive portal primary) lives in ESP32 NVS only — password is never sent to the server.
+// Passwords here are stored in plaintext; acceptable for self-hosted IoT deployments.
+type WifiNetwork {
+    ssid     String
+    password String
+}
+
 model ApiKey {
     id         String    @id @default(auto()) @map("_id") @db.ObjectId
     createdAt  DateTime  @default(now())
@@ -78,21 +86,27 @@ model ApiKey {
 }
 
 model Device {
-    id              String    @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt       DateTime  @default(now())
-    updatedAt       DateTime  @updatedAt
-    name            String    @default("ESP32 Device")
-    macAddress      String    @unique
+    id              String        @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+    name            String        @default("ESP32 Device")
+    macAddress      String        @unique
     firmwareVersion String?
     ssid            String?
     notes           String?
     lastSeenAt      DateTime?
-    apiKeyId        String    @db.ObjectId
-    apiKey          ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-    homeId          String?   @db.ObjectId
-    home            Home?     @relation(fields: [homeId], references: [id])
+    apiKeyId        String        @db.ObjectId
+    apiKey          ApiKey        @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+    homeId          String?       @db.ObjectId
+    home            Home?         @relation(fields: [homeId], references: [id])
     relays          Relay[]
     switches        Switch[]
+    // Dashboard-managed WiFi networks (pushed to ESP32 via WS; does not include captive-portal primary)
+    wifiNetworks    WifiNetwork[]
+    // Desired server config — pushed to ESP32 via WS when changed from dashboard
+    cfgServerHost   String?
+    cfgServerPort   Int?
+    cfgServerTLS    Boolean?
 }
 
 model Relay {

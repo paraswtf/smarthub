@@ -1,7 +1,23 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
+import { existsSync } from "fs";
 import { getDeviceAccess, getRelayAccess } from "~/server/api/lib/permissions";
+
+const FIRMWARE_DIR = process.env.FIRMWARE_DIR ?? "/data/firmware";
+
+function wsUrl(path: string) {
+	return `${process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`}${path}`;
+}
+
+async function callWs(path: string, body: object): Promise<Response> {
+	return fetch(wsUrl(path), {
+		method: "POST",
+		headers: { "Content-Type": "application/json", "x-internal-secret": process.env.WS_SECRET ?? "" },
+		body: JSON.stringify(body),
+		signal: AbortSignal.timeout(2000),
+	});
+}
 
 // GPIO 34–39 are input-only on ESP32 — cannot be used as relay outputs
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
@@ -255,5 +271,89 @@ export const deviceRouter = createTRPCRouter({
 		});
 		if (!relay) throw new TRPCError({ code: "FORBIDDEN" });
 		return ctx.db.relay.delete({ where: { id: input.relayId } });
+	}),
+
+	/** Add a server-managed WiFi network (max 4; wn0 is set via captive portal) */
+	addWifi: protectedProcedure.input(z.object({ deviceId: z.string(), ssid: z.string().min(1).max(32), password: z.string().max(64) })).mutation(async ({ ctx, input }) => {
+		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+		if (owned.wifiNetworks.length >= 4) throw new TRPCError({ code: "BAD_REQUEST", message: "Maximum 4 additional WiFi networks" });
+
+		const updated = await ctx.db.device.update({
+			where: { id: input.deviceId },
+			data: { wifiNetworks: { push: { ssid: input.ssid, password: input.password } } },
+		});
+		try {
+			await callWs("/push-wifi-config", { deviceId: input.deviceId, networks: updated.wifiNetworks });
+		} catch {
+			/* offline */
+		}
+		return updated;
+	}),
+
+	/** Remove a server-managed WiFi network by index */
+	removeWifi: protectedProcedure.input(z.object({ deviceId: z.string(), index: z.number().int().min(0) })).mutation(async ({ ctx, input }) => {
+		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+		if (input.index >= owned.wifiNetworks.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Index out of range" });
+
+		const updated = await ctx.db.device.update({
+			where: { id: input.deviceId },
+			data: { wifiNetworks: owned.wifiNetworks.filter((_, i) => i !== input.index) },
+		});
+		try {
+			await callWs("/push-wifi-config", { deviceId: input.deviceId, networks: updated.wifiNetworks });
+		} catch {
+			/* offline */
+		}
+		return updated;
+	}),
+
+	/** Update the server host/port/TLS config pushed to the ESP32 */
+	updateServerConfig: protectedProcedure
+		.input(
+			z.object({
+				deviceId: z.string(),
+				host: z.string().min(1).max(255),
+				port: z.number().int().min(1).max(65535),
+				tls: z.boolean(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+			if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+
+			const updated = await ctx.db.device.update({
+				where: { id: input.deviceId },
+				data: { cfgServerHost: input.host, cfgServerPort: input.port, cfgServerTLS: input.tls },
+			});
+			try {
+				await callWs("/push-server-config", { deviceId: input.deviceId, host: input.host, port: input.port, tls: input.tls });
+			} catch {
+				/* offline */
+			}
+			return updated;
+		}),
+
+	/** Trigger an OTA firmware update — device must be online and firmware must be uploaded */
+	triggerOta: protectedProcedure.input(z.object({ deviceId: z.string() })).mutation(async ({ ctx, input }) => {
+		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+
+		const firmwarePath = `${FIRMWARE_DIR}/${input.deviceId}/latest.bin`;
+		if (!existsSync(firmwarePath)) throw new TRPCError({ code: "NOT_FOUND", message: "No firmware uploaded for this device" });
+
+		const baseUrl = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
+		const downloadUrl = `${baseUrl}/api/device/${input.deviceId}/firmware`;
+
+		try {
+			const res = await callWs("/push-ota", { deviceId: input.deviceId, downloadUrl });
+			const data = (await res.json()) as { pushed?: boolean };
+			if (!data.pushed) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Device is offline" });
+			return { ok: true };
+		} catch (err) {
+			if (err instanceof TRPCError) throw err;
+			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not reach WS server" });
+		}
 	}),
 });

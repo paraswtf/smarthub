@@ -17,13 +17,28 @@ export interface RelayUpdate {
 	state: boolean;
 }
 
-type WsMessage = DeviceUpdate | RelayUpdate;
+export interface OtaProgress {
+	type: "ota_progress";
+	deviceId: string;
+	percent: number;
+}
+
+export interface OtaResult {
+	type: "ota_result";
+	deviceId: string;
+	success: boolean;
+	error?: string;
+}
+
+type WsMessage = DeviceUpdate | RelayUpdate | OtaProgress | OtaResult;
 type Listener<T> = (msg: T) => void;
 
 interface DeviceSocketContextValue {
 	connected: boolean;
 	onDeviceUpdate: (fn: Listener<DeviceUpdate>) => () => void;
 	onRelayUpdate: (fn: Listener<RelayUpdate>) => () => void;
+	onOtaProgress: (fn: Listener<OtaProgress>) => () => void;
+	onOtaResult: (fn: Listener<OtaResult>) => () => void;
 }
 
 const DeviceSocketContext = createContext<DeviceSocketContextValue | null>(null);
@@ -39,6 +54,8 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 	// These Sets persist for the lifetime of the provider — never recreated
 	const deviceListeners = useRef<Set<Listener<DeviceUpdate>>>(new Set());
 	const relayListeners = useRef<Set<Listener<RelayUpdate>>>(new Set());
+	const otaProgressListeners = useRef<Set<Listener<OtaProgress>>>(new Set());
+	const otaResultListeners = useRef<Set<Listener<OtaResult>>>(new Set());
 
 	// Stable subscription functions — never change reference
 	const onDeviceUpdate = useCallback((fn: Listener<DeviceUpdate>) => {
@@ -56,6 +73,20 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		return () => {
 			relayListeners.current.delete(fn);
 			console.log(`[WS Provider] relayUpdate listener removed (total: ${relayListeners.current.size})`);
+		};
+	}, []);
+
+	const onOtaProgress = useCallback((fn: Listener<OtaProgress>) => {
+		otaProgressListeners.current.add(fn);
+		return () => {
+			otaProgressListeners.current.delete(fn);
+		};
+	}, []);
+
+	const onOtaResult = useCallback((fn: Listener<OtaResult>) => {
+		otaResultListeners.current.add(fn);
+		return () => {
+			otaResultListeners.current.delete(fn);
 		};
 	}, []);
 
@@ -78,7 +109,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		const base = appConfig.apiBaseUrl;
 		const wsBase = base.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
 		const wsPort = process.env.NEXT_PUBLIC_WS_PORT;
-		const wsUrl = wsPort ? `${wsBase.replace(/:\d+$/, "")}:${wsPort}/browser` : `${wsBase.replace(/:\d+$/, "")}/browser`;
+		const wsUrl = wsPort ? `${wsBase.replace(/:\d+$/, "")}:${wsPort}/browser` : `${wsBase}/browser`;
 
 		console.log(`[WS Provider] connecting to ${wsUrl} as userId=${uid}`);
 		const ws = new WebSocket(wsUrl);
@@ -105,6 +136,12 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 			if (msg.type === "relay_update") {
 				console.log(`[WS Provider] relay_update → ${relayListeners.current.size} listeners`);
 				relayListeners.current.forEach((fn) => fn(msg));
+			}
+			if (msg.type === "ota_progress") {
+				otaProgressListeners.current.forEach((fn) => fn(msg));
+			}
+			if (msg.type === "ota_result") {
+				otaResultListeners.current.forEach((fn) => fn(msg));
 			}
 		};
 
@@ -138,7 +175,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		if (userId) connect();
 	}, [userId, connect]);
 
-	return <DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate }}>{children}</DeviceSocketContext.Provider>;
+	return <DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate, onOtaProgress, onOtaResult }}>{children}</DeviceSocketContext.Provider>;
 }
 
 export function useDeviceSocket() {

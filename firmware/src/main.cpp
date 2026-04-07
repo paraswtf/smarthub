@@ -36,24 +36,44 @@ void onSwitchTriggered(const String &relayId, bool newState, bool isToggle)
 }
 
 // ─── WiFi connection ──────────────────────────────────────────
+// Tries the captive-portal primary network (wn0), then server-managed extras (wn1–wn4).
 bool connectWiFi()
 {
-    DBG_WIFI("Connecting to \"%s\"…", cfg.wifiSSID.c_str());
     WiFi.mode(WIFI_STA);
-    WiFi.begin(cfg.wifiSSID.c_str(), cfg.wifiPassword.c_str());
-    uint32_t start = millis();
-    while (WiFi.status() != WL_CONNECTED)
+
+    // Build ordered list: wn0 first, then extra networks
+    const uint8_t total = 1 + cfg.extraWifiCount;
+    for (uint8_t attempt = 0; attempt < total; attempt++)
     {
-        StatusLed::tick();
-        delay(100);
-        if (millis() - start > WIFI_CONNECT_TIMEOUT_MS)
+        const char *ssid = (attempt == 0) ? cfg.wifiSSID.c_str() : cfg.extraWifi[attempt - 1].ssid.c_str();
+        const char *pass = (attempt == 0) ? cfg.wifiPassword.c_str() : cfg.extraWifi[attempt - 1].password.c_str();
+
+        DBG_WIFI("Trying network %d/%d: \"%s\"…", attempt + 1, total, ssid);
+        WiFi.begin(ssid, pass);
+
+        uint32_t start = millis();
+        while (WiFi.status() != WL_CONNECTED)
         {
-            DBG_ERR("WiFi connect timeout");
-            return false;
+            StatusLed::tick();
+            delay(100);
+            if (millis() - start > WIFI_CONNECT_TIMEOUT_MS)
+            {
+                DBG_WARN("Network \"%s\" timed out", ssid);
+                WiFi.disconnect(true);
+                delay(200);
+                break;
+            }
+        }
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            DBG_WIFI_STATUS();
+            return true;
         }
     }
-    DBG_WIFI_STATUS();
-    return true;
+
+    DBG_ERR("All %d WiFi network(s) failed", total);
+    return false;
 }
 
 // ─── Setup ───────────────────────────────────────────────────
@@ -190,7 +210,13 @@ void loop()
         else
         {
             DBG_WARN("Registration failed — retrying in 5s");
-            delay(5000);
+            uint32_t wait = millis();
+            while (millis() - wait < 5000)
+            {
+                checkFactoryReset();
+                StatusLed::tick();
+                delay(10);
+            }
             if (WiFi.status() != WL_CONNECTED)
             {
                 DBG_WARN("WiFi dropped during registration");

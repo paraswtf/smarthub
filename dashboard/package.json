@@ -7,7 +7,7 @@
 		"build": "next build",
 		"db:push": "prisma db push",
 		"db:studio": "prisma studio",
-		"dev": "next dev",
+		"dev": "tsx --env-file=.env server.ts",
 		"ws": "tsx --env-file=.env src/server/ws-server.ts",
 		"postinstall": "prisma generate",
 		"lint": "next lint",

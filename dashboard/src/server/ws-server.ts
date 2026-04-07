@@ -27,12 +27,20 @@
 
 import { WebSocketServer, WebSocket } from "ws";
 import { PrismaClient } from "@prisma/client";
-import { createServer, type IncomingMessage } from "http";
+import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { parse as parseUrl } from "url";
+import { randomBytes } from "crypto";
 
-const db = new PrismaClient();
+// Singleton — survives Next.js HMR reloads and prevents connection pool accumulation
+const globalForWs = globalThis as unknown as { wsDb: PrismaClient | undefined };
+const db = globalForWs.wsDb ?? new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForWs.wsDb = db;
+
 const PORT = Number(process.env.WS_PORT ?? 4001);
 const WS_SECRET = process.env.WS_SECRET ?? "";
+const PING_INTERVAL_MS = 30_000;
+
+// ─── State ────────────────────────────────────────────────────
 
 // Map: deviceId → ESP32 WebSocket
 const deviceSockets = new Map<string, WebSocket>();
@@ -42,6 +50,45 @@ const browserSockets = new Map<string, Set<WebSocket>>();
 const pendingPings = new Map<string, { resolve: (online: boolean) => void; timer: ReturnType<typeof setTimeout> }>();
 // Map: deviceId → Set of userIds who should receive updates (owner + shared users)
 const deviceSubscribers = new Map<string, Set<string>>();
+// Map: one-time OTA download token → { deviceId, expiresAt }
+const otaTokens = new Map<string, { deviceId: string; expiresAt: number }>();
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface AuthMsg {
+	type: "auth";
+	apiKey: string;
+	macAddress: string;
+	deviceId?: string;
+}
+interface RelayAckMsg {
+	type: "relay_ack";
+	relayId: string;
+	state: boolean;
+}
+interface PingAckMsg {
+	type: "ping_ack";
+}
+interface SwitchTriggerMsg {
+	type: "switch_trigger";
+	linkedRelayId: string;
+	desiredState: boolean;
+	isToggle: boolean;
+}
+interface OtaProgressMsg {
+	type: "ota_progress";
+	percent: number;
+}
+interface OtaResultMsg {
+	type: "ota_result";
+	success: boolean;
+	error?: string;
+}
+type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg | OtaProgressMsg | OtaResultMsg;
+interface BrowserSubscribeMsg {
+	type: "subscribe";
+	userId: string;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -66,67 +113,36 @@ function broadcastToUser(userId: string, payload: object) {
 	}
 }
 
-/** Build the subscriber set for a device (owner + relay/room/home shared users) */
+function broadcastToDeviceSubscribers(deviceId: string, payload: object) {
+	const subscribers = deviceSubscribers.get(deviceId);
+	if (!subscribers) return;
+	for (const userId of subscribers) broadcastToUser(userId, payload);
+}
+
+/** Build the subscriber set for a device (owner + relay/room/home shared users) — single query */
 async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 	const device = await db.device.findFirst({
 		where: { id: deviceId },
 		select: {
-			homeId: true,
 			apiKey: { select: { userId: true } },
 			relays: {
 				select: {
-					id: true,
-					roomId: true,
 					shares: { select: { userId: true } },
+					room: { select: { shares: { select: { userId: true } } } },
 				},
 			},
+			home: { select: { shares: { select: { userId: true } } } },
 		},
 	});
 	if (!device) return new Set();
 
 	const subscribers = new Set([device.apiKey.userId]);
-
-	// 1. Direct relay shares on this device's relays
 	for (const relay of device.relays) {
 		for (const s of relay.shares) subscribers.add(s.userId);
+		for (const s of relay.room?.shares ?? []) subscribers.add(s.userId);
 	}
-
-	// 2. Room shares for rooms that contain this device's relays
-	const roomIds = [...new Set(device.relays.map((r) => r.roomId).filter(Boolean))] as string[];
-	if (roomIds.length > 0) {
-		const roomShares = await db.roomShare.findMany({
-			where: { roomId: { in: roomIds } },
-			select: { userId: true },
-		});
-		for (const s of roomShares) subscribers.add(s.userId);
-	}
-
-	// 3. Home share (device's home shared with user)
-	if (device.homeId) {
-		const homeShares = await db.homeShare.findMany({
-			where: { homeId: device.homeId },
-			select: { userId: true },
-		});
-		for (const s of homeShares) subscribers.add(s.userId);
-	}
-
+	for (const s of device.home?.shares ?? []) subscribers.add(s.userId);
 	return subscribers;
-}
-
-/** Broadcast a payload to all subscribers of a device */
-function broadcastToDeviceSubscribers(deviceId: string, payload: object) {
-	const subscribers = deviceSubscribers.get(deviceId);
-	if (!subscribers) return;
-	for (const userId of subscribers) {
-		broadcastToUser(userId, payload);
-	}
-}
-
-function removeBrowserSocket(userId: string, ws: WebSocket) {
-	const sockets = browserSockets.get(userId);
-	if (!sockets) return;
-	sockets.delete(ws);
-	if (sockets.size === 0) browserSockets.delete(userId);
 }
 
 function pushRelayCommand(deviceId: string, relayId: string, pin: number, state: boolean): boolean {
@@ -147,264 +163,165 @@ function pushToDevice(deviceId: string, payload: object): boolean {
 async function sendPingWithState(deviceId: string): Promise<boolean> {
 	const ws = deviceSockets.get(deviceId);
 	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-	const relays = await db.relay.findMany({
-		where: { deviceId },
-		orderBy: { order: "asc" },
-	});
-	ws.send(
-		JSON.stringify({
-			type: "ping",
-			relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })),
-		}),
-	);
+	const relays = await db.relay.findMany({ where: { deviceId }, orderBy: { order: "asc" } });
+	ws.send(JSON.stringify({ type: "ping", relays: relays.map((r) => ({ id: r.id, pin: r.pin, state: r.state })) }));
 	return true;
 }
 
-/** Resolve a pending on-demand ping */
-function resolvePendingPing(deviceId: string) {
+/** Resolve or cancel a pending on-demand ping */
+function settlePendingPing(deviceId: string, online: boolean) {
 	const pending = pendingPings.get(deviceId);
 	if (!pending) return;
 	clearTimeout(pending.timer);
-	pending.resolve(true);
+	pending.resolve(online);
 	pendingPings.delete(deviceId);
 }
 
-/** Fail a pending on-demand ping */
-function failPendingPing(deviceId: string) {
-	const pending = pendingPings.get(deviceId);
-	if (!pending) return;
-	clearTimeout(pending.timer);
-	pending.resolve(false);
-	pendingPings.delete(deviceId);
-}
+// ─── HTTP handler helpers ─────────────────────────────────────
 
-// ─── Types ────────────────────────────────────────────────────
-
-interface AuthMsg {
-	type: "auth";
-	apiKey: string;
-	macAddress: string;
-	deviceId?: string;
-}
-interface RelayAckMsg {
-	type: "relay_ack";
-	relayId: string;
-	state: boolean;
-}
-interface PingAckMsg {
-	type: "ping_ack";
-}
-interface SwitchTriggerMsg {
-	type: "switch_trigger";
-	linkedRelayId: string;
-	desiredState: boolean;
-	isToggle: boolean;
-}
-type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg;
-
-interface BrowserSubscribeMsg {
-	type: "subscribe";
-	userId: string;
-}
-
-// ─── HTTP server ──────────────────────────────────────────────
-
-const httpServer = createServer((req, res) => {
-	const secret = req.headers["x-internal-secret"] ?? "";
-	const authorized = !WS_SECRET || secret === WS_SECRET;
-
-	// ── /push-relay ───────────────────────────────────────────
-	if (req.method === "POST" && req.url === "/push-relay") {
-		if (!authorized) {
-			res.writeHead(403).end();
-			return;
-		}
+function readBody(req: IncomingMessage): Promise<string> {
+	return new Promise((resolve, reject) => {
 		let body = "";
 		req.on("data", (c: Buffer) => {
 			body += c.toString();
 		});
-		req.on("end", () => {
-			try {
-				const { deviceId, relayId, pin, state } = JSON.parse(body);
+		req.on("end", () => resolve(body));
+		req.on("error", reject);
+	});
+}
+
+function jsonOk(res: ServerResponse, data: object) {
+	res.writeHead(200, { "Content-Type": "application/json" });
+	res.end(JSON.stringify(data));
+}
+
+// ─── HTTP request handler (shared between standalone + embedded) ──
+
+export async function wsRequestHandler(req: IncomingMessage, res: ServerResponse) {
+	if (req.method !== "POST") {
+		res.writeHead(405).end();
+		return;
+	}
+	const secret = (req.headers["x-internal-secret"] ?? "") as string;
+	if (WS_SECRET && secret !== WS_SECRET) {
+		res.writeHead(403).end();
+		return;
+	}
+
+	let body: Record<string, unknown>;
+	try {
+		body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+	} catch {
+		res.writeHead(400).end();
+		return;
+	}
+
+	try {
+		switch (req.url) {
+			case "/push-relay": {
+				const { deviceId, relayId, pin, state } = body as { deviceId: string; relayId: string; pin: number; state: boolean };
 				const pushed = pushRelayCommand(deviceId, relayId, pin, state);
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ ok: true, pushed }));
+				jsonOk(res, { ok: true, pushed });
 				console.log(`[HTTP] /push-relay → device=${deviceId} relay=${relayId} state=${state} pushed=${pushed}`);
-			} catch {
-				res.writeHead(400).end();
+				break;
 			}
-		});
-		return;
-	}
-
-	// ── /push-relay-update ────────────────────────────────────
-	if (req.method === "POST" && req.url === "/push-relay-update") {
-		if (!authorized) {
-			res.writeHead(403).end();
-			return;
-		}
-		let body = "";
-		req.on("data", (c: Buffer) => {
-			body += c.toString();
-		});
-		req.on("end", () => {
-			try {
-				const { deviceId, relay } = JSON.parse(body);
+			case "/push-relay-update": {
+				const { deviceId, relay } = body as { deviceId: string; relay: { id: string } };
 				const pushed = pushToDevice(deviceId, { type: "relay_update_config", relay });
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ ok: true, pushed }));
+				jsonOk(res, { ok: true, pushed });
 				console.log(`[HTTP] /push-relay-update → device=${deviceId} relay=${relay.id} pushed=${pushed}`);
-			} catch {
-				res.writeHead(400).end();
+				break;
 			}
-		});
-		return;
-	}
-
-	// ── /push-relay-add ───────────────────────────────────────
-	if (req.method === "POST" && req.url === "/push-relay-add") {
-		if (!authorized) {
-			res.writeHead(403).end();
-			return;
-		}
-		let body = "";
-		req.on("data", (c: Buffer) => {
-			body += c.toString();
-		});
-		req.on("end", () => {
-			try {
-				const { deviceId, relay } = JSON.parse(body);
+			case "/push-relay-add": {
+				const { deviceId, relay } = body as { deviceId: string; relay: { id: string } };
 				const pushed = pushToDevice(deviceId, { type: "relay_add", relay });
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ ok: true, pushed }));
+				jsonOk(res, { ok: true, pushed });
 				console.log(`[HTTP] /push-relay-add → device=${deviceId} relay=${relay.id} pushed=${pushed}`);
-			} catch {
-				res.writeHead(400).end();
+				break;
 			}
-		});
-		return;
-	}
-
-	// ── Switch push endpoints ────────────────────────────────
-	for (const url of ["/push-switch-add", "/push-switch-update", "/push-switch-delete"]) {
-		if (req.method === "POST" && req.url === url) {
-			if (!authorized) {
-				res.writeHead(403).end();
-				return;
+			case "/push-switch-add":
+			case "/push-switch-update":
+			case "/push-switch-delete": {
+				const { deviceId } = body as { deviceId: string };
+				const typeMap: Record<string, string> = {
+					"/push-switch-add": "switch_add",
+					"/push-switch-update": "switch_update_config",
+					"/push-switch-delete": "switch_delete",
+				};
+				const pushed = pushToDevice(deviceId, { type: typeMap[req.url!], ...body });
+				jsonOk(res, { ok: true, pushed });
+				console.log(`[HTTP] ${req.url} → device=${deviceId} pushed=${pushed}`);
+				break;
 			}
-			let body = "";
-			req.on("data", (c: Buffer) => {
-				body += c.toString();
-			});
-			req.on("end", () => {
-				try {
-					const data = JSON.parse(body) as { deviceId: string; [k: string]: unknown };
-					const typeMap: Record<string, string> = {
-						"/push-switch-add": "switch_add",
-						"/push-switch-update": "switch_update_config",
-						"/push-switch-delete": "switch_delete",
-					};
-					const pushed = pushToDevice(data.deviceId, { type: typeMap[url], ...data });
-					res.writeHead(200, { "Content-Type": "application/json" });
-					res.end(JSON.stringify({ ok: true, pushed }));
-					console.log(`[HTTP] ${url} → device=${data.deviceId} pushed=${pushed}`);
-				} catch {
-					res.writeHead(400).end();
-				}
-			});
-			return;
-		}
-	}
-
-	// ── /ping-device — on-demand ping from tRPC ───────────────
-	if (req.method === "POST" && req.url === "/ping-device") {
-		if (!authorized) {
-			res.writeHead(403).end();
-			return;
-		}
-		let body = "";
-		req.on("data", (c: Buffer) => {
-			body += c.toString();
-		});
-		req.on("end", async () => {
-			try {
-				const { deviceId, timeoutMs } = JSON.parse(body) as { deviceId: string; timeoutMs?: number };
+			case "/ping-device": {
+				const { deviceId, timeoutMs } = body as { deviceId: string; timeoutMs?: number };
 				const ws = deviceSockets.get(deviceId);
-
-				// Not connected — fail fast
 				if (!ws || ws.readyState !== WebSocket.OPEN) {
-					res.writeHead(200, { "Content-Type": "application/json" });
-					res.end(JSON.stringify({ online: false }));
-					return;
+					jsonOk(res, { online: false });
+					break;
 				}
-
-				// Cancel existing pending ping for this device
-				failPendingPing(deviceId);
-
-				// Send ping with authoritative relay states
+				settlePendingPing(deviceId, false); // cancel any in-flight ping
 				await sendPingWithState(deviceId);
-
-				// Wait for ping_ack or timeout
-				const timeout = timeoutMs ?? 3000;
 				const online = await new Promise<boolean>((resolve) => {
 					const timer = setTimeout(() => {
 						pendingPings.delete(deviceId);
 						resolve(false);
-					}, timeout);
+					}, timeoutMs ?? 3000);
 					pendingPings.set(deviceId, { resolve, timer });
 				});
-
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ online }));
+				jsonOk(res, { online });
 				console.log(`[HTTP] /ping-device → device=${deviceId} online=${online}`);
-			} catch {
-				res.writeHead(400).end();
+				break;
 			}
-		});
-		return;
-	}
-
-	// ── /refresh-device-subscribers — called when shares change ──
-	if (req.method === "POST" && req.url === "/refresh-device-subscribers") {
-		if (!authorized) {
-			res.writeHead(403).end();
-			return;
-		}
-		let body = "";
-		req.on("data", (c: Buffer) => {
-			body += c.toString();
-		});
-		req.on("end", async () => {
-			try {
-				const { deviceId } = JSON.parse(body) as { deviceId: string };
+			case "/refresh-device-subscribers": {
+				const { deviceId } = body as { deviceId: string };
 				const subscribers = await buildDeviceSubscribers(deviceId);
 				deviceSubscribers.set(deviceId, subscribers);
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ ok: true, subscriberCount: subscribers.size }));
+				jsonOk(res, { ok: true, subscriberCount: subscribers.size });
 				console.log(`[HTTP] /refresh-device-subscribers → device=${deviceId} subscribers=${subscribers.size}`);
-			} catch {
-				res.writeHead(400).end();
+				break;
 			}
-		});
-		return;
+			case "/push-wifi-config": {
+				const { deviceId, networks } = body as { deviceId: string; networks: Array<{ ssid: string; password: string }> };
+				const pushed = pushToDevice(deviceId, { type: "wifi_config", networks });
+				jsonOk(res, { ok: true, pushed });
+				console.log(`[HTTP] /push-wifi-config → device=${deviceId} networks=${networks.length} pushed=${pushed}`);
+				break;
+			}
+			case "/push-server-config": {
+				const { deviceId, host, port, tls } = body as { deviceId: string; host: string; port: number; tls: boolean };
+				const pushed = pushToDevice(deviceId, { type: "server_config", host, port, tls });
+				jsonOk(res, { ok: true, pushed });
+				console.log(`[HTTP] /push-server-config → device=${deviceId} host=${host}:${port} tls=${tls} pushed=${pushed}`);
+				break;
+			}
+			case "/push-ota": {
+				const { deviceId, downloadUrl } = body as { deviceId: string; downloadUrl: string };
+				const token = randomBytes(20).toString("hex");
+				otaTokens.set(token, { deviceId, expiresAt: Date.now() + 10 * 60 * 1000 }); // 10-minute expiry
+				const fullUrl = `${downloadUrl}?token=${token}`;
+				const pushed = pushToDevice(deviceId, { type: "ota_update", url: fullUrl });
+				jsonOk(res, { ok: true, pushed });
+				console.log(`[HTTP] /push-ota → device=${deviceId} pushed=${pushed}`);
+				break;
+			}
+			case "/validate-ota-token": {
+				const { token, deviceId } = body as { token: string; deviceId: string };
+				const entry = otaTokens.get(token);
+				const valid = !!entry && entry.deviceId === deviceId && entry.expiresAt > Date.now();
+				if (valid) otaTokens.delete(token); // one-time use
+				jsonOk(res, { valid });
+				console.log(`[HTTP] /validate-ota-token → device=${deviceId} valid=${valid}`);
+				break;
+			}
+			default:
+				res.writeHead(404).end();
+		}
+	} catch (err) {
+		console.error("[HTTP] Handler error:", err);
+		res.writeHead(500).end();
 	}
-
-	res.writeHead(404).end();
-});
-
-const wss = new WebSocketServer({ server: httpServer });
-
-httpServer.listen(PORT, () => {
-	console.log(`[WS] SmartHUB server listening on port ${PORT}`);
-});
-
-// ─── WebSocket routing ────────────────────────────────────────
-
-wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-	const path = parseUrl(req.url ?? "/").pathname ?? "/";
-	if (path === "/browser") handleBrowserConnection(ws);
-	else handleDeviceConnection(ws);
-});
+}
 
 // ─── Browser connection handler ───────────────────────────────
 
@@ -419,22 +336,28 @@ function handleBrowserConnection(ws: WebSocket) {
 			return;
 		}
 
-		if (msg.type === "subscribe") {
-			const user = await db.user.findUnique({ where: { id: msg.userId }, select: { id: true } });
-			if (!user) {
-				ws.close();
-				return;
+		try {
+			if (msg.type === "subscribe") {
+				const user = await db.user.findUnique({ where: { id: msg.userId }, select: { id: true } });
+				if (!user) {
+					ws.close();
+					return;
+				}
+				subscribedUserId = user.id;
+				if (!browserSockets.has(user.id)) browserSockets.set(user.id, new Set());
+				browserSockets.get(user.id)!.add(ws);
+				console.log(`[WS] Browser subscribed: userId=${user.id} — total: ${browserSockets.get(user.id)!.size}`);
 			}
-			subscribedUserId = user.id;
-			if (!browserSockets.has(user.id)) browserSockets.set(user.id, new Set());
-			browserSockets.get(user.id)!.add(ws);
-			console.log(`[WS] Browser subscribed: userId=${user.id} — total: ${browserSockets.get(user.id)!.size}`);
+		} catch (err) {
+			console.error("[WS] Browser message handler error:", err);
 		}
 	});
 
 	ws.on("close", () => {
 		if (subscribedUserId) {
-			removeBrowserSocket(subscribedUserId, ws);
+			const sockets = browserSockets.get(subscribedUserId);
+			sockets?.delete(ws);
+			if (sockets?.size === 0) browserSockets.delete(subscribedUserId);
 			console.log(`[WS] Browser unsubscribed: userId=${subscribedUserId}`);
 		}
 	});
@@ -446,14 +369,13 @@ function handleBrowserConnection(ws: WebSocket) {
 
 function handleDeviceConnection(ws: WebSocket) {
 	let authenticatedDeviceId: string | null = null;
-	let deviceUserId: string | null = null;
 
-	// Periodic ping: sends authoritative relay states, keeps TCP alive
-	const pingInterval = setInterval(async () => {
+	// Periodic ping: syncs authoritative relay states and keeps TCP alive
+	const pingInterval = setInterval(() => {
 		if (ws.readyState === WebSocket.OPEN && authenticatedDeviceId) {
-			await sendPingWithState(authenticatedDeviceId);
+			sendPingWithState(authenticatedDeviceId).catch((err) => console.error("[WS] pingInterval error:", err));
 		}
-	}, 30_000);
+	}, PING_INTERVAL_MS);
 
 	ws.on("message", async (raw) => {
 		let msg: EspMessage;
@@ -463,127 +385,140 @@ function handleDeviceConnection(ws: WebSocket) {
 			return;
 		}
 
-		// ── AUTH ────────────────────────────────────────────────
-		if (msg.type === "auth") {
-			const { apiKey, macAddress } = msg;
-			const key = await db.apiKey.findFirst({
-				where: { key: apiKey, active: true },
-				select: { id: true, userId: true },
-			});
-			if (!key) {
-				ws.send(JSON.stringify({ type: "auth_fail", reason: "Invalid API key" }));
-				ws.close();
-				return;
-			}
+		try {
+			// ── AUTH ──────────────────────────────────────────────
+			if (msg.type === "auth") {
+				const { apiKey, macAddress } = msg;
+				const key = await db.apiKey.findFirst({
+					where: { key: apiKey, active: true },
+					select: { id: true, userId: true },
+				});
+				if (!key) {
+					ws.send(JSON.stringify({ type: "auth_fail", reason: "Invalid API key" }));
+					ws.close();
+					return;
+				}
 
-			const device = await db.device.upsert({
-				where: { macAddress },
-				update: { apiKeyId: key.id, lastSeenAt: new Date() },
-				create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id, lastSeenAt: new Date() },
-				include: {
-					relays: { orderBy: { order: "asc" } },
-					switches: { orderBy: { createdAt: "asc" } },
-				},
-			});
+				const device = await db.device.upsert({
+					where: { macAddress },
+					update: { apiKeyId: key.id, lastSeenAt: new Date() },
+					create: { macAddress, name: `ESP32 ${macAddress.slice(-5)}`, apiKeyId: key.id, lastSeenAt: new Date() },
+					include: {
+						relays: { orderBy: { order: "asc" } },
+						switches: { orderBy: { createdAt: "asc" } },
+					},
+				});
+				// wifiNetworks, cfgServerHost/Port/TLS are scalar fields included automatically
 
-			authenticatedDeviceId = device.id;
-			deviceUserId = key.userId;
-			deviceSockets.set(device.id, ws);
+				authenticatedDeviceId = device.id;
+				deviceSockets.set(device.id, ws);
+				deviceSubscribers.set(device.id, await buildDeviceSubscribers(device.id));
 
-			// Build subscriber set (owner + shared users)
-			const subscribers = await buildDeviceSubscribers(device.id);
-			deviceSubscribers.set(device.id, subscribers);
+				await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
 
-			await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
+				ws.send(
+					JSON.stringify({
+						type: "auth_ok",
+						deviceId: device.id,
+						relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
+						switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
+						wifiNetworks: device.wifiNetworks, // server-managed extra networks (wn1–wn4)
+						serverConfig: device.cfgServerHost ? { host: device.cfgServerHost, port: device.cfgServerPort, tls: device.cfgServerTLS } : null,
+					}),
+				);
 
-			ws.send(
-				JSON.stringify({
-					type: "auth_ok",
+				broadcastToDeviceSubscribers(device.id, {
+					type: "device_update",
 					deviceId: device.id,
-					relays: device.relays.map((r) => ({
-						id: r.id,
-						pin: r.pin,
-						label: r.label,
-						state: r.state,
-						icon: r.icon,
-					})),
-					switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
-				}),
-			);
+					lastSeenAt: new Date().toISOString(),
+					relays: device.relays.map((r) => ({ id: r.id, state: r.state })),
+				});
 
-			broadcastToDeviceSubscribers(device.id, {
-				type: "device_update",
-				deviceId: device.id,
-				lastSeenAt: new Date().toISOString(),
-				relays: device.relays.map((r) => ({ id: r.id, state: r.state })),
-			});
-
-			console.log(`[WS] Device authenticated: ${device.name} (${macAddress}) id=${device.id} — sockets: ${deviceSockets.size}`);
-			return;
-		}
-
-		// ── PING ACK ──────────────────────────────────────────
-		if (msg.type === "ping_ack" && authenticatedDeviceId) {
-			resolvePendingPing(authenticatedDeviceId);
-			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
-			return;
-		}
-
-		// ── SWITCH TRIGGER ────────────────────────────────────
-		if (msg.type === "switch_trigger" && authenticatedDeviceId) {
-			const { linkedRelayId, desiredState, isToggle } = msg;
-
-			const relay = await db.relay.findFirst({
-				where: { id: linkedRelayId },
-				include: { device: { include: { apiKey: true } } },
-			});
-			if (!relay) {
-				console.log(`[WS] switch_trigger: relay ${linkedRelayId} not found`);
+				console.log(`[WS] Device authenticated: ${device.name} (${macAddress}) id=${device.id} — sockets: ${deviceSockets.size}`);
 				return;
 			}
 
-			const triggeringDevice = await db.device.findUnique({
-				where: { id: authenticatedDeviceId },
-				include: { apiKey: true },
-			});
-			if (relay.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
-				console.log(`[WS] switch_trigger: cross-user relay access denied`);
+			// ── PING ACK ────────────────────────────────────────
+			if (msg.type === "ping_ack" && authenticatedDeviceId) {
+				settlePendingPing(authenticatedDeviceId, true);
+				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 				return;
 			}
 
-			const newState = isToggle ? !relay.state : desiredState;
+			// ── SWITCH TRIGGER ──────────────────────────────────
+			if (msg.type === "switch_trigger" && authenticatedDeviceId) {
+				const { linkedRelayId, desiredState, isToggle } = msg;
 
-			await db.relay.update({
-				where: { id: linkedRelayId },
-				data: { state: newState, updatedAt: new Date() },
-			});
-			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+				const relay = await db.relay.findFirst({
+					where: { id: linkedRelayId },
+					include: { device: { include: { apiKey: true } } },
+				});
+				if (!relay) {
+					console.log(`[WS] switch_trigger: relay ${linkedRelayId} not found`);
+					return;
+				}
 
-			const targetWs = deviceSockets.get(relay.deviceId);
-			if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-				targetWs.send(JSON.stringify({ type: "relay_cmd", relayId: relay.id, pin: relay.pin, state: newState }));
-				console.log(`[WS] switch_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
+				const triggeringDevice = await db.device.findUnique({
+					where: { id: authenticatedDeviceId },
+					include: { apiKey: true },
+				});
+				if (relay.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
+					console.log(`[WS] switch_trigger: cross-user relay access denied`);
+					return;
+				}
+
+				const newState = isToggle ? !relay.state : desiredState;
+				await db.relay.update({ where: { id: linkedRelayId }, data: { state: newState, updatedAt: new Date() } });
+				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+
+				const targetWs = deviceSockets.get(relay.deviceId);
+				if (targetWs?.readyState === WebSocket.OPEN) {
+					targetWs.send(JSON.stringify({ type: "relay_cmd", relayId: relay.id, pin: relay.pin, state: newState }));
+					console.log(`[WS] switch_trigger: relay_cmd → device ${relay.deviceId} relay ${relay.id} → ${newState}`);
+				}
+				broadcastToDeviceSubscribers(relay.deviceId, { type: "relay_update", deviceId: relay.deviceId, relayId: relay.id, state: newState });
+				return;
 			}
 
-			broadcastToDeviceSubscribers(relay.deviceId, { type: "relay_update", deviceId: relay.deviceId, relayId: relay.id, state: newState });
-			return;
-		}
+			// ── RELAY ACK ────────────────────────────────────────
+			if (msg.type === "relay_ack" && authenticatedDeviceId) {
+				await db.relay.updateMany({
+					where: { id: msg.relayId, deviceId: authenticatedDeviceId },
+					data: { state: msg.state, updatedAt: new Date() },
+				});
+				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+				broadcastToDeviceSubscribers(authenticatedDeviceId, {
+					type: "relay_update",
+					deviceId: authenticatedDeviceId,
+					relayId: msg.relayId,
+					state: msg.state,
+				});
+				console.log(`[WS] Relay ack: ${msg.relayId} → ${msg.state ? "ON" : "OFF"}`);
+			}
 
-		// ── RELAY ACK ──────────────────────────────────────────
-		if (msg.type === "relay_ack" && authenticatedDeviceId) {
-			await db.relay.updateMany({
-				where: { id: msg.relayId, deviceId: authenticatedDeviceId },
-				data: { state: msg.state, updatedAt: new Date() },
-			});
-			await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+			// ── OTA PROGRESS ─────────────────────────────────────
+			if (msg.type === "ota_progress" && authenticatedDeviceId) {
+				broadcastToDeviceSubscribers(authenticatedDeviceId, {
+					type: "ota_progress",
+					deviceId: authenticatedDeviceId,
+					percent: (msg as OtaProgressMsg).percent,
+				});
+				console.log(`[WS] OTA progress: ${authenticatedDeviceId} → ${(msg as OtaProgressMsg).percent}%`);
+			}
 
-			broadcastToDeviceSubscribers(authenticatedDeviceId, {
-				type: "relay_update",
-				deviceId: authenticatedDeviceId,
-				relayId: msg.relayId,
-				state: msg.state,
-			});
-			console.log(`[WS] Relay ack: ${msg.relayId} → ${msg.state ? "ON" : "OFF"}`);
+			// ── OTA RESULT ────────────────────────────────────────
+			if (msg.type === "ota_result" && authenticatedDeviceId) {
+				const m = msg as OtaResultMsg;
+				broadcastToDeviceSubscribers(authenticatedDeviceId, {
+					type: "ota_result",
+					deviceId: authenticatedDeviceId,
+					success: m.success,
+					error: m.error,
+				});
+				console.log(`[WS] OTA result: ${authenticatedDeviceId} → ${m.success ? "success" : `failed: ${m.error}`}`);
+			}
+		} catch (err) {
+			console.error("[WS] Device message handler error:", err);
 		}
 	});
 
@@ -596,112 +531,185 @@ function handleDeviceConnection(ws: WebSocket) {
 			} else {
 				console.log(`[WS] Stale close for ${authenticatedDeviceId} — ignoring`);
 			}
-			failPendingPing(authenticatedDeviceId);
+			settlePendingPing(authenticatedDeviceId, false);
 		}
 	});
 
 	ws.on("error", (err) => console.error("[WS] Device error:", err.message));
 }
 
-// ─── Schedule executor ───────────────────────────────────────
+// ─── Schedule executor ────────────────────────────────────────
 
 const SCHEDULE_CHECK_INTERVAL = 60_000;
 
-/** Map short weekday name to day number (0=Sun..6=Sat) */
-function weekdayToNumber(wd: string): number {
-	const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-	return map[wd] ?? -1;
+/** Extract hour, minute, day-of-month, and weekday (0=Sun) in a given timezone */
+function localTimeParts(timezone: string, date: Date) {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: timezone,
+		hour: "numeric",
+		minute: "numeric",
+		day: "numeric",
+		weekday: "short",
+		hour12: false,
+	}).formatToParts(date);
+	const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+	const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+	return {
+		hour: n("hour"),
+		minute: n("minute"),
+		day: n("day"),
+		weekday: weekdayMap[parts.find((p) => p.type === "weekday")?.value ?? ""] ?? -1,
+	};
 }
 
-setInterval(async () => {
-	try {
-		const schedules = await db.relaySchedule.findMany({
-			where: { enabled: true },
-			include: {
-				relay: { select: { id: true, pin: true, deviceId: true, state: true } },
-			},
-		});
+// Guard against duplicate intervals on HMR reloads
+const globalForSchedule = globalThis as unknown as { scheduleStarted?: boolean };
+if (!globalForSchedule.scheduleStarted) {
+	globalForSchedule.scheduleStarted = true;
 
-		if (schedules.length === 0) return;
-		const now = new Date();
+	setInterval(async () => {
+		try {
+			const schedules = await db.relaySchedule.findMany({
+				where: { enabled: true },
+				include: { relay: { select: { id: true, pin: true, deviceId: true, state: true } } },
+			});
+			if (schedules.length === 0) return;
 
-		for (const schedule of schedules) {
-			// Get current time in the schedule's timezone
-			const parts = new Intl.DateTimeFormat("en-US", {
-				timeZone: schedule.timezone,
-				hour: "numeric",
-				minute: "numeric",
-				weekday: "short",
-				hour12: false,
-			}).formatToParts(now);
+			const now = new Date();
+			for (const schedule of schedules) {
+				const { hour, minute, day, weekday } = localTimeParts(schedule.timezone, now);
 
-			const localHour = Number(parts.find((p) => p.type === "hour")?.value);
-			const localMinute = Number(parts.find((p) => p.type === "minute")?.value);
-			const localDay = weekdayToNumber(parts.find((p) => p.type === "weekday")?.value ?? "");
+				if (hour !== schedule.hour || minute !== schedule.minute) continue;
+				if (!schedule.daysOfWeek.includes(weekday)) continue;
 
-			if (localHour !== schedule.hour || localMinute !== schedule.minute) continue;
-			if (!schedule.daysOfWeek.includes(localDay)) continue;
+				// Prevent double-fire within the same calendar minute
+				if (schedule.lastFiredAt) {
+					const last = localTimeParts(schedule.timezone, schedule.lastFiredAt);
+					if (last.hour === hour && last.minute === minute && last.day === day) continue;
+				}
 
-			// Prevent double-fire in the same minute
-			if (schedule.lastFiredAt) {
-				const lastParts = new Intl.DateTimeFormat("en-US", {
-					timeZone: schedule.timezone,
-					hour: "numeric",
-					minute: "numeric",
-					hour12: false,
-					year: "numeric",
-					month: "numeric",
-					day: "numeric",
-				}).formatToParts(schedule.lastFiredAt);
-				const lastH = Number(lastParts.find((p) => p.type === "hour")?.value);
-				const lastM = Number(lastParts.find((p) => p.type === "minute")?.value);
-				const lastD = Number(lastParts.find((p) => p.type === "day")?.value);
-				const nowD = Number(
-					new Intl.DateTimeFormat("en-US", {
-						timeZone: schedule.timezone,
-						day: "numeric",
-					}).format(now),
-				);
-				if (lastH === localHour && lastM === localMinute && lastD === nowD) continue;
-			}
+				// Skip if relay is already in the desired state
+				if (schedule.relay.state === schedule.action) {
+					await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });
+					continue;
+				}
 
-			// Skip if relay is already in the desired state
-			if (schedule.relay.state === schedule.action) {
+				await db.relay.update({ where: { id: schedule.relay.id }, data: { state: schedule.action } });
+				pushRelayCommand(schedule.relay.deviceId, schedule.relay.id, schedule.relay.pin, schedule.action);
+				broadcastToDeviceSubscribers(schedule.relay.deviceId, {
+					type: "relay_update",
+					deviceId: schedule.relay.deviceId,
+					relayId: schedule.relay.id,
+					state: schedule.action,
+				});
 				await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });
+				console.log(`[SCHEDULE] Fired: "${schedule.label}" → relay ${schedule.relay.id} → ${schedule.action ? "ON" : "OFF"}`);
+			}
+		} catch (err) {
+			console.error("[SCHEDULE] Error:", err);
+		}
+	}, SCHEDULE_CHECK_INTERVAL);
+
+	console.log(`[SCHEDULE] Executor started — checking every ${SCHEDULE_CHECK_INTERVAL / 1000}s`);
+}
+
+// ─── WSS factory ─────────────────────────────────────────────
+
+export function createWss() {
+	const wss = new WebSocketServer({ noServer: true });
+
+	// WS-level heartbeat: detects dead connections that skip the TCP FIN
+	// (e.g. sudden Wi-Fi drops). Browser connections have no other keepalive.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const heartbeat = setInterval(() => {
+		for (const ws of wss.clients) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			if ((ws as any)._alive === false) {
+				ws.terminate();
 				continue;
 			}
-
-			// Update relay state in DB (desired state for heartbeat sync)
-			await db.relay.update({
-				where: { id: schedule.relay.id },
-				data: { state: schedule.action },
-			});
-
-			// Push to ESP32 if online
-			pushRelayCommand(schedule.relay.deviceId, schedule.relay.id, schedule.relay.pin, schedule.action);
-
-			// Broadcast to browser subscribers
-			broadcastToDeviceSubscribers(schedule.relay.deviceId, {
-				type: "relay_update",
-				deviceId: schedule.relay.deviceId,
-				relayId: schedule.relay.id,
-				state: schedule.action,
-			});
-
-			await db.relaySchedule.update({ where: { id: schedule.id }, data: { lastFiredAt: now } });
-			console.log(`[SCHEDULE] Fired: "${schedule.label}" → relay ${schedule.relay.id} → ${schedule.action ? "ON" : "OFF"}`);
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(ws as any)._alive = false;
+			ws.ping();
 		}
-	} catch (err) {
-		console.error("[SCHEDULE] Error:", err);
-	}
-}, SCHEDULE_CHECK_INTERVAL);
+	}, PING_INTERVAL_MS);
+	wss.on("close", () => clearInterval(heartbeat));
 
-console.log(`[SCHEDULE] Executor started — checking every ${SCHEDULE_CHECK_INTERVAL / 1000}s`);
+	wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(ws as any)._alive = true;
+		ws.on("pong", () => {
+			(ws as any)._alive = true;
+		}); // eslint-disable-line @typescript-eslint/no-explicit-any
+		const path = parseUrl(req.url ?? "/").pathname ?? "/";
+		if (path === "/browser") handleBrowserConnection(ws);
+		else handleDeviceConnection(ws);
+	});
 
-// ─── Graceful shutdown ────────────────────────────────────────
+	return wss;
+}
 
-process.on("SIGTERM", async () => {
-	console.log("[WS] Shutting down…");
-	await db.$disconnect();
-	httpServer.close(() => process.exit(0));
-});
+// ─── WSS attacher (used by server.ts in dev) ─────────────────
+
+export function attachWss(server: import("http").Server) {
+	const wss = createWss();
+
+	// Collect all upgrade listeners that are NOT ours (Next.js HMR, etc.)
+	// This list is dynamic — we intercept future server.on("upgrade") calls so that
+	// any listeners Next.js adds lazily (after app.prepare()) also go through here
+	// instead of directly onto the server, where they would fire after us and
+	// potentially call socket.destroy() on already-upgraded WS connections.
+	const externalUpgradeListeners: Function[] = []; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+
+	// Capture listeners already registered by app.prepare()
+	const alreadyRegistered = server.rawListeners("upgrade") as Function[]; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+	externalUpgradeListeners.push(...alreadyRegistered);
+	server.removeAllListeners("upgrade");
+
+	// Intercept future registrations for the "upgrade" event
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const _origOn = server.on.bind(server) as (...args: any[]) => typeof server;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(server as any).on = (server as any).addListener = function (event: string, listener: (...args: unknown[]) => void) {
+		if (event === "upgrade") {
+			externalUpgradeListeners.push(listener);
+			return this;
+		}
+		return _origOn(event, listener);
+	};
+
+	// Single combined upgrade router — our paths first, then delegate the rest
+	_origOn("upgrade", (req: IncomingMessage, socket: import("net").Socket, head: Buffer) => {
+		const path = parseUrl(req.url ?? "/").pathname ?? "/";
+		if (path === "/" || path === "/browser") {
+			wss.handleUpgrade(req, socket, head, (ws) => {
+				wss.emit("connection", ws, req);
+			});
+		} else {
+			for (const listener of externalUpgradeListeners) {
+				listener.call(server, req, socket, head);
+			}
+		}
+	});
+
+	return wss;
+}
+
+// ─── Standalone mode (Docker / npm run ws) ────────────────────
+
+const isMain = process.argv[1] === new URL(import.meta.url).pathname;
+if (isMain) {
+	const httpServer = createServer((req, res) => {
+		void wsRequestHandler(req, res);
+	});
+	const wss = attachWss(httpServer);
+	httpServer.listen(PORT, () => {
+		console.log(`[WS] SmartHUB server listening on port ${PORT}`);
+	});
+	process.on("SIGTERM", async () => {
+		console.log("[WS] Shutting down…");
+		wss.close();
+		await db.$disconnect();
+		httpServer.close(() => process.exit(0));
+	});
+}

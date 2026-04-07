@@ -19,6 +19,7 @@
 		"*.{ts,tsx,js,jsx,json,css,md,prisma}": "prettier --write"
 	},
 	"devDependencies": {
+		"concurrently": "^9.2.1",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
 		"prettier": "^3.8.1",

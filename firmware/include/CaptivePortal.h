@@ -59,10 +59,8 @@ static const char CONFIG_PAGE[] PROGMEM = R"rawhtml(
     </label>
 
     <div id="dev-fields" class="dev-fields %DEV_SHOW%">
-      <div class="row">
-        <div><label>API Port</label><input name="port" type="number" value="%PORT%" min="1" max="65535"></div>
-        <div><label>WS Port</label><input name="wsport" type="number" value="%WSPORT%" min="1" max="65535"></div>
-      </div>
+      <label>Port</label>
+      <input name="port" type="number" value="%PORT%" min="1" max="65535">
     </div>
 
     <div id="prod-info" class="prod-info" %PROD_HIDE%>
@@ -97,12 +95,17 @@ public:
     _saved = false;
     _cfg = &cfg;
 
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    char apSSID[32];
+    snprintf(apSSID, sizeof(apSSID), "%s%02X%02X%02X", AP_SSID_PREFIX, mac[3], mac[4], mac[5]);
+
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(
         IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
-    WiFi.softAP(AP_SSID, strlen(AP_PASSWORD) > 0 ? AP_PASSWORD : nullptr);
+    WiFi.softAP(apSSID, strlen(AP_PASSWORD) > 0 ? AP_PASSWORD : nullptr);
 
-    DBG_PORTAL("AP started — SSID: %s  IP: 192.168.4.1", AP_SSID);
+    DBG_PORTAL("AP started — SSID: %s  IP: 192.168.4.1", apSSID);
 
     _dns.start(53, "*", IPAddress(192, 168, 4, 1));
 
@@ -110,12 +113,9 @@ public:
                { _handleRoot(); });
     _server.on("/save", HTTP_POST, [this]()
                { _handleSave(); });
-    _server.on("/generate_204", HTTP_GET, [this]()
-               { _handleRoot(); });
-    _server.on("/hotspot-detect.html", HTTP_GET, [this]()
-               { _handleRoot(); });
+    // Captive portal detection — redirect to portal page so OS shows the popup
     _server.onNotFound([this]()
-                       { _handleRoot(); });
+                       { _handleCaptiveRedirect(); });
     _server.begin();
 
     DBG_PORTAL("Web server started — waiting for configuration…");
@@ -145,6 +145,13 @@ private:
   DeviceConfig *_cfg = nullptr;
   bool _saved = false;
 
+  void _handleCaptiveRedirect()
+  {
+    _server.sendHeader("Location", "http://192.168.4.1/", true);
+    _server.send(302, "text/plain", "");
+    DBG_PORTAL("Captive redirect → %s", _server.uri().c_str());
+  }
+
   void _handleRoot()
   {
     DBG_PORTAL("Serving config page to %s", _server.client().remoteIP().toString().c_str());
@@ -154,7 +161,6 @@ private:
     page.replace("%KEY%", _cfg->apiKey);
     page.replace("%HOST%", _cfg->serverHost);
     page.replace("%PORT%", String(_cfg->serverPort));
-    page.replace("%WSPORT%", String(_cfg->wsPort));
     page.replace("%DEVMODE%", _cfg->devMode ? "1" : "0");
     page.replace("%DEV_CHECKED%", _cfg->devMode ? "checked" : "");
     page.replace("%DEV_SHOW%", _cfg->devMode ? "show" : "");
@@ -181,22 +187,22 @@ private:
     if (_cfg->devMode)
     {
       _cfg->serverPort = _server.arg("port").toInt();
-      _cfg->wsPort = _server.arg("wsport").toInt();
       _cfg->serverSecure = false; // dev mode always uses plain WS
     }
     else
     {
       _cfg->serverPort = 443;
-      _cfg->wsPort = 443;
       _cfg->serverSecure = true; // production always uses WSS
     }
 
-    DBG_PORTAL("Config saved — ssid=%s  host=%s  apiPort=%d  wsPort=%d  tls=%d  devMode=%d  name=%s",
+    DBG_PORTAL("Config saved — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  name=%s",
                _cfg->wifiSSID.c_str(), _cfg->serverHost.c_str(),
-               _cfg->serverPort, _cfg->wsPort, _cfg->serverSecure,
+               _cfg->serverPort, _cfg->serverSecure,
                _cfg->devMode, _cfg->deviceName.c_str());
 
     Storage::save(*_cfg);
+    // Also persist primary network in new wn0 slot so connectWiFi() logging is consistent
+    // (wn0 is never sent to the server — it lives in NVS only)
 
     _server.send(200, "text/html; charset=utf-8",
                  "<html><head><meta charset='UTF-8'></head>"

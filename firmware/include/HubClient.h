@@ -1,6 +1,8 @@
 #pragma once
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <HTTPUpdate.h>
+#include <WiFiClientSecure.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include "Storage.h"
@@ -93,8 +95,7 @@ public:
     // ── WebSocket connect ─────────────────────────────────────
     void connectWebSocket()
     {
-        // Dev mode: use separate wsPort with WS. Production: use serverPort (443) with WSS.
-        uint16_t port = _cfg->devMode ? _cfg->wsPort : _cfg->serverPort;
+        uint16_t port = _cfg->serverPort;
         DBG_WS("Connecting to %s:%d (devMode=%d)", _cfg->serverHost.c_str(), port, _cfg->devMode);
 
         _resetState();
@@ -180,7 +181,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.2.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.3.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -348,6 +349,37 @@ private:
                 swCount++;
             }
             _switches->applyServerConfig(swBuf, swCount);
+
+            // Apply server-managed WiFi networks (wn1–wn4) if provided
+            JsonArray wnArr = doc["wifiNetworks"].as<JsonArray>();
+            if (!wnArr.isNull())
+            {
+                WifiNetworkEntry wnBuf[MAX_WIFI_NETWORKS];
+                uint8_t wnCount = 0;
+                for (JsonObject wn : wnArr)
+                {
+                    if (wnCount >= MAX_WIFI_NETWORKS) break;
+                    wnBuf[wnCount].ssid = wn["ssid"].as<String>();
+                    wnBuf[wnCount].password = wn["password"].as<String>();
+                    wnCount++;
+                }
+                Storage::saveExtraWifi(wnBuf, wnCount);
+                _cfg->extraWifiCount = wnCount;
+                for (uint8_t i = 0; i < wnCount; i++) _cfg->extraWifi[i] = wnBuf[i];
+                DBG_WS("auth_ok — %d extra WiFi network(s) saved", wnCount);
+            }
+
+            // Apply server config override if provided
+            JsonObject scObj = doc["serverConfig"].as<JsonObject>();
+            if (!scObj.isNull() && scObj["host"].as<String>().length() > 0)
+            {
+                String host = scObj["host"].as<String>();
+                uint16_t port = scObj["port"] | _cfg->serverPort;
+                bool tls = scObj["tls"] | _cfg->serverSecure;
+                Storage::saveServerConfig(host, port, tls);
+                DBG_WS("auth_ok — server config saved: %s:%d tls=%d", host.c_str(), port, tls);
+            }
+
             DBG_WS("auth_ok — %d relay(s)  %d switch(es)", rCount, swCount);
         }
 
@@ -526,9 +558,127 @@ private:
             DBG_WS("switch_delete: id=%s", switchId.c_str());
         }
 
+        else if (strcmp(type, "wifi_config") == 0)
+        {
+            // Server pushed updated extra WiFi list — save to NVS
+            JsonArray arr = doc["networks"].as<JsonArray>();
+            WifiNetworkEntry wnBuf[MAX_WIFI_NETWORKS];
+            uint8_t wnCount = 0;
+            for (JsonObject wn : arr)
+            {
+                if (wnCount >= MAX_WIFI_NETWORKS) break;
+                wnBuf[wnCount].ssid = wn["ssid"].as<String>();
+                wnBuf[wnCount].password = wn["password"].as<String>();
+                wnCount++;
+            }
+            Storage::saveExtraWifi(wnBuf, wnCount);
+            _cfg->extraWifiCount = wnCount;
+            for (uint8_t i = 0; i < wnCount; i++) _cfg->extraWifi[i] = wnBuf[i];
+            DBG_WS("wifi_config: %d network(s) saved", wnCount);
+        }
+
+        else if (strcmp(type, "server_config") == 0)
+        {
+            // Server pushed new host/port/TLS — save to NVS, applied on next reboot
+            String host = doc["host"] | "";
+            uint16_t port = doc["port"] | _cfg->serverPort;
+            bool tls = doc["tls"] | _cfg->serverSecure;
+            if (host.length() > 0)
+            {
+                Storage::saveServerConfig(host, port, tls);
+                DBG_WS("server_config: %s:%d tls=%d saved — takes effect on reconnect", host.c_str(), port, tls);
+            }
+        }
+
+        else if (strcmp(type, "ota_update") == 0)
+        {
+            // Server triggered OTA — download and flash firmware from given URL
+            String url = doc["url"] | "";
+            if (url.length() == 0)
+            {
+                DBG_ERR("ota_update: missing url");
+                return;
+            }
+            DBG_WS("ota_update: url=%s", url.c_str());
+            _performOta(url);
+        }
+
         else
         {
             DBG_WARN("Unknown type: %s", type);
+        }
+    }
+
+    // ── OTA firmware update ───────────────────────────────────
+    void _sendOtaProgress(uint8_t percent)
+    {
+        JsonDocument doc;
+        doc["type"] = "ota_progress";
+        doc["percent"] = percent;
+        _send(doc);
+        _ws.loop(); // flush immediately
+    }
+
+    void _sendOtaResult(bool success, const String &error = "")
+    {
+        JsonDocument doc;
+        doc["type"] = "ota_result";
+        doc["success"] = success;
+        if (!success && error.length() > 0) doc["error"] = error;
+        _send(doc);
+        _ws.loop();
+    }
+
+    void _performOta(const String &url)
+    {
+        _sendOtaProgress(0);
+
+        // Use secure client (skip cert validation — acceptable for self-hosted IoT)
+        WiFiClientSecure secureClient;
+        secureClient.setInsecure();
+
+        // Use plain client for http URLs
+        WiFiClient plainClient;
+        bool isHttps = url.startsWith("https://");
+
+        httpUpdate.rebootOnUpdate(false); // send result before rebooting
+
+        httpUpdate.onProgress([this](int cur, int total) {
+            if (total > 0)
+            {
+                uint8_t pct = (uint8_t)(100 * cur / total);
+                static uint8_t lastPct = 0;
+                if (pct != lastPct) // only send on change
+                {
+                    lastPct = pct;
+                    _sendOtaProgress(pct);
+                }
+            }
+        });
+
+        t_httpUpdate_return ret;
+        if (isHttps)
+            ret = httpUpdate.update(secureClient, url);
+        else
+            ret = httpUpdate.update(plainClient, url);
+
+        switch (ret)
+        {
+        case HTTP_UPDATE_FAILED:
+            DBG_ERR("OTA failed: %s", httpUpdate.getLastErrorString().c_str());
+            _sendOtaResult(false, httpUpdate.getLastErrorString());
+            break;
+        case HTTP_UPDATE_NO_UPDATES:
+            DBG_WS("OTA: no update available");
+            _sendOtaResult(false, "No update");
+            break;
+        case HTTP_UPDATE_OK:
+            DBG_WS("OTA: flash complete — rebooting");
+            _sendOtaProgress(100);
+            _sendOtaResult(true);
+            delay(500);
+            ESP.restart();
+            break;
         }
     }
 };

@@ -2,7 +2,33 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Trash2, Plus, Save, X, Loader2, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio, Wifi, WifiOff, ServerCrash, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+	ArrowLeft,
+	Pencil,
+	Trash2,
+	Plus,
+	Save,
+	X,
+	Loader2,
+	Lightbulb,
+	Fan,
+	Plug,
+	Wind,
+	Tv,
+	Coffee,
+	Thermometer,
+	Radio,
+	Wifi,
+	WifiOff,
+	ServerCrash,
+	CheckCircle2,
+	AlertCircle,
+	GitBranch,
+	Upload,
+	Zap,
+	Lock,
+	LockOpen,
+} from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -16,6 +42,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../../../globals.config";
+import { PinoutEditor } from "~/components/dashboard/PinoutEditor";
 
 const RELAY_ICONS: Record<string, React.ElementType> = {
 	lightbulb: Lightbulb,
@@ -87,14 +114,32 @@ export default function DeviceDetailPage() {
 	const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = checking
 	const pingDevice = api.device.pingDevice.useMutation();
 
-	// Ping device on load to determine online status
+	// Ping device on load — retry up to 3 times if offline (device may still be connecting)
 	useEffect(() => {
 		if (!device) return;
 		setIsOnline(null);
-		pingDevice.mutateAsync({ deviceId: id }).then(
-			(r) => setIsOnline(r.online),
-			() => setIsOnline(false),
-		);
+		let cancelled = false;
+
+		const ping = async (attemptsLeft: number) => {
+			try {
+				const r = await pingDevice.mutateAsync({ deviceId: id });
+				if (cancelled) return;
+				if (r.online || attemptsLeft <= 1) {
+					setIsOnline(r.online);
+				} else {
+					setTimeout(() => {
+						if (!cancelled) void ping(attemptsLeft - 1);
+					}, 3000);
+				}
+			} catch {
+				if (!cancelled) setIsOnline(false);
+			}
+		};
+
+		void ping(3);
+		return () => {
+			cancelled = true;
+		};
 	}, [device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// device_update from WS = device just authenticated → it's online
@@ -250,6 +295,95 @@ export default function DeviceDetailPage() {
 		},
 	});
 
+	// OTA WS listeners
+	const { onOtaProgress, onOtaResult } = useDeviceSocket();
+	useEffect(
+		() =>
+			onOtaProgress((msg) => {
+				if (msg.deviceId !== id) return;
+				setOtaUploadStatus("flashing");
+				setOtaProgress(msg.percent);
+			}),
+		[onOtaProgress, id],
+	); // eslint-disable-line react-hooks/exhaustive-deps
+	useEffect(
+		() =>
+			onOtaResult((msg) => {
+				if (msg.deviceId !== id) return;
+				if (msg.success) {
+					setOtaUploadStatus("success");
+					setOtaProgress(100);
+				} else {
+					setOtaUploadStatus("failed");
+					setOtaError(msg.error ?? "Unknown error");
+				}
+			}),
+		[onOtaResult, id],
+	); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// WiFi mutations
+	const addWifi = api.device.addWifi.useMutation({
+		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
+			setAddingWifi(false);
+			setNewWifi({ ssid: "", password: "" });
+		},
+	});
+	const removeWifi = api.device.removeWifi.useMutation({
+		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
+		},
+	});
+
+	// Server config mutation
+	const updateServerConfig = api.device.updateServerConfig.useMutation({
+		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
+			setEditingServerCfg(false);
+		},
+	});
+
+	// OTA mutation
+	const triggerOta = api.device.triggerOta.useMutation({
+		onSuccess: () => {
+			setOtaUploadStatus("flashing");
+			setOtaProgress(0);
+		},
+		onError: (err) => {
+			setOtaUploadStatus("failed");
+			setOtaError(err.message);
+		},
+	});
+
+	async function handleOtaUpload() {
+		if (!otaFile) return;
+		setOtaUploadStatus("uploading");
+		const formData = new FormData();
+		formData.append("firmware", otaFile);
+		try {
+			const res = await fetch(`/api/device/${id}/firmware`, { method: "POST", body: formData });
+			if (!res.ok) {
+				const err = ((await res.json()) as { error?: string }).error ?? "Upload failed";
+				setOtaUploadStatus("failed");
+				setOtaError(err);
+			} else {
+				setOtaUploadStatus("ready");
+			}
+		} catch {
+			setOtaUploadStatus("failed");
+			setOtaError("Upload failed");
+		}
+	}
+
+	const startEditServerCfg = () => {
+		setServerCfg({
+			host: device?.cfgServerHost ?? "",
+			port: device?.cfgServerPort ?? 4001,
+			tls: device?.cfgServerTLS ?? false,
+		});
+		setEditingServerCfg(true);
+	};
+
 	// ── Switch state & mutations ────────────────────────────
 	const { data: switchList = [] } = api.switch.list.useQuery({ deviceId: id });
 	const { data: allRelays = [] } = api.switch.listAllRelays.useQuery();
@@ -283,6 +417,21 @@ export default function DeviceDetailPage() {
 	// Delete confirm
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
 	const [deleteRelayId, setDeleteRelayId] = useState<string | null>(null);
+
+	// ── WiFi networks ───────────────────────────────────────
+	const [addingWifi, setAddingWifi] = useState(false);
+	const [newWifi, setNewWifi] = useState({ ssid: "", password: "" });
+
+	// ── Server config ───────────────────────────────────────
+	const [editingServerCfg, setEditingServerCfg] = useState(false);
+	const [serverCfg, setServerCfg] = useState({ host: "", port: 4001, tls: false });
+
+	// ── OTA ─────────────────────────────────────────────────
+	const [otaFile, setOtaFile] = useState<File | null>(null);
+	const [otaUploadStatus, setOtaUploadStatus] = useState<"idle" | "uploading" | "ready" | "triggering" | "flashing" | "success" | "failed">("idle");
+	const [otaProgress, setOtaProgress] = useState(0);
+	const [otaError, setOtaError] = useState<string | null>(null);
+	const otaFileInputRef = useRef<HTMLInputElement>(null);
 
 	if (isLoading)
 		return (
@@ -391,18 +540,25 @@ export default function DeviceDetailPage() {
 				))}
 			</div>
 
-			{/* Tabs: Relays + Switches + Config */}
+			{/* Tabs: Relays + Switches + Wiring + Config */}
 			<Tabs defaultValue="relays">
 				<TabsList className="w-full">
 					<TabsTrigger value="relays">
 						Relays ({device.relays.length}/{appConfig.maxRelaysPerDevice})
 					</TabsTrigger>
 					<TabsTrigger value="switches">Switches ({switchList.length})</TabsTrigger>
-					<TabsTrigger value="config">Device Config</TabsTrigger>
+					<TabsTrigger value="wiring" className="flex items-center gap-1.5">
+						<GitBranch className="w-3 h-3" />
+						Wiring
+					</TabsTrigger>
+					<TabsTrigger value="config">Config</TabsTrigger>
 				</TabsList>
 
 				{/* RELAYS TAB */}
-				<TabsContent value="relays" className="mt-4">
+				<TabsContent value="relays" className="mt-4 space-y-3">
+					<p className="text-xs text-muted-foreground">
+						Relays control output GPIO pins to switch connected devices on or off. Pins 4, 5, 13–27, 32, and 33 support both input and output and are ideal for relays.
+					</p>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 						{device.relays.map((relay: DeviceGetOutput["relays"][number]) => {
 							const IconComp = RELAY_ICONS[relay.icon] ?? Plug;
@@ -792,8 +948,14 @@ export default function DeviceDetailPage() {
 						))}
 				</TabsContent>
 
+				{/* WIRING TAB */}
+				<TabsContent value="wiring" className="mt-4">
+					<PinoutEditor deviceId={id} relays={device.relays} switches={switchList} allRelays={allRelays} isOwner={isOwner} />
+				</TabsContent>
+
 				{/* CONFIG TAB */}
-				<TabsContent value="config" className="mt-4">
+				<TabsContent value="config" className="mt-4 space-y-4">
+					{/* Device info */}
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-base">Device Information</CardTitle>
@@ -817,6 +979,270 @@ export default function DeviceDetailPage() {
 							</div>
 						</CardContent>
 					</Card>
+
+					{/* WiFi networks */}
+					{isOwner && (
+						<Card>
+							<CardHeader>
+								<CardTitle className="text-base flex items-center gap-2">
+									<Wifi className="w-4 h-4" />
+									WiFi Networks
+								</CardTitle>
+								<CardDescription>Extra networks the ESP32 tries if the primary (captive portal) fails — pushed live when device is online</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-3">
+								{device.wifiNetworks.length === 0 && !addingWifi && <p className="text-sm text-muted-foreground">No extra networks configured.</p>}
+								{device.wifiNetworks.map((nw, i) => (
+									<div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+										<div>
+											<p className="text-sm font-medium">{nw.ssid}</p>
+											<p className="text-xs text-muted-foreground">•••••••• (password saved)</p>
+										</div>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="text-destructive hover:text-destructive h-7"
+											onClick={() => removeWifi.mutate({ deviceId: id, index: i })}
+											disabled={removeWifi.isPending}
+										>
+											<Trash2 className="w-3.5 h-3.5" />
+										</Button>
+									</div>
+								))}
+								{addingWifi ? (
+									<div className="space-y-2 pt-1">
+										<Input placeholder="SSID" value={newWifi.ssid} onChange={(e) => setNewWifi((w) => ({ ...w, ssid: e.target.value }))} className="h-8 text-sm" autoFocus />
+										<Input
+											placeholder="Password (leave empty for open)"
+											type="password"
+											value={newWifi.password}
+											onChange={(e) => setNewWifi((w) => ({ ...w, password: e.target.value }))}
+											className="h-8 text-sm"
+										/>
+										<div className="flex gap-1.5">
+											<Button size="sm" className="h-7 text-xs" onClick={() => addWifi.mutate({ deviceId: id, ...newWifi })} disabled={addWifi.isPending || !newWifi.ssid}>
+												{addWifi.isPending ? (
+													<Loader2 className="w-3 h-3 animate-spin" />
+												) : (
+													<>
+														<Save className="w-3 h-3" /> Save
+													</>
+												)}
+											</Button>
+											<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingWifi(false)}>
+												Cancel
+											</Button>
+										</div>
+									</div>
+								) : (
+									<Button variant="outline" size="sm" className="w-full mt-1" onClick={() => setAddingWifi(true)} disabled={device.wifiNetworks.length >= 4}>
+										<Plus className="w-3.5 h-3.5" /> Add Network
+										{device.wifiNetworks.length >= 4 && <span className="ml-2 text-muted-foreground">(max 4)</span>}
+									</Button>
+								)}
+							</CardContent>
+						</Card>
+					)}
+
+					{/* Server configuration */}
+					{isOwner && (
+						<Card>
+							<CardHeader>
+								<div className="flex items-start justify-between">
+									<div>
+										<CardTitle className="text-base">Server Configuration</CardTitle>
+										<CardDescription>Host, port, and TLS setting pushed to the device</CardDescription>
+									</div>
+									{!editingServerCfg && (
+										<Button variant="outline" size="sm" onClick={startEditServerCfg}>
+											<Pencil className="w-3.5 h-3.5" /> Edit
+										</Button>
+									)}
+								</div>
+							</CardHeader>
+							<CardContent>
+								{editingServerCfg ? (
+									<div className="space-y-3">
+										<div className="flex gap-2">
+											<div className="flex-1">
+												<Label className="text-[10px]">Host</Label>
+												<Input
+													value={serverCfg.host}
+													onChange={(e) => setServerCfg((c) => ({ ...c, host: e.target.value }))}
+													placeholder="smarthub.example.com"
+													className="h-8 text-sm mt-0.5"
+												/>
+											</div>
+											<div className="w-24">
+												<Label className="text-[10px]">Port</Label>
+												<Input
+													type="number"
+													value={serverCfg.port}
+													onChange={(e) => setServerCfg((c) => ({ ...c, port: Number(e.target.value) }))}
+													className="h-8 text-sm mt-0.5"
+													min={1}
+													max={65535}
+												/>
+											</div>
+										</div>
+										<div className="flex items-center gap-2">
+											<Switch checked={serverCfg.tls} onCheckedChange={(v) => setServerCfg((c) => ({ ...c, tls: v }))} />
+											<Label className="text-sm flex items-center gap-1.5">
+												{serverCfg.tls ? <Lock className="w-3.5 h-3.5 text-primary" /> : <LockOpen className="w-3.5 h-3.5 text-muted-foreground" />}
+												{serverCfg.tls ? "TLS enabled (WSS)" : "TLS disabled (WS)"}
+											</Label>
+										</div>
+										<div className="flex gap-1.5">
+											<Button
+												size="sm"
+												className="h-7 text-xs"
+												onClick={() => updateServerConfig.mutate({ deviceId: id, ...serverCfg })}
+												disabled={updateServerConfig.isPending || !serverCfg.host}
+											>
+												{updateServerConfig.isPending ? (
+													<Loader2 className="w-3 h-3 animate-spin" />
+												) : (
+													<>
+														<Save className="w-3 h-3" /> Save
+													</>
+												)}
+											</Button>
+											<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingServerCfg(false)}>
+												Cancel
+											</Button>
+										</div>
+									</div>
+								) : (
+									<div className="space-y-2">
+										{device.cfgServerHost ? (
+											<>
+												<div className="flex gap-2 text-sm">
+													<span className="text-muted-foreground min-w-[60px]">Host</span>
+													<span className="mono">{device.cfgServerHost}</span>
+												</div>
+												<div className="flex gap-2 text-sm">
+													<span className="text-muted-foreground min-w-[60px]">Port</span>
+													<span className="mono">{device.cfgServerPort}</span>
+												</div>
+												<div className="flex gap-2 text-sm">
+													<span className="text-muted-foreground min-w-[60px]">TLS</span>
+													<span className="flex items-center gap-1">
+														{device.cfgServerTLS ? <Lock className="w-3.5 h-3.5 text-primary" /> : <LockOpen className="w-3.5 h-3.5 text-muted-foreground" />}
+														{device.cfgServerTLS ? "Enabled" : "Disabled"}
+													</span>
+												</div>
+											</>
+										) : (
+											<p className="text-sm text-muted-foreground">Not configured — device uses captive portal settings.</p>
+										)}
+									</div>
+								)}
+							</CardContent>
+						</Card>
+					)}
+
+					{/* OTA firmware update */}
+					{isOwner && (
+						<Card>
+							<CardHeader>
+								<CardTitle className="text-base flex items-center gap-2">
+									<Zap className="w-4 h-4" />
+									Firmware Update (OTA)
+								</CardTitle>
+								<CardDescription>Upload a .bin and push it over-the-air — device will restart after flashing</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-4">
+								{/* Upload section */}
+								<div className="space-y-2">
+									<Label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">1. Upload firmware file</Label>
+									<div className="flex gap-2 items-center">
+										<input
+											ref={otaFileInputRef}
+											type="file"
+											accept=".bin"
+											className="hidden"
+											onChange={(e) => {
+												setOtaFile(e.target.files?.[0] ?? null);
+												setOtaUploadStatus("idle");
+												setOtaError(null);
+											}}
+										/>
+										<Button variant="outline" size="sm" onClick={() => otaFileInputRef.current?.click()}>
+											<Upload className="w-3.5 h-3.5" /> {otaFile ? otaFile.name : "Choose .bin file"}
+										</Button>
+										{otaFile && otaUploadStatus !== "ready" && otaUploadStatus !== "flashing" && otaUploadStatus !== "success" && (
+											<Button size="sm" onClick={handleOtaUpload} disabled={otaUploadStatus === "uploading"}>
+												{otaUploadStatus === "uploading" ? (
+													<>
+														<Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+													</>
+												) : (
+													"Upload"
+												)}
+											</Button>
+										)}
+										{otaUploadStatus === "ready" && (
+											<span className="text-xs text-primary flex items-center gap-1">
+												<CheckCircle2 className="w-3.5 h-3.5" /> Uploaded
+											</span>
+										)}
+									</div>
+									{otaFile && <p className="text-xs text-muted-foreground">{(otaFile.size / 1024).toFixed(1)} KB</p>}
+								</div>
+
+								{/* Trigger section */}
+								<div className="space-y-2">
+									<Label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">2. Push to device</Label>
+									<Button
+										size="sm"
+										onClick={() => {
+											setOtaError(null);
+											triggerOta.mutate({ deviceId: id });
+										}}
+										disabled={otaUploadStatus !== "ready" || !isOnline || triggerOta.isPending}
+									>
+										{triggerOta.isPending ? (
+											<>
+												<Loader2 className="w-3 h-3 animate-spin" /> Sending…
+											</>
+										) : (
+											<>
+												<Zap className="w-3.5 h-3.5" /> Push Update
+											</>
+										)}
+									</Button>
+									{!isOnline && <p className="text-xs text-muted-foreground">Device must be online to receive OTA.</p>}
+								</div>
+
+								{/* Progress */}
+								{(otaUploadStatus === "flashing" || otaUploadStatus === "success") && (
+									<div className="space-y-1.5">
+										<div className="flex items-center justify-between text-xs">
+											<span className="text-muted-foreground">{otaUploadStatus === "success" ? "Complete" : "Flashing…"}</span>
+											<span className="text-foreground font-medium">{otaProgress}%</span>
+										</div>
+										<div className="h-2 rounded-full bg-muted overflow-hidden">
+											<div
+												className={cn("h-full rounded-full transition-all duration-300", otaUploadStatus === "success" ? "bg-primary" : "bg-amber-500")}
+												style={{ width: `${otaProgress}%` }}
+											/>
+										</div>
+										{otaUploadStatus === "success" && (
+											<p className="text-xs text-primary flex items-center gap-1">
+												<CheckCircle2 className="w-3.5 h-3.5" /> Flashed — device is rebooting
+											</p>
+										)}
+									</div>
+								)}
+
+								{otaUploadStatus === "failed" && (
+									<p className="text-xs text-destructive flex items-center gap-1">
+										<AlertCircle className="w-3.5 h-3.5" /> {otaError ?? "Failed"}
+									</p>
+								)}
+							</CardContent>
+						</Card>
+					)}
 				</TabsContent>
 			</Tabs>
 

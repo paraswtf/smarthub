@@ -5,10 +5,18 @@
 #include "Debug.h"
 #include "SwitchTypes.h"
 
+struct WifiNetworkEntry
+{
+    String ssid;
+    String password;
+};
+
 struct DeviceConfig
 {
     String wifiSSID;
     String wifiPassword;
+    WifiNetworkEntry extraWifi[MAX_WIFI_NETWORKS]; // server-managed (wn1–wn4)
+    uint8_t extraWifiCount;
     String deviceName;
     String apiKey;
     String serverHost;
@@ -16,7 +24,6 @@ struct DeviceConfig
     bool serverSecure;
     String deviceId;
     bool devMode;
-    uint16_t wsPort; // separate WS port (dev mode only)
 };
 
 struct RelayConfig
@@ -44,7 +51,15 @@ public:
         cfg.serverSecure = prefs.getBool("srv_tls", false);
         cfg.deviceId = prefs.getString("dev_id", "");
         cfg.devMode = prefs.getBool("dev_mode", false);
-        cfg.wsPort = prefs.getUShort("ws_port", 4001);
+
+        // Load server-managed extra WiFi networks (wn1–wn4)
+        cfg.extraWifiCount = prefs.getUChar("wn_cnt", 0);
+        for (uint8_t i = 0; i < cfg.extraWifiCount && i < MAX_WIFI_NETWORKS; i++)
+        {
+            String p = "wn" + String(i + 1) + "_";
+            cfg.extraWifi[i].ssid = prefs.getString((p + "ssid").c_str(), "");
+            cfg.extraWifi[i].password = prefs.getString((p + "pass").c_str(), "");
+        }
 
         prefs.end();
 
@@ -57,9 +72,9 @@ public:
 
         bool valid = cfg.wifiSSID.length() > 0 && cfg.apiKey.length() > 0 && cfg.serverHost.length() > 0;
 
-        DBG_STORAGE("load() — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  wsPort=%d  deviceId=%s  valid=%d",
+        DBG_STORAGE("load() — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  deviceId=%s  valid=%d",
                     cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
-                    cfg.serverSecure, cfg.devMode, cfg.wsPort, cfg.deviceId.c_str(), valid);
+                    cfg.serverSecure, cfg.devMode, cfg.deviceId.c_str(), valid);
 
         return valid;
     }
@@ -77,12 +92,11 @@ public:
         prefs.putUShort("srv_port", cfg.serverPort);
         prefs.putBool("srv_tls", cfg.serverSecure);
         prefs.putBool("dev_mode", cfg.devMode);
-        prefs.putUShort("ws_port", cfg.wsPort);
 
         prefs.end();
-        DBG_STORAGE("save() — ssid=%s  host=%s:%d  tls=%d  devMode=%d  wsPort=%d",
+        DBG_STORAGE("save() — ssid=%s  host=%s:%d  tls=%d  devMode=%d",
                     cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
-                    cfg.serverSecure, cfg.devMode, cfg.wsPort);
+                    cfg.serverSecure, cfg.devMode);
     }
 
     static void saveDeviceId(const String &id)
@@ -202,5 +216,35 @@ public:
         }
         prefs.end();
         return count;
+    }
+
+    // ── Server-managed WiFi networks (wn1–wn4) ──────────────
+    static void saveExtraWifi(const WifiNetworkEntry networks[], uint8_t count)
+    {
+        if (count > MAX_WIFI_NETWORKS) count = MAX_WIFI_NETWORKS;
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        prefs.putUChar("wn_cnt", count);
+        for (uint8_t i = 0; i < count; i++)
+        {
+            String p = "wn" + String(i + 1) + "_";
+            prefs.putString((p + "ssid").c_str(), networks[i].ssid);
+            prefs.putString((p + "pass").c_str(), networks[i].password);
+        }
+        prefs.end();
+        DBG_STORAGE("saveExtraWifi() — %d network(s)", count);
+    }
+
+    // ── Server config override ────────────────────────────────
+    // Saves host/port/TLS — applied on next boot (or immediately if devMode permits).
+    static void saveServerConfig(const String &host, uint16_t port, bool tls)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        prefs.putString("srv_host", host);
+        prefs.putUShort("srv_port", port);
+        prefs.putBool("srv_tls", tls);
+        prefs.end();
+        DBG_STORAGE("saveServerConfig() — host=%s port=%d tls=%d", host.c_str(), port, tls);
     }
 };

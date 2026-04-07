@@ -6,7 +6,8 @@
 #define DEBUG_MODE 1
 
 // ─── Captive-portal AP settings ──────────────────────────────
-#define AP_SSID "ESP-Hub-Setup"
+// AP_SSID is a prefix — CaptivePortal appends the last 3 MAC bytes (e.g. "SmartHUB-A1B2C3")
+#define AP_SSID_PREFIX "SmartHUB-"
 #define AP_PASSWORD "" // open network
 #define AP_IP "192.168.4.1"
 #define AP_GATEWAY "192.168.4.1"
@@ -20,6 +21,9 @@
 
 // ─── Max relays ───────────────────────────────────────────────
 #define MAX_RELAYS 8
+
+// ─── Max server-managed WiFi networks (wn1–wn4, in addition to captive-portal wn0) ──
+#define MAX_WIFI_NETWORKS 4
 
 // ─── NVS namespace ────────────────────────────────────────────
 #define NVS_NAMESPACE "esp_hub"
