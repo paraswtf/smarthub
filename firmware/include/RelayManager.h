@@ -88,7 +88,7 @@ public:
         if (i >= count || relays[i].pin == 0)
             return;
         if (_isOutputCapable(relays[i].pin))
-            digitalWrite(relays[i].pin, HIGH); // active-LOW → OFF
+            digitalWrite(relays[i].pin, relays[i].activeLow ? HIGH : LOW); // drive to OFF level
         pinMode(relays[i].pin, INPUT);
     }
 
@@ -169,7 +169,9 @@ private:
             return;
         if (!_isOutputCapable(relays[i].pin))
             return;
-        // Active-LOW: relay ON = GPIO LOW, relay OFF = GPIO HIGH
-        digitalWrite(relays[i].pin, relays[i].state ? LOW : HIGH);
+        // activeLow=true  → ON=LOW,  OFF=HIGH (most relay modules)
+        // activeLow=false → ON=HIGH, OFF=LOW  (bare relay / active-HIGH driver)
+        bool gpioLevel = relays[i].activeLow ? !relays[i].state : relays[i].state;
+        digitalWrite(relays[i].pin, gpioLevel ? HIGH : LOW);
     }
 };

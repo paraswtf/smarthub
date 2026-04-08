@@ -183,7 +183,7 @@ export default function DeviceDetailPage() {
 
 	// Add relay state
 	const [addingRelay, setAddingRelay] = useState(false);
-	const [newRelay, setNewRelay] = useState({ pin: 2, label: "", icon: "plug" });
+	const [newRelay, setNewRelay] = useState({ pin: 2, label: "", icon: "plug", activeLow: true });
 
 	// Edit relay state
 	const [editingRelayId, setEditingRelayId] = useState<string | null>(null);
@@ -729,6 +729,17 @@ export default function DeviceDetailPage() {
 													))}
 												</select>
 											</div>
+										</div>
+										<div>
+											<Label className="text-[10px]">Trigger logic</Label>
+											<select
+												value={newRelay.activeLow ? "low" : "high"}
+												onChange={(e) => setNewRelay((r) => ({ ...r, activeLow: e.target.value === "low" }))}
+												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+											>
+												<option value="low">Active-LOW (most relay modules)</option>
+												<option value="high">Active-HIGH (bare relay / custom driver)</option>
+											</select>
 										</div>
 										<div className="flex gap-1.5">
 											<Button

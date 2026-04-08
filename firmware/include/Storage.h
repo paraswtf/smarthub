@@ -32,6 +32,7 @@ struct RelayConfig
     uint8_t pin;
     String label;
     bool state;
+    bool activeLow = true; // true = active-LOW (most relay modules); false = active-HIGH
 };
 
 class Storage
@@ -120,6 +121,7 @@ public:
             prefs.putUChar((p + "pin").c_str(), relays[i].pin);
             prefs.putString((p + "lbl").c_str(), relays[i].label);
             prefs.putBool((p + "st").c_str(), relays[i].state);
+            prefs.putBool((p + "al").c_str(), relays[i].activeLow);
         }
         prefs.end();
         DBG_STORAGE("saveRelays() - %d relay(s)", count);
@@ -149,8 +151,9 @@ public:
             relays[i].pin = prefs.getUChar((p + "pin").c_str(), 0);
             relays[i].label = prefs.getString((p + "lbl").c_str(), "Relay");
             relays[i].state = prefs.getBool((p + "st").c_str(), false);
-            DBG_STORAGE("  relay[%d] pin=%-2d state=%d label=%s",
-                        i, relays[i].pin, relays[i].state, relays[i].label.c_str());
+            relays[i].activeLow = prefs.getBool((p + "al").c_str(), true);
+            DBG_STORAGE("  relay[%d] pin=%-2d state=%d activeLow=%d label=%s",
+                        i, relays[i].pin, relays[i].state, relays[i].activeLow, relays[i].label.c_str());
         }
         prefs.end();
         return count;
