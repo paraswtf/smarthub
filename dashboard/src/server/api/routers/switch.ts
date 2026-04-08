@@ -3,7 +3,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDeviceAccess } from "~/server/api/lib/permissions";
 
-const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY — ideal for switches
+const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39]; // these are INPUT-ONLY - ideal for switches
 
 function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof import("~/server/db").db }) {
 	return ctx.db.device.findFirst({
@@ -22,7 +22,7 @@ export const switchRouter = createTRPCRouter({
 		});
 	}),
 
-	/** List all relays across all user devices — for cross-device linking */
+	/** List all relays across all user devices - for cross-device linking */
 	listAllRelays: protectedProcedure.query(async ({ ctx }) => {
 		const apiKeys = await ctx.db.apiKey.findMany({
 			where: { userId: ctx.session.user.id, active: true },
@@ -77,7 +77,7 @@ export const switchRouter = createTRPCRouter({
 					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
-				/* offline — picks up on reconnect */
+				/* offline - picks up on reconnect */
 			}
 
 			return sw;

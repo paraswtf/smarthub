@@ -31,7 +31,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { parse as parseUrl } from "url";
 import { randomBytes } from "crypto";
 
-// Singleton — survives Next.js HMR reloads and prevents connection pool accumulation
+// Singleton - survives Next.js HMR reloads and prevents connection pool accumulation
 const globalForWs = globalThis as unknown as { wsDb: PrismaClient | undefined };
 const db = globalForWs.wsDb ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForWs.wsDb = db;
@@ -119,7 +119,7 @@ function broadcastToDeviceSubscribers(deviceId: string, payload: object) {
 	for (const userId of subscribers) broadcastToUser(userId, payload);
 }
 
-/** Build the subscriber set for a device (owner + relay/room/home shared users) — single query */
+/** Build the subscriber set for a device (owner + relay/room/home shared users) - single query */
 async function buildDeviceSubscribers(deviceId: string): Promise<Set<string>> {
 	const device = await db.device.findFirst({
 		where: { id: deviceId },
@@ -346,7 +346,7 @@ function handleBrowserConnection(ws: WebSocket) {
 				subscribedUserId = user.id;
 				if (!browserSockets.has(user.id)) browserSockets.set(user.id, new Set());
 				browserSockets.get(user.id)!.add(ws);
-				console.log(`[WS] Browser subscribed: userId=${user.id} — total: ${browserSockets.get(user.id)!.size}`);
+				console.log(`[WS] Browser subscribed: userId=${user.id} - total: ${browserSockets.get(user.id)!.size}`);
 			}
 		} catch (err) {
 			console.error("[WS] Browser message handler error:", err);
@@ -434,7 +434,7 @@ function handleDeviceConnection(ws: WebSocket) {
 					relays: device.relays.map((r) => ({ id: r.id, state: r.state })),
 				});
 
-				console.log(`[WS] Device authenticated: ${device.name} (${macAddress}) id=${device.id} — sockets: ${deviceSockets.size}`);
+				console.log(`[WS] Device authenticated: ${device.name} (${macAddress}) id=${device.id} - sockets: ${deviceSockets.size}`);
 				return;
 			}
 
@@ -527,9 +527,9 @@ function handleDeviceConnection(ws: WebSocket) {
 		if (authenticatedDeviceId) {
 			if (deviceSockets.get(authenticatedDeviceId) === ws) {
 				deviceSockets.delete(authenticatedDeviceId);
-				console.log(`[WS] Device disconnected: ${authenticatedDeviceId} — sockets: ${deviceSockets.size}`);
+				console.log(`[WS] Device disconnected: ${authenticatedDeviceId} - sockets: ${deviceSockets.size}`);
 			} else {
-				console.log(`[WS] Stale close for ${authenticatedDeviceId} — ignoring`);
+				console.log(`[WS] Stale close for ${authenticatedDeviceId} - ignoring`);
 			}
 			settlePendingPing(authenticatedDeviceId, false);
 		}
@@ -610,7 +610,7 @@ if (!globalForSchedule.scheduleStarted) {
 		}
 	}, SCHEDULE_CHECK_INTERVAL);
 
-	console.log(`[SCHEDULE] Executor started — checking every ${SCHEDULE_CHECK_INTERVAL / 1000}s`);
+	console.log(`[SCHEDULE] Executor started - checking every ${SCHEDULE_CHECK_INTERVAL / 1000}s`);
 }
 
 // ─── WSS factory ─────────────────────────────────────────────
@@ -655,7 +655,7 @@ export function attachWss(server: import("http").Server) {
 	const wss = createWss();
 
 	// Collect all upgrade listeners that are NOT ours (Next.js HMR, etc.)
-	// This list is dynamic — we intercept future server.on("upgrade") calls so that
+	// This list is dynamic - we intercept future server.on("upgrade") calls so that
 	// any listeners Next.js adds lazily (after app.prepare()) also go through here
 	// instead of directly onto the server, where they would fire after us and
 	// potentially call socket.destroy() on already-upgraded WS connections.
@@ -678,7 +678,7 @@ export function attachWss(server: import("http").Server) {
 		return _origOn(event, listener);
 	};
 
-	// Single combined upgrade router — our paths first, then delegate the rest
+	// Single combined upgrade router - our paths first, then delegate the rest
 	_origOn("upgrade", (req: IncomingMessage, socket: import("net").Socket, head: Buffer) => {
 		const path = parseUrl(req.url ?? "/").pathname ?? "/";
 		if (path === "/" || path === "/browser") {

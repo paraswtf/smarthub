@@ -1,4 +1,4 @@
-# ESP Hub — Home Automation Control Center
+# ESP Hub - Home Automation Control Center
 
 A full-stack home automation dashboard for connecting multiple ESP32 devices to a single account.
 Built with Next.js 15, tRPC, Prisma (MongoDB), NextAuth, shadcn/ui, and Tailwind CSS.
@@ -109,7 +109,7 @@ which power every shadcn component automatically.
 
 ## ESP32 Integration
 
-### Step 1 — Captive Portal (first boot)
+### Step 1 - Captive Portal (first boot)
 
 When an ESP32 starts without saved config, it broadcasts a WiFi AP (`ESP-Setup`).
 Connecting to it opens a captive portal where the user enters:
@@ -118,7 +118,7 @@ Connecting to it opens a captive portal where the user enters:
 - Friendly device name
 - API key (from `/dashboard/api-keys`)
 
-### Step 2 — Registration
+### Step 2 - Registration
 
 On connect the ESP32 calls:
 
@@ -135,7 +135,7 @@ POST /api/esp/register
 
 Response includes the device ID and any pre-configured relays.
 
-### Step 3 — WebSocket connection
+### Step 3 - WebSocket connection
 
 ```js
 // ESP32 Arduino sketch (pseudocode)
@@ -151,7 +151,7 @@ ws.send({ type: "auth", apiKey: "ehk_...", macAddress: "AA:BB:CC:DD:EE:FF" });
 ws.send({ type: "heartbeat", deviceId: "...", relayStates: [{ id, state }] });
 ```
 
-### Step 4 — Heartbeat fallback (offline sync)
+### Step 4 - Heartbeat fallback (offline sync)
 
 If WebSocket is unavailable the ESP32 can poll:
 

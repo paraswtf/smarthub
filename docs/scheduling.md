@@ -25,4 +25,4 @@ sequenceDiagram
 
 If the device is offline when a schedule fires, the desired state is persisted in the DB. The next heartbeat or WS ping will deliver the pending state once the device comes back online.
 
-ESP32 is authoritative for physical relay state — `relay_ack` is the confirmation.
+ESP32 is authoritative for physical relay state - `relay_ack` is the confirmation.

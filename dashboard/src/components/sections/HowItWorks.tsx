@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 
-const STEPS = [
+const STEPS: { n: string; title: string; desc: string; link?: { label: string; href: string } }[] = [
 	{ n: "01", title: "Create an account", desc: "Sign up at SmartHUB and generate an API key from the dashboard. One key can be shared across multiple ESP32 boards." },
 	{
 		n: "02",
 		title: "Flash & configure",
-		desc: "Power on your ESP32. It starts in AP mode — connect to its WiFi hotspot and open the captive portal at 192.168.4.1. Enter your home WiFi, device name, and API key.",
+		desc: "Download the latest firmware binary and flash it to your ESP32. It starts in AP mode - connect to its WiFi hotspot and open the captive portal. Enter your home WiFi, device name, and API key.",
+		link: { label: "Download firmware →", href: "/dashboard/firmware" },
 	},
 	{ n: "03", title: "Device comes online", desc: "The ESP32 reboots, connects to your home network, and opens a WebSocket connection to SmartHUB. It appears in your dashboard within seconds." },
 	{ n: "04", title: "Configure & control", desc: "From the device detail page, assign GPIO pins to relays, name them, and start toggling them in real time from any browser." },
@@ -52,8 +54,8 @@ export default function HowItWorksSection() {
 				</div>
 
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-					{STEPS.map(({ n, title, desc }) => (
-						<div key={n} className="reveal land-card p-7 h-full">
+					{STEPS.map(({ n, title, desc, link }) => (
+						<div key={n} className="reveal land-card p-7 h-full flex flex-col">
 							<div className="font-['Sora'] font-extrabold text-[44px] leading-none mb-5 select-none" style={{ color: "rgba(18,201,132,0.18)" }}>
 								{n}
 							</div>
@@ -63,6 +65,11 @@ export default function HowItWorksSection() {
 							<p className="text-[14px] leading-relaxed" style={{ color: "#7a9080" }}>
 								{desc}
 							</p>
+							{link && (
+								<Link href={link.href} className="mt-3 text-[13px] font-semibold no-underline" style={{ color: "#12c984" }}>
+									{link.label}
+								</Link>
+							)}
 						</div>
 					))}
 				</div>

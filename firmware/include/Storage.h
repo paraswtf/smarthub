@@ -72,7 +72,7 @@ public:
 
         bool valid = cfg.wifiSSID.length() > 0 && cfg.apiKey.length() > 0 && cfg.serverHost.length() > 0;
 
-        DBG_STORAGE("load() — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  deviceId=%s  valid=%d",
+        DBG_STORAGE("load() - ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  deviceId=%s  valid=%d",
                     cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
                     cfg.serverSecure, cfg.devMode, cfg.deviceId.c_str(), valid);
 
@@ -94,7 +94,7 @@ public:
         prefs.putBool("dev_mode", cfg.devMode);
 
         prefs.end();
-        DBG_STORAGE("save() — ssid=%s  host=%s:%d  tls=%d  devMode=%d",
+        DBG_STORAGE("save() - ssid=%s  host=%s:%d  tls=%d  devMode=%d",
                     cfg.wifiSSID.c_str(), cfg.serverHost.c_str(), cfg.serverPort,
                     cfg.serverSecure, cfg.devMode);
     }
@@ -105,7 +105,7 @@ public:
         prefs.begin(NVS_NAMESPACE, false);
         prefs.putString("dev_id", id);
         prefs.end();
-        DBG_STORAGE("saveDeviceId() — %s", id.c_str());
+        DBG_STORAGE("saveDeviceId() - %s", id.c_str());
     }
 
     static void saveRelays(const RelayConfig relays[], uint8_t count)
@@ -122,10 +122,10 @@ public:
             prefs.putBool((p + "st").c_str(), relays[i].state);
         }
         prefs.end();
-        DBG_STORAGE("saveRelays() — %d relay(s)", count);
+        DBG_STORAGE("saveRelays() - %d relay(s)", count);
     }
 
-    // Write only the state of a single relay by index — much lower flash wear
+    // Write only the state of a single relay by index - much lower flash wear
     // than saveRelays() since only one bool is written instead of the full array.
     static void saveRelayState(uint8_t index, bool state)
     {
@@ -163,7 +163,7 @@ public:
         prefs.clear();                      // wipes everything
         prefs.putBool("factory_rst", true); // write flag AFTER clear so it survives
         prefs.end();
-        DBG_STORAGE("clear() — NVS wiped, factory reset flag set");
+        DBG_STORAGE("clear() - NVS wiped, factory reset flag set");
     }
 
     // Returns true once after a factory reset, then clears the flag
@@ -196,7 +196,7 @@ public:
             prefs.putString((p + "rid").c_str(), sw[i].linkedRelayId);
         }
         prefs.end();
-        DBG_STORAGE("saveSwitches() — %d switch(es)", count);
+        DBG_STORAGE("saveSwitches() - %d switch(es)", count);
     }
 
     static uint8_t loadSwitches(struct SwitchConfig sw[])
@@ -221,7 +221,8 @@ public:
     // ── Server-managed WiFi networks (wn1–wn4) ──────────────
     static void saveExtraWifi(const WifiNetworkEntry networks[], uint8_t count)
     {
-        if (count > MAX_WIFI_NETWORKS) count = MAX_WIFI_NETWORKS;
+        if (count > MAX_WIFI_NETWORKS)
+            count = MAX_WIFI_NETWORKS;
         Preferences prefs;
         prefs.begin(NVS_NAMESPACE, false);
         prefs.putUChar("wn_cnt", count);
@@ -232,11 +233,11 @@ public:
             prefs.putString((p + "pass").c_str(), networks[i].password);
         }
         prefs.end();
-        DBG_STORAGE("saveExtraWifi() — %d network(s)", count);
+        DBG_STORAGE("saveExtraWifi() - %d network(s)", count);
     }
 
     // ── Server config override ────────────────────────────────
-    // Saves host/port/TLS — applied on next boot (or immediately if devMode permits).
+    // Saves host/port/TLS - applied on next boot (or immediately if devMode permits).
     static void saveServerConfig(const String &host, uint16_t port, bool tls)
     {
         Preferences prefs;
@@ -245,6 +246,6 @@ public:
         prefs.putUShort("srv_port", port);
         prefs.putBool("srv_tls", tls);
         prefs.end();
-        DBG_STORAGE("saveServerConfig() — host=%s port=%d tls=%d", host.c_str(), port, tls);
+        DBG_STORAGE("saveServerConfig() - host=%s port=%d tls=%d", host.c_str(), port, tls);
     }
 };

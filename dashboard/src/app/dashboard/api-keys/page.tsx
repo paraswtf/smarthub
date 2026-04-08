@@ -83,7 +83,7 @@ export default function ApiKeysPage() {
 					<div className="text-sm text-muted-foreground space-y-1">
 						<p>
 							<span className="font-semibold text-foreground">How it works:</span> Create an API key and give it a label. Enter it in your ESP32&apos;s captive portal. Multiple ESP32
-							devices can share the same key — they&apos;ll all appear under your account.
+							devices can share the same key - they&apos;ll all appear under your account.
 						</p>
 						<p>Keep your keys private. Revoking a key disconnects all devices using it.</p>
 					</div>
@@ -209,7 +209,7 @@ export default function ApiKeysPage() {
 						<div className="space-y-4">
 							<div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
 								<p className="text-xs font-semibold text-primary mb-2 flex items-center gap-1.5">
-									<Check className="w-3.5 h-3.5" /> Key created — copy it now
+									<Check className="w-3.5 h-3.5" /> Key created - copy it now
 								</p>
 								<p className="text-xs text-muted-foreground mb-3">This is the only time you&apos;ll see the full key. Store it safely.</p>
 								<div className="flex items-center gap-2">

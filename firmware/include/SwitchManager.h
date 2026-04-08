@@ -5,7 +5,7 @@
 #include "Storage.h"
 #include "SwitchTypes.h"
 
-// Callback type — called when a switch triggers with (relayId, newState)
+// Callback type - called when a switch triggers with (relayId, newState)
 using SwitchCallback = void (*)(const String &relayId, bool newState, bool isToggle);
 
 // ── ISR state (file-scope, not inside a class) ────────────────────
@@ -26,12 +26,12 @@ static void IRAM_ATTR _detMomentaryISR(void *arg)
 }
 
 /**
- * SwitchManager — input-pin monitoring for physical switches.
+ * SwitchManager - input-pin monitoring for physical switches.
  *
  * Two strategies depending on switch type:
  *
- *   LATCHING  — polling + software debounce (stable state detection).
- *   MOMENTARY — hardware interrupt on RISING edge + cooldown.
+ *   LATCHING  - polling + software debounce (stable state detection).
+ *   MOMENTARY - hardware interrupt on RISING edge + cooldown.
  *               A 200-400ms VCC pulse is too short for reliable polling
  *               when hub.loop() can block for tens of ms. The ISR catches
  *               the edge instantly; loop() processes the flag with a
@@ -170,7 +170,7 @@ public:
     }
 
     /**
-     * Call every loop() — handles both switch types:
+     * Call every loop() - handles both switch types:
      *   LATCHING:  polls pin, software debounce, fires on stable change.
      *   MOMENTARY: checks ISR flag, verifies cooldown, fires toggle.
      */
@@ -215,7 +215,7 @@ public:
                     _confirmHigh[i] = 0;
 
                     if (!pass)
-                        continue; // noise — not a real press
+                        continue; // noise - not a real press
 
                     _fireMomentary(i, now, relayStates, relayIds, relayCount);
                     continue;
@@ -227,7 +227,7 @@ public:
 
                 _det_isrFlags &= ~(1 << i);
 
-                // Cooldown — reject triggers too close together
+                // Cooldown - reject triggers too close together
                 if (now - _lastMomentaryFire[i] < MOMENTARY_COOLDOWN_MS)
                     continue;
 
@@ -239,7 +239,7 @@ public:
                 }
                 else
                 {
-                    // Pin 0-33: internal pulldown works — verify pin is still
+                    // Pin 0-33: internal pulldown works - verify pin is still
                     // HIGH (filters crosstalk spikes from adjacent wires)
                     if (digitalRead(switches[i].pin) == HIGH)
                         _fireMomentary(i, now, relayStates, relayIds, relayCount);
@@ -305,7 +305,7 @@ private:
 
     // Non-blocking confirmation: samples accumulated across loop() iterations.
     // A real 200-400ms VCC press reads HIGH on every sample.
-    // A floating pin (GPIO 34-39 without pull resistor) reads ~50% HIGH —
+    // A floating pin (GPIO 34-39 without pull resistor) reads ~50% HIGH -
     // fails the threshold.  Zero blocking, one digitalRead per loop pass.
     uint8_t _confirmHigh[MAX_SWITCHES];  // HIGH reads during confirmation
     uint8_t _confirmTotal[MAX_SWITCHES]; // total reads (0 = not confirming)
@@ -318,7 +318,7 @@ private:
     // INPUT_PULLDOWN / INPUT_PULLUP silently does nothing on these pins.
     static bool _isInputOnly(uint8_t pin) { return pin >= 34 && pin <= 39; }
 
-    // Fire a momentary trigger — shared by fast path and confirmation path
+    // Fire a momentary trigger - shared by fast path and confirmation path
     void _fireMomentary(uint8_t i, uint32_t now,
                         const bool relayStates[], const String relayIds[], uint8_t relayCount)
     {
@@ -354,7 +354,7 @@ private:
             if (_isInputOnly(switches[i].pin))
             {
                 pinMode(switches[i].pin, INPUT); // pulldown has no effect on 34-39
-                DBG_WARN("GPIO%d is input-only — NO internal pull. "
+                DBG_WARN("GPIO%d is input-only - NO internal pull. "
                          "Add external 10k pull-down resistor!",
                          switches[i].pin);
             }

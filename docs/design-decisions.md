@@ -27,7 +27,7 @@ Homes contain rooms, rooms contain relays. Relays physically live on devices but
 
 ## Granular sharing
 
-Three levels: home (all rooms + relays), room (all relays in room), individual relay. `getRelayAccess` checks in order: owner → RelayShare → RoomShare → HomeShare. First match wins — no additive permissions. See [sharing.md](sharing.md).
+Three levels: home (all rooms + relays), room (all relays in room), individual relay. `getRelayAccess` checks in order: owner → RelayShare → RoomShare → HomeShare. First match wins - no additive permissions. See [sharing.md](sharing.md).
 
 ## Server-side scheduling
 
@@ -35,7 +35,7 @@ The WS server runs a `setInterval` (60s) to check all enabled schedules. Schedul
 
 ## Cross-device switches
 
-A switch on Device A can control a relay on Device B (same owner). The WS server resolves routing at runtime when it receives `switch_trigger` — it looks up the target relay, validates ownership, then sends `relay_cmd` to the target device's socket. No firmware coupling required.
+A switch on Device A can control a relay on Device B (same owner). The WS server resolves routing at runtime when it receives `switch_trigger` - it looks up the target relay, validates ownership, then sends `relay_cmd` to the target device's socket. No firmware coupling required.
 
 ## Optimistic UI
 
@@ -49,15 +49,15 @@ To prevent Next.js from lazily adding upgrade listeners (post-`prepare()`) that 
 
 ## WS-level heartbeat
 
-The `ws` library's `wss.clients` set is iterated every 30s with `ws.ping()`. If no `pong` arrives before the next check, the connection is `terminate()`d. This catches hard disconnects (Wi-Fi drop without TCP FIN) that the application-level JSON ping wouldn't detect for a full 90 seconds (the ESP32 watchdog timeout). Browser connections have no application-level keepalive — the WS heartbeat is their only mechanism.
+The `ws` library's `wss.clients` set is iterated every 30s with `ws.ping()`. If no `pong` arrives before the next check, the connection is `terminate()`d. This catches hard disconnects (Wi-Fi drop without TCP FIN) that the application-level JSON ping wouldn't detect for a full 90 seconds (the ESP32 watchdog timeout). Browser connections have no application-level keepalive - the WS heartbeat is their only mechanism.
 
 ## JWT sessions + DB validation
 
-NextAuth's CredentialsProvider requires JWT session strategy (cannot use database sessions without an adapter). The session callback queries the DB on every session read to check that the user still exists. This means account deletion takes effect immediately — forged or stale JWTs won't work.
+NextAuth's CredentialsProvider requires JWT session strategy (cannot use database sessions without an adapter). The session callback queries the DB on every session read to check that the user still exists. This means account deletion takes effect immediately - forged or stale JWTs won't work.
 
 ## NVS flash wear minimisation
 
-ESP32 flash cells have a finite write endurance (~100k cycles per page). `Storage::saveRelayState(index, bool)` writes a single NVS key (`r0_st`, `r1_st`, …) on each toggle instead of rewriting the full relay array. A heavily-used relay might toggle thousands of times a day — writing one key vs. 8 is a significant improvement.
+ESP32 flash cells have a finite write endurance (~100k cycles per page). `Storage::saveRelayState(index, bool)` writes a single NVS key (`r0_st`, `r1_st`, …) on each toggle instead of rewriting the full relay array. A heavily-used relay might toggle thousands of times a day - writing one key vs. 8 is a significant improvement.
 
 ## Momentary switch ISR
 

@@ -4,7 +4,7 @@
 
 ```
 package.json                  # npm workspaces root (workspace: dashboard/)
-platformio.ini                # PlatformIO config — src_dir/include_dir point into firmware/
+platformio.ini                # PlatformIO config - src_dir/include_dir point into firmware/
 dashboard/                    # Next.js app (full-stack dashboard + WS server)
 firmware/                     # ESP32 Arduino firmware
 .github/workflows/deploy.yml  # GitHub Actions CI/CD
@@ -17,15 +17,15 @@ deployment.md                 # Production deployment guide
 ## Dashboard (`dashboard/`)
 
 ```
-server.ts                          # Custom dev server — Next.js + WS on :3000 combined
+server.ts                          # Custom dev server - Next.js + WS on :3000 combined
 next.config.ts                     # Next.js config (standalone output, env validation)
-globals.config.ts                  # Brand, theme, timing constants — editing this reskins the UI
+globals.config.ts                  # Brand, theme, timing constants - editing this reskins the UI
 prisma/schema.prisma               # MongoDB Prisma schema (all models)
 Dockerfile                         # Multi-stage: deps → builder → nextjs | wsserver targets
 
 src/
   app/
-    layout.tsx                     # Root layout — fonts, ThemeProvider, TRPCProvider
+    layout.tsx                     # Root layout - fonts, ThemeProvider, TRPCProvider
     page.tsx                       # Landing page (Hero, Features, HowItWorks)
 
     auth/
@@ -38,28 +38,28 @@ src/
 
     dashboard/
       layout.tsx                   # Redirects unauthenticated users; wraps with DeviceSocketProvider + sidebar
-      page.tsx                     # Overview — all devices with relay state
+      page.tsx                     # Overview - all devices with relay state
       homes/
         page.tsx                   # Home list with create dialog
-        [id]/page.tsx              # Home detail — rooms grid, device list, share/assign dialogs
+        [id]/page.tsx              # Home detail - rooms grid, device list, share/assign dialogs
       rooms/
-        [id]/page.tsx              # Room detail — relay toggles, schedules, share/assign dialogs
+        [id]/page.tsx              # Room detail - relay toggles, schedules, share/assign dialogs
       devices/
-        [id]/page.tsx              # Device detail — relay CRUD, switch CRUD, online status, config
+        [id]/page.tsx              # Device detail - relay CRUD, switch CRUD, online status, config
       shared/page.tsx              # Homes/rooms/relays shared with current user
       api-keys/page.tsx            # API key management (create, reveal, revoke, delete)
       settings/page.tsx            # Profile, password, theme, about
 
     api/
       auth/[...nextauth]/route.ts  # NextAuth v5 handler
-      auth/register/route.ts       # POST — create account, send verification email
-      auth/verify-email/route.ts   # GET  — validate token, mark email verified
-      auth/resend-verification/route.ts  # POST — resend verification email
-      auth/check-verified/route.ts       # POST — { verified: boolean } for polling
-      auth/forgot-password/route.ts      # POST — generate reset token, send email
-      auth/reset-password/route.ts       # POST — validate token, set new password
-      esp/register/route.ts        # POST — ESP32 first registration (upsert device)
-      esp/heartbeat/route.ts       # POST — ESP32 60s fallback sync (relay state reconciliation)
+      auth/register/route.ts       # POST - create account, send verification email
+      auth/verify-email/route.ts   # GET  - validate token, mark email verified
+      auth/resend-verification/route.ts  # POST - resend verification email
+      auth/check-verified/route.ts       # POST - { verified: boolean } for polling
+      auth/forgot-password/route.ts      # POST - generate reset token, send email
+      auth/reset-password/route.ts       # POST - validate token, set new password
+      esp/register/route.ts        # POST - ESP32 first registration (upsert device)
+      esp/heartbeat/route.ts       # POST - ESP32 60s fallback sync (relay state reconciliation)
       trpc/[trpc]/route.ts         # tRPC fetch adapter
 
   components/
@@ -78,12 +78,12 @@ src/
 
   server/
     auth/
-      config.ts                   # NextAuth config — providers, callbacks, JWT strategy
+      config.ts                   # NextAuth config - providers, callbacks, JWT strategy
       index.ts                    # Exports { auth, handlers, signIn, signOut }
 
     api/
       trpc.ts                     # Context factory, publicProcedure, protectedProcedure
-      root.ts                     # appRouter — composes all 8 routers
+      root.ts                     # appRouter - composes all 8 routers
       routers/
         device.ts                 # Device + relay CRUD, toggleRelay, pingDevice
         home.ts                   # Home CRUD + device assignment
@@ -96,7 +96,7 @@ src/
       lib/
         permissions.ts            # getDeviceAccess, getRelayAccess (owner/shared/none)
 
-    ws-server.ts                  # WS server — all real-time logic (590 lines)
+    ws-server.ts                  # WS server - all real-time logic (590 lines)
                                   #   • ESP32 auth, ping, relay_ack, switch_trigger handlers
                                   #   • Browser subscribe / fan-out
                                   #   • Internal HTTP API (push-relay, ping-device, etc.)
@@ -128,22 +128,22 @@ include/
   Storage.h                  # NVS (Preferences) read/write
                               #   • DeviceConfig struct (WiFi, apiKey, server, devMode)
                               #   • RelayConfig / SwitchConfig persistence
-                              #   • saveRelayState(index, bool) — single-key write to reduce flash wear
-                              #   • consumeFactoryResetFlag() — one-shot flag for server
+                              #   • saveRelayState(index, bool) - single-key write to reduce flash wear
+                              #   • consumeFactoryResetFlag() - one-shot flag for server
   CaptivePortal.h            # WiFi AP + DNS server + embedded HTTP config form
                               #   • SSID: "SmartHUB-" + last 3 MAC bytes (unique per device)
                               #   • DNS redirects all domains to 192.168.4.1 (captive portal popup)
                               #   • /save POST: write NVS, reboot
                               #   • 5-minute timeout → auto-reboot
   HubClient.h                # Core connectivity class
-                              #   • registerDevice() — POST /api/esp/register
-                              #   • connectWebSocket() — WebSocketsClient with SSL support
-                              #   • loop() — WS loop + 90s watchdog + 10s auth timeout
-                              #   • _handleMessage() — auth_ok/fail, ping, relay_cmd, switch messages
+                              #   • registerDevice() - POST /api/esp/register
+                              #   • connectWebSocket() - WebSocketsClient with SSL support
+                              #   • loop() - WS loop + 90s watchdog + 10s auth timeout
+                              #   • _handleMessage() - auth_ok/fail, ping, relay_cmd, switch messages
   RelayManager.h             # GPIO output management (max 8 relays)
                               #   • Active-LOW: relay ON = GPIO LOW
-                              #   • applyServerConfig() — overwrites relay table + saves to NVS
-                              #   • setById(id, state) — sets GPIO, records millis() of change
+                              #   • applyServerConfig() - overwrites relay table + saves to NVS
+                              #   • setById(id, state) - sets GPIO, records millis() of change
                               #   • Rejects pins 34–39 (input-only on all ESP32 variants)
   SwitchManager.h            # Input pin monitoring (max 8 switches)
                               #   • Two-way/three-way: polling + 50ms debounce

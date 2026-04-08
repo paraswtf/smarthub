@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js 20+
-- MongoDB 7 with a replica set (required by Prisma — even locally)
+- MongoDB 7 with a replica set (required by Prisma - even locally)
 - PlatformIO CLI (firmware flashing only)
 
 ### Quick MongoDB replica set (Docker)
@@ -45,7 +45,7 @@ WS_PORT=4001
 # ─── Browser ──────────────────────────────────────────────────
 NEXT_PUBLIC_API_URL="http://localhost:3000"
 
-# NEXT_PUBLIC_WS_PORT — intentionally UNSET in dev.
+# NEXT_PUBLIC_WS_PORT - intentionally UNSET in dev.
 # When unset the browser connects to the same host:port as the API (port 3000).
 # Set to 4001 in production where Caddy exposes WS on :4001 separately.
 # NEXT_PUBLIC_WS_PORT=4001
@@ -54,7 +54,7 @@ NEXT_PUBLIC_API_URL="http://localhost:3000"
 AUTH_GOOGLE_CLIENT_ID=""
 AUTH_GOOGLE_CLIENT_SECRET=""
 
-# ─── Email — needed for registration + password reset ─────────
+# ─── Email - needed for registration + password reset ─────────
 BREVO_API_KEY=""
 BREVO_SENDER_EMAIL=""
 ```
@@ -66,7 +66,7 @@ BREVO_SENDER_EMAIL=""
 | `DATABASE_URL`        | `mongodb://localhost:27017/esphub?replicaSet=rs0&directConnection=true` | Atlas URI                      | Must include `replicaSet`               |
 | `AUTH_SECRET`         | Any string                                                              | Strong random                  | Signs JWT session tokens                |
 | `WS_SECRET`           | Any string                                                              | Strong random                  | Next.js → WS server internal auth       |
-| `WS_INTERNAL_URL`     | `http://localhost:3000`                                                 | `http://wsserver:4001`         | **Port 3000 in dev** — combined server  |
+| `WS_INTERNAL_URL`     | `http://localhost:3000`                                                 | `http://wsserver:4001`         | **Port 3000 in dev** - combined server  |
 | `WS_PORT`             | `4001`                                                                  | `4001`                         | Standalone WS container only            |
 | `NEXT_PUBLIC_WS_PORT` | **unset**                                                               | `4001`                         | Unset = same port as API                |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3000`                                                 | `https://smarthub.example.com` | Baked into browser bundle at build time |
@@ -93,7 +93,7 @@ You do **not** need to run `npm run ws` separately in development. That script i
 ### Other commands
 
 ```bash
-npm run db:studio    # Prisma Studio — visual browser for MongoDB data
+npm run db:studio    # Prisma Studio - visual browser for MongoDB data
 npm run format       # Prettier-format all files (also runs automatically on commit)
 npm run build        # Production Next.js build (standalone output)
 ```
@@ -113,14 +113,14 @@ The `platformio.ini` at the repo root sets `src_dir = firmware/src` and `include
 
 ### Debug output
 
-`firmware/include/Config.h` has `#define DEBUG_MODE 1` by default. This enables color-coded serial logging with timestamps and heap stats. Set to `0` for production — all debug macros compile away to nothing.
+`firmware/include/Config.h` has `#define DEBUG_MODE 1` by default. This enables color-coded serial logging with timestamps and heap stats. Set to `0` for production - all debug macros compile away to nothing.
 
 ### First-boot setup (captive portal)
 
 1. On first boot (or after factory reset), the ESP32 starts a WiFi AP named **`SmartHUB-AABBCC`** (last 3 bytes of its MAC address).
 2. Connect from your phone or laptop. iOS and Android will automatically open the captive portal.
 3. Fill in: WiFi SSID + password, API key (create one at **Dashboard → API Keys**), server hostname + port.
-4. Save — the device reboots, connects to WiFi, registers via HTTP, then opens a WebSocket.
+4. Save - the device reboots, connects to WiFi, registers via HTTP, then opens a WebSocket.
 
 **Factory reset**: hold GPIO 0 (the BOOT button) for 3 seconds at any time. This wipes NVS config and restarts into the captive portal. A factory reset flag is sent to the server on the next registration, which wipes all relay assignments for that device.
 

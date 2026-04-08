@@ -42,7 +42,7 @@ Called on ESP32 boot after WiFi connects. Upserts the device record. If `factory
 
 Called every 60 seconds by the ESP32 as a fallback sync mechanism. ESP32 reports physical relay states (authoritative); server returns desired states (picks up any missed commands).
 
-`lastSeenAt` update is throttled — only written to DB if >30s since last write.
+`lastSeenAt` update is throttled - only written to DB if >30s since last write.
 
 **Request body:**
 
@@ -113,7 +113,7 @@ Replaces any existing verification token with a fresh 24h token and resends the 
 
 #### `POST /api/auth/check-verified`
 
-Polls whether a credential user's email is verified. Only returns `false` for credential users — prevents OAuth account enumeration.
+Polls whether a credential user's email is verified. Only returns `false` for credential users - prevents OAuth account enumeration.
 
 **Body:** `{ email }`  
 **Response:** `{ verified: boolean }`
@@ -168,7 +168,7 @@ Base path: `/api/trpc`. All procedures except `user.updateSelf` require an authe
 
 | Procedure            | Input                                      | Notes                                                                 |
 | -------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
-| `list`               | —                                          | All devices the user owns (via API keys)                              |
+| `list`               | -                                          | All devices the user owns (via API keys)                              |
 | `get`                | `{ id }`                                   | Returns device + relays + switches + `accessLevel: "owner"\|"shared"` |
 | `update`             | `{ id, name?, notes? }`                    | Owner only                                                            |
 | `delete`             | `{ id }`                                   | Owner only                                                            |
@@ -188,13 +188,13 @@ Base path: `/api/trpc`. All procedures except `user.updateSelf` require an authe
 
 | Procedure           | Input                        | Notes                                                 |
 | ------------------- | ---------------------------- | ----------------------------------------------------- |
-| `list`              | —                            | All owned homes with room/device counts               |
+| `list`              | -                            | All owned homes with room/device counts               |
 | `get`               | `{ id }`                     | Home + rooms (with relays+devices) + devices + shares |
-| `create`            | `{ name }`                   | —                                                     |
+| `create`            | `{ name }`                   | -                                                     |
 | `update`            | `{ id, name }`               | Owner only                                            |
 | `delete`            | `{ id }`                     | Owner only; must have no devices                      |
 | `assignDevice`      | `{ deviceId, homeId\|null }` | `null` unassigns; also unassigns relays from rooms    |
-| `unassignedDevices` | —                            | Devices with no home (or orphaned homeId)             |
+| `unassignedDevices` | -                            | Devices with no home (or orphaned homeId)             |
 
 ---
 
@@ -220,15 +220,15 @@ All home-level procedures require being the home owner. Room procedures require 
 | Procedure          | Input                 | Notes                                                                     |
 | ------------------ | --------------------- | ------------------------------------------------------------------------- |
 | `shareHome`        | `{ homeId, email }`   | Grants access to all rooms + relays; refreshes all device subscriber sets |
-| `unshareHome`      | `{ homeId, userId }`  | —                                                                         |
-| `listHomeShares`   | `{ homeId }`          | —                                                                         |
+| `unshareHome`      | `{ homeId, userId }`  | -                                                                         |
+| `listHomeShares`   | `{ homeId }`          | -                                                                         |
 | `shareRoom`        | `{ roomId, email }`   | Grants access to all relays in room                                       |
-| `unshareRoom`      | `{ roomId, userId }`  | —                                                                         |
-| `listRoomShares`   | `{ roomId }`          | —                                                                         |
+| `unshareRoom`      | `{ roomId, userId }`  | -                                                                         |
+| `listRoomShares`   | `{ roomId }`          | -                                                                         |
 | `shareRelay`       | `{ relayId, email }`  | Grants access to a single relay                                           |
-| `unshareRelay`     | `{ relayId, userId }` | —                                                                         |
-| `listRelayShares`  | `{ relayId }`         | —                                                                         |
-| `listSharedWithMe` | —                     | Returns `{ homes[], rooms[], relays[] }` shared with current user         |
+| `unshareRelay`     | `{ relayId, userId }` | -                                                                         |
+| `listRelayShares`  | `{ relayId }`         | -                                                                         |
+| `listSharedWithMe` | -                     | Returns `{ homes[], rooms[], relays[] }` shared with current user         |
 
 After any share/unshare, calls `/refresh-device-subscribers` on affected devices to rebuild the WS fan-out subscriber set.
 
@@ -240,10 +240,10 @@ All procedures require owning the relay's device. Max 10 schedules per relay.
 
 | Procedure | Input                                                              | Notes                                |
 | --------- | ------------------------------------------------------------------ | ------------------------------------ |
-| `list`    | `{ relayId }`                                                      | —                                    |
+| `list`    | `{ relayId }`                                                      | -                                    |
 | `create`  | `{ relayId, label, hour, minute, daysOfWeek[], action, timezone }` | `action`: `true` = ON, `false` = OFF |
 | `update`  | `{ id, ...fields }`                                                | Any subset of create fields          |
-| `delete`  | `{ id }`                                                           | —                                    |
+| `delete`  | `{ id }`                                                           | -                                    |
 | `toggle`  | `{ id, enabled }`                                                  | Enable/disable without deleting      |
 
 **Schedule fields:**
@@ -260,7 +260,7 @@ All procedures require owning the relay's device. Max 10 schedules per relay.
 | Procedure       | Input                                                 | Notes                                                           |
 | --------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
 | `list`          | `{ deviceId }`                                        | Requires device access                                          |
-| `listAllRelays` | —                                                     | All user's relays across all devices (for cross-device linking) |
+| `listAllRelays` | -                                                     | All user's relays across all devices (for cross-device linking) |
 | `add`           | `{ deviceId, pin, label, switchType, linkedRelayId }` | Validates relay belongs to same user; calls `/push-switch-add`  |
 | `update`        | `{ switchId, ...fields }`                             | Calls `/push-switch-update`                                     |
 | `delete`        | `{ switchId }`                                        | Calls `/push-switch-delete`                                     |
@@ -273,10 +273,10 @@ All procedures require owning the relay's device. Max 10 schedules per relay.
 
 | Procedure | Input       | Notes                                                   |
 | --------- | ----------- | ------------------------------------------------------- |
-| `list`    | —           | All keys with device counts                             |
+| `list`    | -           | All keys with device counts                             |
 | `create`  | `{ label }` | Max 10 active keys; format `ehk_` + 40 hex              |
 | `revoke`  | `{ id }`    | Sets `active: false` (devices using it get `auth_fail`) |
-| `delete`  | `{ id }`    | Permanent — unlinks all associated devices              |
+| `delete`  | `{ id }`    | Permanent - unlinks all associated devices              |
 
 ---
 

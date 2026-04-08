@@ -65,7 +65,7 @@ model VerificationToken {
 // ─── SmartHUB ────────────────────────────────────────────────
 
 // Additional WiFi networks pushed to the ESP32 from the dashboard.
-// wn0 (captive portal primary) lives in ESP32 NVS only — password is never sent to the server.
+// wn0 (captive portal primary) lives in ESP32 NVS only - password is never sent to the server.
 // Passwords here are stored in plaintext; acceptable for self-hosted IoT deployments.
 type WifiNetwork {
     ssid     String
@@ -86,27 +86,30 @@ model ApiKey {
 }
 
 model Device {
-    id              String        @id @default(auto()) @map("_id") @db.ObjectId
-    createdAt       DateTime      @default(now())
-    updatedAt       DateTime      @updatedAt
-    name            String        @default("ESP32 Device")
-    macAddress      String        @unique
-    firmwareVersion String?
-    ssid            String?
-    notes           String?
-    lastSeenAt      DateTime?
-    apiKeyId        String        @db.ObjectId
-    apiKey          ApiKey        @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-    homeId          String?       @db.ObjectId
-    home            Home?         @relation(fields: [homeId], references: [id])
-    relays          Relay[]
-    switches        Switch[]
+    id                 String        @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt          DateTime      @default(now())
+    updatedAt          DateTime      @updatedAt
+    name               String        @default("ESP32 Device")
+    macAddress         String        @unique
+    firmwareVersion    String?
+    ssid               String?
+    notes              String?
+    lastSeenAt         DateTime?
+    apiKeyId           String        @db.ObjectId
+    apiKey             ApiKey        @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+    homeId             String?       @db.ObjectId
+    home               Home?         @relation(fields: [homeId], references: [id])
+    relays             Relay[]
+    switches           Switch[]
     // Dashboard-managed WiFi networks (pushed to ESP32 via WS; does not include captive-portal primary)
-    wifiNetworks    WifiNetwork[]
-    // Desired server config — pushed to ESP32 via WS when changed from dashboard
-    cfgServerHost   String?
-    cfgServerPort   Int?
-    cfgServerTLS    Boolean?
+    wifiNetworks       WifiNetwork[]
+    // Desired server config - pushed to ESP32 via WS when changed from dashboard
+    cfgServerHost      String?
+    cfgServerPort      Int?
+    cfgServerTLS       Boolean?
+    // Reported by ESP32 on registration - what host/port it is actually connecting to
+    reportedServerHost String?
+    reportedServerPort Int?
 }
 
 model Relay {
@@ -127,9 +130,9 @@ model Relay {
 }
 
 // A switch monitors an input GPIO pin and toggles a linked relay on state change.
-// switchType "two_way"   — SPST: VCC ↔ floating (INPUT_PULLDOWN), toggles on change
-// switchType "three_way" — SPDT: VCC ↔ GND (INPUT, no pull), toggles on change
-// switchType "momentary" — push button (INPUT_PULLDOWN + ISR RISING), toggles on press
+// switchType "two_way"   - SPST: VCC ↔ floating (INPUT_PULLDOWN), toggles on change
+// switchType "three_way" - SPDT: VCC ↔ GND (INPUT, no pull), toggles on change
+// switchType "momentary" - push button (INPUT_PULLDOWN + ISR RISING), toggles on press
 model Switch {
     id            String   @id @default(auto()) @map("_id") @db.ObjectId
     createdAt     DateTime @default(now())

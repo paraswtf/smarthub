@@ -79,17 +79,17 @@ export default function CustomCursor() {
 		const tick = () => {
 			rafId = requestAnimationFrame(tick);
 
-			// Dot — instant
+			// Dot - instant
 			dot.style.left = `${mx}px`;
 			dot.style.top = `${my}px`;
 
-			// Ring — slight lag
+			// Ring - slight lag
 			rx += (mx - rx) * 0.18;
 			ry += (my - ry) * 0.18;
 			ring.style.left = `${rx}px`;
 			ring.style.top = `${ry}px`;
 
-			// Trail — more lag, pixel squares
+			// Trail - more lag, pixel squares
 			tx += (mx - tx) * 0.09;
 			ty += (my - ty) * 0.09;
 			trail.style.left = `${tx}px`;
@@ -143,7 +143,7 @@ export default function CustomCursor() {
 				}}
 			/>
 
-			{/* Inner dot — sharp square */}
+			{/* Inner dot - sharp square */}
 			<div
 				ref={dotRef}
 				className="fixed z-[9999] pointer-events-none"

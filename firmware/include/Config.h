@@ -2,11 +2,11 @@
 
 // ─── Debug ────────────────────────────────────────────────────
 // Set to 1 to enable verbose serial output, 0 for production.
-// When disabled, all DBG_* macros compile to nothing — zero overhead.
+// When disabled, all DBG_* macros compile to nothing - zero overhead.
 #define DEBUG_MODE 1
 
 // ─── Captive-portal AP settings ──────────────────────────────
-// AP_SSID is a prefix — CaptivePortal appends the last 3 MAC bytes (e.g. "SmartHUB-A1B2C3")
+// AP_SSID is a prefix - CaptivePortal appends the last 3 MAC bytes (e.g. "SmartHUB-A1B2C3")
 #define AP_SSID_PREFIX "SmartHUB-"
 #define AP_PASSWORD "" // open network
 #define AP_IP "192.168.4.1"
@@ -17,7 +17,7 @@
 #define WIFI_CONNECT_TIMEOUT_MS 15000   // max wait for WiFi on boot
 #define WS_RECONNECT_INTERVAL_MS 5000   // delay between WS reconnect attempts
 #define HEARTBEAT_INTERVAL_MS 60000     // how often to send heartbeat (60s)
-#define CONFIG_PORTAL_TIMEOUT_MS 300000 // 5 min — reboot if nobody configures
+#define CONFIG_PORTAL_TIMEOUT_MS 300000 // 5 min - reboot if nobody configures
 
 // ─── Max relays ───────────────────────────────────────────────
 #define MAX_RELAYS 8
@@ -28,7 +28,7 @@
 // ─── NVS namespace ────────────────────────────────────────────
 #define NVS_NAMESPACE "esp_hub"
 
-// ─── LED pin (optional — set to -1 to disable) ────────────────
+// ─── LED pin (optional - set to -1 to disable) ────────────────
 // Blink pattern:
 //   Fast blink  → AP / captive portal mode
 //   Slow blink  → connecting to WiFi / WS

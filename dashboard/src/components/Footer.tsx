@@ -20,6 +20,13 @@ const SECTIONS: { heading: string; links: FooterLink[] }[] = [
 		],
 	},
 	{
+		heading: "Firmware",
+		links: [
+			{ label: "Download Latest", href: "/dashboard/firmware" },
+			{ label: "All Releases", href: "https://github.com/paraswtf/smarthub/releases", external: true },
+		],
+	},
+	{
 		heading: "Open Source",
 		links: [
 			{ label: "GitHub", href: "https://github.com/paraswtf/smarthub", external: true },

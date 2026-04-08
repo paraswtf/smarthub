@@ -53,7 +53,7 @@ export function LiveLastSeen({ date, compact = false }: Props) {
 		const id = setInterval(() => {
 			setTick((t) => {
 				const ms = date ? Date.now() - new Date(date).getTime() : Infinity;
-				// Once we're past 10s accuracy of 1s is fine — reduce CPU
+				// Once we're past 10s accuracy of 1s is fine - reduce CPU
 				const next = ms < 10_000 ? 100 : 1_000;
 				if (next !== interval) {
 					clearInterval(id);
@@ -78,7 +78,7 @@ export function LiveLastSeen({ date, compact = false }: Props) {
 				minute: "2-digit",
 				second: "2-digit",
 			})
-		: "—";
+		: "-";
 
 	return (
 		<div className="flex flex-col gap-0.5">

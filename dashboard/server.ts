@@ -1,5 +1,5 @@
 /**
- * Custom Next.js dev server — runs Next.js + WebSocket server on the same port.
+ * Custom Next.js dev server - runs Next.js + WebSocket server on the same port.
  * Mirrors Caddy's WebSocket routing in production (ws upgrade on same domain).
  *
  * Usage: npm run dev (via tsx watch server.ts)

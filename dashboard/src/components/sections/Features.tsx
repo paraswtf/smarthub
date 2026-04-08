@@ -8,7 +8,7 @@ const FEATURES = [
 	{
 		icon: Zap,
 		title: "Real-time WebSocket",
-		desc: "Commands reach your ESP32 instantly over a persistent WebSocket connection. No polling, no delays — toggle a relay and it switches in milliseconds.",
+		desc: "Commands reach your ESP32 instantly over a persistent WebSocket connection. No polling, no delays - toggle a relay and it switches in milliseconds.",
 	},
 	{
 		icon: ToggleRight,
@@ -16,7 +16,7 @@ const FEATURES = [
 		desc: "Assign GPIO pins, give each relay a friendly name and icon, and control them with a single tap. Offline state syncs automatically on reconnect.",
 	},
 	{ icon: Key, title: "API key auth", desc: "Generate API keys from the dashboard and flash them to your ESP32 via the captive portal. Revoke a key to instantly disconnect all boards using it." },
-	{ icon: Wifi, title: "Captive portal config", desc: "First boot puts the ESP32 in AP mode. Connect to its WiFi, open the portal, enter your home network credentials and API key — done." },
+	{ icon: Wifi, title: "Captive portal config", desc: "First boot puts the ESP32 in AP mode. Connect to its WiFi, open the portal, enter your home network credentials and API key - done." },
 	{ icon: Globe, title: "Self-hostable", desc: "Run SmartHUB on any VPS or home server. All you need is Node.js and a MongoDB database. The WebSocket server is a single standalone process." },
 ];
 
@@ -50,7 +50,7 @@ export default function FeaturesSection() {
 					<span className="hl">automate your home</span>
 				</h2>
 				<p className="text-[16px] max-w-[520px] mx-auto mt-5 leading-relaxed" style={{ color: "#7a9080" }}>
-					SmartHUB handles the hard parts — device auth, real-time sync, and state persistence — so you can focus on building.
+					SmartHUB handles the hard parts - device auth, real-time sync, and state persistence - so you can focus on building.
 				</p>
 			</div>
 

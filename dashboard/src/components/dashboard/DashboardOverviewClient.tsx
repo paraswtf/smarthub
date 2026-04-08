@@ -1,17 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cpu, Zap, Key, Wifi, WifiOff, ToggleRight, Home, DoorOpen, ChevronRight } from "lucide-react";
+import { Cpu, Zap, Wifi, ToggleRight, Home, DoorOpen, ChevronRight, Usb } from "lucide-react";
 import Link from "next/link";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../globals.config";
+import { UsbSetupDialog } from "~/components/dashboard/UsbSetupDialog";
 
 export default function DashboardOverviewClient({ userName }: { userName?: string | null }) {
+	const [usbOpen, setUsbOpen] = useState(false);
 	const utils = api.useUtils();
 	const utilsRef = useRef(utils);
 	utilsRef.current = utils;
@@ -107,7 +108,7 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 		{ label: "Homes", value: homeCount, icon: Home, sub: `${roomCount} rooms` },
 		{ label: "Rooms", value: roomCount, icon: DoorOpen, sub: `${relayCount} relays` },
 		{ label: "Active Relays", value: activeRelays, icon: ToggleRight, sub: `of ${relayCount} configured` },
-		{ label: "Devices Online", value: onlineCount, icon: Wifi, sub: deviceCount > 0 ? `${Math.round((onlineCount / deviceCount) * 100)}% uptime` : "—" },
+		{ label: "Devices Online", value: onlineCount, icon: Wifi, sub: deviceCount > 0 ? `${Math.round((onlineCount / deviceCount) * 100)}% uptime` : "-" },
 	];
 
 	return (
@@ -150,8 +151,8 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 							<Button asChild>
 								<Link href="/dashboard/api-keys">Generate API Key</Link>
 							</Button>
-							<Button variant="outline" asChild>
-								<Link href="/dashboard/homes">View Homes</Link>
+							<Button variant="outline" onClick={() => setUsbOpen(true)}>
+								<Usb className="w-4 h-4" /> Configure via USB
 							</Button>
 						</div>
 					</CardContent>
@@ -222,20 +223,35 @@ export default function DashboardOverviewClient({ userName }: { userName?: strin
 					<ol className="space-y-3">
 						{[
 							{ n: 1, text: "Generate an API Key from the API Keys page" },
-							{ n: 2, text: "Power on your ESP32 — it starts in Config Mode (AP: ESP-Hub-Setup)" },
-							{ n: 3, text: "Connect to the ESP32 WiFi and open the captive portal (192.168.4.1)" },
+							{ n: 2, text: "Download the latest firmware and flash it to your ESP32 - " },
+							{ n: 3, text: "Power on your ESP32 - it starts in Config Mode. Connect to its WiFi hotspot and open the captive portal (192.168.4.1)" },
 							{ n: 4, text: "Enter your home WiFi credentials, give the device a name, and paste your API key" },
-							{ n: 5, text: "Save — the ESP32 will reboot, connect, and appear in your dashboard" },
+							{ n: 5, text: "Save - the ESP32 will reboot, connect, and appear in your dashboard" },
 							{ n: 6, text: "Create a home, add rooms, and assign relays to organize your controls" },
 						].map(({ n, text }) => (
 							<li key={n} className="flex items-start gap-3">
 								<span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">{n}</span>
-								<span className="text-sm text-muted-foreground">{text}</span>
+								<span className="text-sm text-muted-foreground leading-6">
+									{text}
+									{n === 2 && (
+										<Link href="/dashboard/firmware" className="text-primary hover:underline font-medium">
+											get firmware
+										</Link>
+									)}
+								</span>
 							</li>
 						))}
 					</ol>
+					<div className="pt-3 mt-3 border-t border-border flex items-center justify-between gap-3">
+						<p className="text-xs text-muted-foreground">Already have firmware? Skip steps 3–5 with a USB connection.</p>
+						<Button variant="outline" size="sm" onClick={() => setUsbOpen(true)} className="shrink-0">
+							<Usb className="w-3.5 h-3.5" /> Configure via USB
+						</Button>
+					</div>
 				</CardContent>
 			</Card>
+
+			<UsbSetupDialog open={usbOpen} onOpenChange={setUsbOpen} />
 		</div>
 	);
 }

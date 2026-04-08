@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Zap, LayoutDashboard, Home, Share2, Key, Settings, LogOut, ChevronRight, Menu, X } from "lucide-react";
+import { Zap, LayoutDashboard, Home, Share2, Key, Settings, LogOut, ChevronRight, Menu, X, Cpu } from "lucide-react";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { ThemeToggle } from "~/components/ThemeToggle";
@@ -16,6 +16,7 @@ const NAV = [
 	{ href: "/dashboard/shared", label: "Shared with me", icon: Share2 },
 	{ href: "/dashboard/api-keys", label: "API Keys", icon: Key },
 	{ href: "/dashboard/settings", label: "Settings", icon: Settings },
+	{ href: "/dashboard/firmware", label: "Firmware", icon: Cpu },
 ];
 
 interface Props {

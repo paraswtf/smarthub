@@ -218,7 +218,7 @@ export default function SettingsPage() {
 					</div>
 					<Separator className="my-4" />
 					<p className="text-xs text-muted-foreground">
-						To change brand colors, relay limits, or WebSocket settings, edit <code className="mono bg-muted px-1 py-0.5 rounded text-[11px]">globals.config.ts</code> in the project root —
+						To change brand colors, relay limits, or WebSocket settings, edit <code className="mono bg-muted px-1 py-0.5 rounded text-[11px]">globals.config.ts</code> in the project root -
 						all values cascade through the entire UI automatically.
 					</p>
 				</CardContent>

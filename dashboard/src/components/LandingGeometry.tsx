@@ -103,7 +103,7 @@ export default function LandingGeometry() {
 			autoRx += 0.0018 + scrollVel * 0.0005;
 			autoRy += 0.0024;
 
-			// Two shapes — sizes relative to canvas height to avoid stretching
+			// Two shapes - sizes relative to canvas height to avoid stretching
 			const R = h * 0.38;
 			const shapes = [
 				{ ox: w * 0.82, oy: h * 0.42, radius: R, offRx: 0.3, offRy: 0.6 },
@@ -140,7 +140,7 @@ export default function LandingGeometry() {
 						ctx.stroke();
 					});
 
-				// Front-facing vertex dots — sharp squares
+				// Front-facing vertex dots - sharp squares
 				transformed.forEach(([vx, vy, vz]) => {
 					const depth = (vz + 1) / 2;
 					if (depth < 0.45) return;

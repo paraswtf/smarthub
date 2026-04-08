@@ -8,7 +8,7 @@ const FIRMWARE_DIR = process.env.FIRMWARE_DIR ?? "/data/firmware";
 const WS_INTERNAL_URL = process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`;
 const WS_SECRET = process.env.WS_SECRET ?? "";
 
-/** POST — upload a firmware .bin file (session auth, owner only) */
+/** POST - upload a firmware .bin file (session auth, owner only) */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	const { id: deviceId } = await params;
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 	return NextResponse.json({ ok: true, size: buffer.length });
 }
 
-/** GET — download firmware binary (one-time OTA token auth) */
+/** GET - download firmware binary (one-time OTA token auth) */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	const { id: deviceId } = await params;
 	const token = req.nextUrl.searchParams.get("token");

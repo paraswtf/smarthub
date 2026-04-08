@@ -6,7 +6,7 @@ import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
-	allowedDevOrigins: ["192.168.1.62"],
+	allowedDevOrigins: ["192.168.1.7"],
 	output: "standalone",
 	reactStrictMode: true,
 	images: {

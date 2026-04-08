@@ -1,4 +1,4 @@
-# SmartHUB — Home Automation Platform
+# SmartHUB - Home Automation Platform
 
 SmartHUB is a full-stack IoT platform for controlling ESP32 relay modules via a web dashboard. Users register ESP32 devices, configure GPIO relay outputs and switch inputs, organize them into homes and rooms, and toggle relays in real-time through WebSocket communication.
 
@@ -46,7 +46,7 @@ graph TB
 
 | Topic                                            | Description                                                           |
 | ------------------------------------------------ | --------------------------------------------------------------------- |
-| [Data Model](docs/data-model.md)                 | Entity relationships — users, homes, rooms, devices, relays, switches |
+| [Data Model](docs/data-model.md)                 | Entity relationships - users, homes, rooms, devices, relays, switches |
 | [Tech Stack](docs/tech-stack.md)                 | Frameworks and libraries for dashboard and firmware                   |
 | [Project Structure](docs/project-structure.md)   | File layout for dashboard and ESP32 firmware                          |
 | [WebSocket Protocol](docs/websocket-protocol.md) | Message sequences and internal HTTP API                               |

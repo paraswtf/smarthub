@@ -43,6 +43,8 @@ public:
         doc["ssid"] = WiFi.SSID();
         doc["firmwareVersion"] = FIRMWARE_VERSION;
         doc["factoryReset"] = Storage::consumeFactoryResetFlag();
+        doc["serverHost"] = _cfg->serverHost;
+        doc["serverPort"] = _cfg->serverPort;
 
         String body;
         serializeJson(doc, body);
@@ -87,7 +89,7 @@ public:
         _relays->applyServerConfig(rBuf, rCount);
         _relays->printAll();
 
-        DBG_HUB("Registered — deviceId: %s  relays: %d", _cfg->deviceId.c_str(), rCount);
+        DBG_HUB("Registered - deviceId: %s  relays: %d", _cfg->deviceId.c_str(), rCount);
         DBG_HEAP();
         return true;
     }
@@ -116,7 +118,7 @@ public:
         _lastActivity = millis();
     }
 
-    // ── Main loop — call every loop() ────────────────────────
+    // ── Main loop - call every loop() ────────────────────────
     void loop()
     {
         _ws.loop();
@@ -128,32 +130,32 @@ public:
             // Watchdog: if no ping from server within 90s (3× the 30s interval), force reconnect
             if (now - _lastActivity > 90000)
             {
-                DBG_WARN("Watchdog: no activity for %lums — forcing reconnect", now - _lastActivity);
+                DBG_WARN("Watchdog: no activity for %lums - forcing reconnect", now - _lastActivity);
                 _forceReconnect();
             }
         }
         else if (connected)
         {
-            // Connected but not yet authenticated — watchdog for stuck auth
+            // Connected but not yet authenticated - watchdog for stuck auth
             if (now - _lastActivity > AUTH_TIMEOUT_MS)
             {
-                DBG_WARN("Auth timeout (%dms) — forcing reconnect", AUTH_TIMEOUT_MS);
+                DBG_WARN("Auth timeout (%dms) - forcing reconnect", AUTH_TIMEOUT_MS);
                 _forceReconnect();
             }
         }
         else
         {
-            // Not connected — log retry status every 10s
+            // Not connected - log retry status every 10s
             static uint32_t lastLog = 0;
             if (now - lastLog >= 10000)
             {
-                DBG_WS("Not connected — retrying every %dms", WS_RECONNECT_INTERVAL_MS);
+                DBG_WS("Not connected - retrying every %dms", WS_RECONNECT_INTERVAL_MS);
                 lastLog = now;
             }
         }
     }
 
-    // Reset flags only — called from main when WiFi drops
+    // Reset flags only - called from main when WiFi drops
     void disconnect()
     {
         _relays->flush();
@@ -163,12 +165,12 @@ public:
     // Public so main.cpp switch callback can send acks directly
     void sendRelayAck(const String &relayId, bool state) { _sendRelayAck(relayId, state); }
 
-    // Send switch trigger to server — server resolves cross-device relay
+    // Send switch trigger to server - server resolves cross-device relay
     void sendSwitchTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
     {
         if (!authenticated)
         {
-            DBG_WARN("switch_trigger: not authenticated — ignored");
+            DBG_WARN("switch_trigger: not authenticated - ignored");
             return;
         }
         JsonDocument doc;
@@ -219,7 +221,7 @@ private:
             break;
 
         case WStype_CONNECTED:
-            DBG_WS("TCP connected — sending auth");
+            DBG_WS("TCP connected - sending auth");
             connected = true;
             _lastActivity = millis();
             _relays->count = 0; // wipe stale IDs before auth_ok arrives
@@ -243,7 +245,7 @@ private:
             break;
 
         case WStype_ERROR:
-            DBG_ERR("WS error — will reconnect");
+            DBG_ERR("WS error - will reconnect");
             _relays->flush();
             _resetState();
             break;
@@ -339,10 +341,13 @@ private:
                 swBuf[swCount].id = d["id"].as<String>();
                 swBuf[swCount].pin = d["pin"].as<uint8_t>();
                 swBuf[swCount].label = d["label"].as<String>();
-                swBuf[swCount].switchType = [&]() {
+                swBuf[swCount].switchType = [&]()
+                {
                     String st = d["switchType"] | "two_way";
-                    if (st == "momentary") return SWITCH_MOMENTARY;
-                    if (st == "three_way") return SWITCH_THREE_WAY;
+                    if (st == "momentary")
+                        return SWITCH_MOMENTARY;
+                    if (st == "three_way")
+                        return SWITCH_THREE_WAY;
                     return SWITCH_TWO_WAY;
                 }();
                 swBuf[swCount].linkedRelayId = d["linkedRelayId"].as<String>();
@@ -358,15 +363,17 @@ private:
                 uint8_t wnCount = 0;
                 for (JsonObject wn : wnArr)
                 {
-                    if (wnCount >= MAX_WIFI_NETWORKS) break;
+                    if (wnCount >= MAX_WIFI_NETWORKS)
+                        break;
                     wnBuf[wnCount].ssid = wn["ssid"].as<String>();
                     wnBuf[wnCount].password = wn["password"].as<String>();
                     wnCount++;
                 }
                 Storage::saveExtraWifi(wnBuf, wnCount);
                 _cfg->extraWifiCount = wnCount;
-                for (uint8_t i = 0; i < wnCount; i++) _cfg->extraWifi[i] = wnBuf[i];
-                DBG_WS("auth_ok — %d extra WiFi network(s) saved", wnCount);
+                for (uint8_t i = 0; i < wnCount; i++)
+                    _cfg->extraWifi[i] = wnBuf[i];
+                DBG_WS("auth_ok - %d extra WiFi network(s) saved", wnCount);
             }
 
             // Apply server config override if provided
@@ -377,10 +384,10 @@ private:
                 uint16_t port = scObj["port"] | _cfg->serverPort;
                 bool tls = scObj["tls"] | _cfg->serverSecure;
                 Storage::saveServerConfig(host, port, tls);
-                DBG_WS("auth_ok — server config saved: %s:%d tls=%d", host.c_str(), port, tls);
+                DBG_WS("auth_ok - server config saved: %s:%d tls=%d", host.c_str(), port, tls);
             }
 
-            DBG_WS("auth_ok — %d relay(s)  %d switch(es)", rCount, swCount);
+            DBG_WS("auth_ok - %d relay(s)  %d switch(es)", rCount, swCount);
         }
 
         else if (strcmp(type, "auth_fail") == 0)
@@ -393,7 +400,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("relay_cmd before auth — ignored");
+                DBG_WARN("relay_cmd before auth - ignored");
                 return;
             }
             String id = doc["relayId"].as<String>();
@@ -412,7 +419,7 @@ private:
 
         else if (strcmp(type, "ping") == 0)
         {
-            // Server ping carries authoritative relay states — sync and ack
+            // Server ping carries authoritative relay states - sync and ack
             JsonArray arr = doc["relays"].as<JsonArray>();
             if (!arr.isNull())
             {
@@ -427,7 +434,7 @@ private:
                         // Skip relays changed locally within the last 10s
                         if (now - _relays->getLastChanged(id) < 10000)
                         {
-                            DBG_WS("ping sync: skip %s — changed %lums ago",
+                            DBG_WS("ping sync: skip %s - changed %lums ago",
                                    id.c_str(), now - _relays->getLastChanged(id));
                             continue;
                         }
@@ -447,7 +454,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("relay_add before auth — ignored");
+                DBG_WARN("relay_add before auth - ignored");
                 return;
             }
             if (_relays->count >= MAX_RELAYS)
@@ -471,7 +478,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("relay_update_config before auth — ignored");
+                DBG_WARN("relay_update_config before auth - ignored");
                 return;
             }
             JsonObject r = doc["relay"].as<JsonObject>();
@@ -504,7 +511,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("switch_add before auth — ignored");
+                DBG_WARN("switch_add before auth - ignored");
                 return;
             }
             JsonObject d = doc["switch"].as<JsonObject>();
@@ -512,10 +519,13 @@ private:
             nd.id = d["id"].as<String>();
             nd.pin = d["pin"].as<uint8_t>();
             nd.label = d["label"].as<String>();
-            nd.switchType = [&]() {
+            nd.switchType = [&]()
+            {
                 String st = d["switchType"] | "two_way";
-                if (st == "momentary") return SWITCH_MOMENTARY;
-                if (st == "three_way") return SWITCH_THREE_WAY;
+                if (st == "momentary")
+                    return SWITCH_MOMENTARY;
+                if (st == "three_way")
+                    return SWITCH_THREE_WAY;
                 return SWITCH_TWO_WAY;
             }();
             nd.linkedRelayId = d["linkedRelayId"].as<String>();
@@ -527,7 +537,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("switch_update_config before auth — ignored");
+                DBG_WARN("switch_update_config before auth - ignored");
                 return;
             }
             JsonObject d = doc["switch"].as<JsonObject>();
@@ -535,10 +545,13 @@ private:
             updated.id = d["id"].as<String>();
             updated.pin = d["pin"].as<uint8_t>();
             updated.label = d["label"].as<String>();
-            updated.switchType = [&]() {
+            updated.switchType = [&]()
+            {
                 String st = d["switchType"] | "two_way";
-                if (st == "momentary") return SWITCH_MOMENTARY;
-                if (st == "three_way") return SWITCH_THREE_WAY;
+                if (st == "momentary")
+                    return SWITCH_MOMENTARY;
+                if (st == "three_way")
+                    return SWITCH_THREE_WAY;
                 return SWITCH_TWO_WAY;
             }();
             updated.linkedRelayId = d["linkedRelayId"].as<String>();
@@ -550,7 +563,7 @@ private:
         {
             if (!authenticated)
             {
-                DBG_WARN("switch_delete before auth — ignored");
+                DBG_WARN("switch_delete before auth - ignored");
                 return;
             }
             String switchId = doc["switchId"].as<String>();
@@ -560,39 +573,41 @@ private:
 
         else if (strcmp(type, "wifi_config") == 0)
         {
-            // Server pushed updated extra WiFi list — save to NVS
+            // Server pushed updated extra WiFi list - save to NVS
             JsonArray arr = doc["networks"].as<JsonArray>();
             WifiNetworkEntry wnBuf[MAX_WIFI_NETWORKS];
             uint8_t wnCount = 0;
             for (JsonObject wn : arr)
             {
-                if (wnCount >= MAX_WIFI_NETWORKS) break;
+                if (wnCount >= MAX_WIFI_NETWORKS)
+                    break;
                 wnBuf[wnCount].ssid = wn["ssid"].as<String>();
                 wnBuf[wnCount].password = wn["password"].as<String>();
                 wnCount++;
             }
             Storage::saveExtraWifi(wnBuf, wnCount);
             _cfg->extraWifiCount = wnCount;
-            for (uint8_t i = 0; i < wnCount; i++) _cfg->extraWifi[i] = wnBuf[i];
+            for (uint8_t i = 0; i < wnCount; i++)
+                _cfg->extraWifi[i] = wnBuf[i];
             DBG_WS("wifi_config: %d network(s) saved", wnCount);
         }
 
         else if (strcmp(type, "server_config") == 0)
         {
-            // Server pushed new host/port/TLS — save to NVS, applied on next reboot
+            // Server pushed new host/port/TLS - save to NVS, applied on next reboot
             String host = doc["host"] | "";
             uint16_t port = doc["port"] | _cfg->serverPort;
             bool tls = doc["tls"] | _cfg->serverSecure;
             if (host.length() > 0)
             {
                 Storage::saveServerConfig(host, port, tls);
-                DBG_WS("server_config: %s:%d tls=%d saved — takes effect on reconnect", host.c_str(), port, tls);
+                DBG_WS("server_config: %s:%d tls=%d saved - takes effect on reconnect", host.c_str(), port, tls);
             }
         }
 
         else if (strcmp(type, "ota_update") == 0)
         {
-            // Server triggered OTA — download and flash firmware from given URL
+            // Server triggered OTA - download and flash firmware from given URL
             String url = doc["url"] | "";
             if (url.length() == 0)
             {
@@ -624,7 +639,8 @@ private:
         JsonDocument doc;
         doc["type"] = "ota_result";
         doc["success"] = success;
-        if (!success && error.length() > 0) doc["error"] = error;
+        if (!success && error.length() > 0)
+            doc["error"] = error;
         _send(doc);
         _ws.loop();
     }
@@ -633,7 +649,7 @@ private:
     {
         _sendOtaProgress(0);
 
-        // Use secure client (skip cert validation — acceptable for self-hosted IoT)
+        // Use secure client (skip cert validation - acceptable for self-hosted IoT)
         WiFiClientSecure secureClient;
         secureClient.setInsecure();
 
@@ -643,7 +659,8 @@ private:
 
         httpUpdate.rebootOnUpdate(false); // send result before rebooting
 
-        httpUpdate.onProgress([this](int cur, int total) {
+        httpUpdate.onProgress([this](int cur, int total)
+                              {
             if (total > 0)
             {
                 uint8_t pct = (uint8_t)(100 * cur / total);
@@ -653,8 +670,7 @@ private:
                     lastPct = pct;
                     _sendOtaProgress(pct);
                 }
-            }
-        });
+            } });
 
         t_httpUpdate_return ret;
         if (isHttps)
@@ -673,7 +689,7 @@ private:
             _sendOtaResult(false, "No update");
             break;
         case HTTP_UPDATE_OK:
-            DBG_WS("OTA: flash complete — rebooting");
+            DBG_WS("OTA: flash complete - rebooting");
             _sendOtaProgress(100);
             _sendOtaResult(true);
             delay(500);

@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════╗
- * ║              ESP HUB — GLOBAL CONFIGURATION              ║
+ * ║              ESP HUB - GLOBAL CONFIGURATION              ║
  * ║  Edit this file to restyle the entire dashboard.         ║
  * ╚══════════════════════════════════════════════════════════╝
  *
@@ -29,13 +29,13 @@ export const appConfig = {
 
 // ─── Light Theme ─────────────────────────────────────────────
 export const lightTheme = {
-	background: "0 0% 100%", // #ffffff — page bg
-	foreground: "222 47% 11%", // #0f172a — body text
-	card: "0 0% 100%", // #ffffff — card bg
+	background: "0 0% 100%", // #ffffff - page bg
+	foreground: "222 47% 11%", // #0f172a - body text
+	card: "0 0% 100%", // #ffffff - card bg
 	cardForeground: "222 47% 11%", // #0f172a
 	popover: "0 0% 100%",
 	popoverForeground: "222 47% 11%",
-	primary: "161 94% 30%", // #059669 — emerald
+	primary: "161 94% 30%", // #059669 - emerald
 	primaryForeground: "0 0% 100%", // #ffffff
 	secondary: "210 40% 96%", // #f1f5f9
 	secondaryForeground: "222 47% 11%",
@@ -67,13 +67,13 @@ export const lightTheme = {
 
 // ─── Dark Theme ──────────────────────────────────────────────
 export const darkTheme = {
-	background: "150 50% 4%", // #050f08 — near-black green
-	foreground: "213 27% 90%", // #dde6f0 — off-white
-	card: "148 45% 6%", // #071009 — dark card
+	background: "150 50% 4%", // #050f08 - near-black green
+	foreground: "213 27% 90%", // #dde6f0 - off-white
+	card: "148 45% 6%", // #071009 - dark card
 	cardForeground: "213 27% 90%",
 	popover: "148 45% 5%",
 	popoverForeground: "213 27% 90%",
-	primary: "161 69% 42%", // #12c984 — electric emerald
+	primary: "161 69% 42%", // #12c984 - electric emerald
 	primaryForeground: "148 60% 8%", // very dark green text on primary
 	secondary: "148 32% 12%", // #0f2118
 	secondaryForeground: "213 27% 90%",
@@ -88,7 +88,7 @@ export const darkTheme = {
 	ring: "161 69% 42%",
 
 	// Sidebar-specific
-	sidebar: "150 60% 3%", // #040c06 — deepest black
+	sidebar: "150 60% 3%", // #040c06 - deepest black
 	sidebarForeground: "213 27% 85%",
 	sidebarBorder: "148 28% 10%",
 	sidebarPrimary: "161 69% 42%",

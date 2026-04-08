@@ -19,6 +19,8 @@ const schema = z.object({
 	ssid: z.string().max(64).optional(),
 	firmwareVersion: z.string().max(32).optional(),
 	factoryReset: z.boolean().optional(), // true when ESP32 NVS was cleared
+	serverHost: z.string().max(255).optional(), // actual host the device is connecting to
+	serverPort: z.number().int().min(1).max(65535).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
 		}
 
-		const { apiKey, macAddress, name, ssid, firmwareVersion, factoryReset } = parsed.data;
+		const { apiKey, macAddress, name, ssid, firmwareVersion, factoryReset, serverHost, serverPort } = parsed.data;
 
 		// Validate API key
 		const key = await db.apiKey.findFirst({
@@ -39,13 +41,15 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: "Invalid or revoked API key" }, { status: 401 });
 		}
 
-		// Upsert device — name is only set on first creation.
+		// Upsert device - name is only set on first creation.
 		// Dashboard edits take precedence and are never overwritten by the device.
 		const device = await db.device.upsert({
 			where: { macAddress },
 			update: {
 				...(ssid && { ssid }),
 				...(firmwareVersion && { firmwareVersion }),
+				...(serverHost && { reportedServerHost: serverHost }),
+				...(serverPort && { reportedServerPort: serverPort }),
 				apiKeyId: key.id,
 				lastSeenAt: new Date(),
 			},
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
 		if (factoryReset) {
 			await db.relay.deleteMany({ where: { deviceId: device.id } });
 			await db.device.update({ where: { id: device.id }, data: { homeId: null } });
-			console.log(`[Register] Factory reset for device ${device.id} — relays cleared, home unassigned`);
+			console.log(`[Register] Factory reset for device ${device.id} - relays cleared, home unassigned`);
 		}
 
 		// Update API key lastUsedAt

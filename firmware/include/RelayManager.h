@@ -18,7 +18,7 @@ public:
             _initPin(i);
     }
 
-    // Apply relay list received from server — always persist (source of truth)
+    // Apply relay list received from server - always persist (source of truth)
     void applyServerConfig(const RelayConfig newRelays[], uint8_t newCount)
     {
         count = newCount;
@@ -72,7 +72,7 @@ public:
         return false;
     }
 
-    // Re-initialise a single relay's GPIO — call after changing pin/state
+    // Re-initialise a single relay's GPIO - call after changing pin/state
     void reinitPin(uint8_t i)
     {
         if (i >= count)
@@ -82,7 +82,7 @@ public:
         DBG_RELAY("reinitPin[%d] GPIO%d → %s", i, relays[i].pin, relays[i].state ? "ON" : "OFF");
     }
 
-    // Release a relay's GPIO — call with OLD config BEFORE updating fields
+    // Release a relay's GPIO - call with OLD config BEFORE updating fields
     void releasePinAt(uint8_t i)
     {
         if (i >= count || relays[i].pin == 0)
@@ -92,7 +92,7 @@ public:
         pinMode(relays[i].pin, INPUT);
     }
 
-    // Explicitly flush current states to NVS — call before reboot or on disconnect
+    // Explicitly flush current states to NVS - call before reboot or on disconnect
     void flush()
     {
         Storage::saveRelays(relays, count);
@@ -136,17 +136,17 @@ public:
 private:
     uint32_t _lastChanged[MAX_RELAYS] = {};
 
-    // GPIO 34–39 are input-only on all ESP32 variants — reject them as relay pins
+    // GPIO 34–39 are input-only on all ESP32 variants - reject them as relay pins
     static bool _isOutputCapable(uint8_t pin)
     {
         if (pin >= 34 && pin <= 39)
         {
-            DBG_ERR("GPIO%d is input-only on ESP32 — cannot use as relay output", pin);
+            DBG_ERR("GPIO%d is input-only on ESP32 - cannot use as relay output", pin);
             return false;
         }
         if (pin == 0)
         {
-            DBG_WARN("GPIO0 is the BOOT button — using it as a relay may prevent flashing");
+            DBG_WARN("GPIO0 is the BOOT button - using it as a relay may prevent flashing");
         }
         return true;
     }

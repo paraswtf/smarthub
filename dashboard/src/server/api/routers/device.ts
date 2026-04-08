@@ -19,7 +19,7 @@ async function callWs(path: string, body: object): Promise<Response> {
 	});
 }
 
-// GPIO 34–39 are input-only on ESP32 — cannot be used as relay outputs
+// GPIO 34–39 are input-only on ESP32 - cannot be used as relay outputs
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
 function validateRelayPin(pin: number | undefined) {
 	if (pin !== undefined && INPUT_ONLY_PINS.includes(pin)) {
@@ -145,11 +145,11 @@ export const deviceRouter = createTRPCRouter({
 		}
 
 		if (pushed) {
-			// ESP32 received the command — relay_ack will confirm in DB
+			// ESP32 received the command - relay_ack will confirm in DB
 			return { ...relay, state: relay.state };
 		}
 
-		// Not connected — write DB so it syncs on next ping
+		// Not connected - write DB so it syncs on next ping
 		return ctx.db.relay.update({ where: { id: input.relayId }, data: { state: input.state, updatedAt: new Date() } });
 	}),
 
@@ -199,7 +199,7 @@ export const deviceRouter = createTRPCRouter({
 					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
-				// WS server unreachable — ESP32 picks up changes on next reconnect
+				// WS server unreachable - ESP32 picks up changes on next reconnect
 			}
 
 			return updated;
@@ -255,7 +255,7 @@ export const deviceRouter = createTRPCRouter({
 					signal: AbortSignal.timeout(2000),
 				});
 			} catch {
-				// WS server unreachable — ESP32 will pick up new relay on next reconnect
+				// WS server unreachable - ESP32 will pick up new relay on next reconnect
 			}
 
 			return relay;
@@ -283,6 +283,24 @@ export const deviceRouter = createTRPCRouter({
 			where: { id: input.deviceId },
 			data: { wifiNetworks: { push: { ssid: input.ssid, password: input.password } } },
 		});
+		try {
+			await callWs("/push-wifi-config", { deviceId: input.deviceId, networks: updated.wifiNetworks });
+		} catch {
+			/* offline */
+		}
+		return updated;
+	}),
+
+	/** Reorder server-managed WiFi networks - pass array of current indices in desired order */
+	reorderWifi: protectedProcedure.input(z.object({ deviceId: z.string(), order: z.array(z.number().int().min(0)) })).mutation(async ({ ctx, input }) => {
+		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+		const networks = owned.wifiNetworks;
+		if (input.order.length !== networks.length || !input.order.every((i) => i < networks.length)) {
+			throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid order" });
+		}
+		const reordered = input.order.map((i) => networks[i]!);
+		const updated = await ctx.db.device.update({ where: { id: input.deviceId }, data: { wifiNetworks: reordered } });
 		try {
 			await callWs("/push-wifi-config", { deviceId: input.deviceId, networks: updated.wifiNetworks });
 		} catch {
@@ -335,7 +353,7 @@ export const deviceRouter = createTRPCRouter({
 			return updated;
 		}),
 
-	/** Trigger an OTA firmware update — device must be online and firmware must be uploaded */
+	/** Trigger an OTA firmware update - device must be online and firmware must be uploaded */
 	triggerOta: protectedProcedure.input(z.object({ deviceId: z.string() })).mutation(async ({ ctx, input }) => {
 		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
 		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });

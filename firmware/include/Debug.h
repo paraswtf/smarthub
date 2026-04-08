@@ -40,7 +40,7 @@ static inline void _printTimestamp()
 // ─── Core macros ──────────────────────────────────────────────
 #if DEBUG_MODE
 
-// General log  — DBG_LOG(TAG, fmt, ...)
+// General log  - DBG_LOG(TAG, fmt, ...)
 #define DBG_LOG(tag, fmt, ...)                      \
     do                                              \
     {                                               \
@@ -65,7 +65,7 @@ static inline void _printTimestamp()
 #define DBG_PORTAL(fmt, ...) DBG_LOG(_TAG_PORTAL, fmt, ##__VA_ARGS__)
 #define DBG_STORAGE(fmt, ...) DBG_LOG(_TAG_STORAGE, fmt, ##__VA_ARGS__)
 
-// Dump a raw buffer as hex — useful for inspecting WS payloads
+// Dump a raw buffer as hex - useful for inspecting WS payloads
 #define DBG_HEX(label, buf, len)                                               \
     do                                                                         \
     {                                                                          \
@@ -76,7 +76,7 @@ static inline void _printTimestamp()
         Serial.println();                                                      \
     } while (0)
 
-// Print heap / stack stats — call anywhere to track memory
+// Print heap / stack stats - call anywhere to track memory
 #define DBG_HEAP()                                                                                           \
     do                                                                                                       \
     {                                                                                                        \
@@ -109,7 +109,7 @@ static inline void _printTimestamp()
         Serial.println(_CLR_BOLD "────────────────────────────────────" _CLR_RESET); \
     } while (0)
 
-// Assert — halts with an error message if condition is false
+// Assert - halts with an error message if condition is false
 #define DBG_ASSERT(cond, msg)                                      \
     do                                                             \
     {                                                              \

@@ -1,4 +1,4 @@
-# ESP Hub — ESP32 Firmware
+# ESP Hub - ESP32 Firmware
 
 Arduino/PlatformIO firmware for connecting ESP32 relay boards to the ESP Hub dashboard.
 
@@ -35,17 +35,17 @@ esp32/
 1. Open the `esp32/` folder in VS Code with PlatformIO installed.
 2. Flash with `pio run --target upload`.
 3. Open the serial monitor: `pio device monitor` (115200 baud).
-4. The ESP32 starts in **AP mode** — connect to the `ESP-Hub-Setup` WiFi network from
+4. The ESP32 starts in **AP mode** - connect to the `ESP-Hub-Setup` WiFi network from
    your phone or laptop.
 5. Your device should automatically open the config portal. If not, navigate to
    **http://192.168.4.1** manually.
 6. Fill in:
-    - **WiFi SSID / Password** — your home network
-    - **Device Name** — a friendly label shown in the dashboard
-    - **API Key** — copy from the ESP Hub dashboard → API Keys page
-    - **Server Host** — your ESP Hub server hostname (e.g. `myserver.com`)
-    - **Server Port** — usually `3000` (Next.js) for HTTP and `4001` for WebSocket
-    - **Secure** — enable if your server uses HTTPS/WSS
+    - **WiFi SSID / Password** - your home network
+    - **Device Name** - a friendly label shown in the dashboard
+    - **API Key** - copy from the ESP Hub dashboard → API Keys page
+    - **Server Host** - your ESP Hub server hostname (e.g. `myserver.com`)
+    - **Server Port** - usually `3000` (Next.js) for HTTP and `4001` for WebSocket
+    - **Secure** - enable if your server uses HTTPS/WSS
 7. Click **Save & Connect**. The ESP32 reboots, connects to WiFi, registers with the
    server, and appears in your dashboard.
 
@@ -53,7 +53,7 @@ esp32/
 
 ## Relay wiring
 
-Most relay modules are **active-LOW** — the relay activates when the GPIO is pulled LOW.
+Most relay modules are **active-LOW** - the relay activates when the GPIO is pulled LOW.
 `RelayManager` uses this convention by default:
 
 ```
@@ -84,7 +84,7 @@ Uses the onboard LED (GPIO 2 by default, active-LOW). Configure in `Config.h`.
 
 ## Re-entering config mode
 
-To reset config and re-enter the captive portal, call `Storage::clear()` and reboot —
+To reset config and re-enter the captive portal, call `Storage::clear()` and reboot -
 or hold a button wired to a GPIO and call it from `setup()` before `Storage::load()`.
 
 A simple reset-on-boot example (add to `setup()` in `main.cpp`):

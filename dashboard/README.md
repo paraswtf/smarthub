@@ -1,6 +1,6 @@
-# Blockphrase — T3 Stack
+# Blockphrase - T3 Stack
 
-Built with the [T3 Stack](https://create.t3.gg/) — Next.js App Router, TypeScript, Tailwind CSS, tRPC, Prisma, and NextAuth.
+Built with the [T3 Stack](https://create.t3.gg/) - Next.js App Router, TypeScript, Tailwind CSS, tRPC, Prisma, and NextAuth.
 
 ## Stack
 
@@ -111,7 +111,7 @@ For production, swap the `datasource` in `prisma/schema.prisma` to:
 
 ```prisma
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
 }
 ```

@@ -24,9 +24,85 @@ static SwitchManager switches;
 static HubClient hub;
 static CaptivePortal portal;
 
+// ─── Serial config receiver ──────────────────────────────────
+// Processes PING and CONFIG:{json} lines from the USB-connected dashboard.
+// Non-blocking: reads whatever bytes are available and returns immediately.
+// Called from the top of loop() AND injected into CaptivePortal's blocking
+// while-loop via tickCb so USB config works in any device state.
+static String _serialBuf;
+
+void handleSerial()
+{
+    while (Serial.available())
+    {
+        char c = (char)Serial.read();
+        if (c == '\r') continue;
+        if (c == '\n')
+        {
+            _serialBuf.trim();
+
+            if (_serialBuf == "PING")
+            {
+                Serial.println("SMARTHUB_PONG");
+            }
+            else if (_serialBuf.startsWith("CONFIG:"))
+            {
+                String json = _serialBuf.substring(7);
+                JsonDocument doc;
+                DeserializationError err = deserializeJson(doc, json);
+                if (err)
+                {
+                    Serial.print("SMARTHUB_ERR:invalid json: ");
+                    Serial.println(err.c_str());
+                }
+                else
+                {
+                    const char *apiKey   = doc["apiKey"]     | "";
+                    const char *ssid     = doc["ssid"]       | "";
+                    const char *password = doc["password"]   | "";
+                    const char *name     = doc["name"]       | "ESP32 Device";
+                    const char *host     = doc["serverHost"] | "";
+                    uint16_t    port     = doc["serverPort"] | (uint16_t)3000;
+                    bool        devMode  = doc["devMode"]    | false;
+
+                    if (strlen(apiKey) < 4 || strlen(ssid) == 0 || strlen(host) == 0)
+                    {
+                        Serial.println("SMARTHUB_ERR:missing required fields (apiKey, ssid, serverHost)");
+                    }
+                    else
+                    {
+                        DeviceConfig newCfg;
+                        newCfg.apiKey         = apiKey;
+                        newCfg.wifiSSID       = ssid;
+                        newCfg.wifiPassword   = password;
+                        newCfg.deviceName     = strlen(name) > 0 ? name : "ESP32 Device";
+                        newCfg.serverHost     = host;
+                        newCfg.serverPort     = port;
+                        newCfg.serverSecure   = !devMode;
+                        newCfg.devMode        = devMode;
+                        newCfg.extraWifiCount = 0;
+                        Storage::save(newCfg);
+                        DBG_MAIN("USB config applied — rebooting");
+                        Serial.println("SMARTHUB_OK");
+                        Serial.flush(); // wait for TX buffer to drain before reboot
+                        delay(800);
+                        ESP.restart();
+                    }
+                }
+            }
+
+            _serialBuf = "";
+        }
+        else if (_serialBuf.length() < 1024)
+        {
+            _serialBuf += c;
+        }
+    }
+}
+
 // ─── Switch callback ─────────────────────────────────────────
 // Called by SwitchManager when an input pin changes state.
-// Sends switch_trigger to the server — which finds the linked relay
+// Sends switch_trigger to the server - which finds the linked relay
 // (potentially on a different device) and issues relay_cmd to it.
 void onSwitchTriggered(const String &relayId, bool newState, bool isToggle)
 {
@@ -82,7 +158,7 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
-    DBG_BANNER("SmartHUB — Booting");
+    DBG_BANNER("SmartHUB - Booting");
     DBG_MAIN("Chip: %s  Rev: %d  Cores: %d  Freq: %d MHz",
              ESP.getChipModel(), ESP.getChipRevision(),
              ESP.getChipCores(), getCpuFrequencyMhz());
@@ -95,7 +171,7 @@ void setup()
     pinMode(0, INPUT_PULLUP);
     if (digitalRead(0) == LOW)
     {
-        DBG_MAIN("BOOT button held — waiting 3s to confirm factory reset…");
+        DBG_MAIN("BOOT button held - waiting 3s to confirm factory reset…");
         StatusLed::set(LED_BLINK_FAST);
         uint32_t held = millis();
         while (digitalRead(0) == LOW)
@@ -104,27 +180,27 @@ void setup()
             delay(10);
             if (millis() - held > 3000)
             {
-                DBG_MAIN("Factory reset confirmed — clearing NVS");
+                DBG_MAIN("Factory reset confirmed - clearing NVS");
                 StatusLed::set(LED_SOLID);
                 Storage::clear();
                 delay(500);
                 ESP.restart();
             }
         }
-        DBG_MAIN("BOOT released early — continuing normal boot");
+        DBG_MAIN("BOOT released early - continuing normal boot");
     }
 
     bool hasConfig = Storage::load(cfg);
 
     if (hasConfig)
     {
-        DBG_MAIN("Stored config — device: \"%s\"  server: %s:%d",
+        DBG_MAIN("Stored config - device: \"%s\"  server: %s:%d",
                  cfg.deviceName.c_str(), cfg.serverHost.c_str(), cfg.serverPort);
         state = S_CONNECT;
     }
     else
     {
-        DBG_MAIN("No config — starting captive portal");
+        DBG_MAIN("No config - starting captive portal");
         state = S_PORTAL;
     }
 
@@ -134,12 +210,13 @@ void setup()
 }
 
 // ─── Factory reset (BOOT button) ─────────────────────────────
-// Works in any state — hold GPIO 0 for 3s to wipe NVS and restart.
+// Works in any state - hold GPIO 0 for 3s to wipe NVS and restart.
 void checkFactoryReset()
 {
-    if (digitalRead(0) != LOW) return;
+    if (digitalRead(0) != LOW)
+        return;
 
-    DBG_MAIN("BOOT held — hold 3s for factory reset");
+    DBG_MAIN("BOOT held - hold 3s for factory reset");
     StatusLed::set(LED_BLINK_FAST);
     uint32_t held = millis();
     while (digitalRead(0) == LOW)
@@ -155,12 +232,13 @@ void checkFactoryReset()
             ESP.restart();
         }
     }
-    DBG_MAIN("BOOT released early — ignoring");
+    DBG_MAIN("BOOT released early - ignoring");
 }
 
 // ─── Loop ────────────────────────────────────────────────────
 void loop()
 {
+    handleSerial();
     StatusLed::tick();
     checkFactoryReset();
 
@@ -170,7 +248,7 @@ void loop()
     case S_PORTAL:
         DBG_BANNER("State: CAPTIVE PORTAL");
         StatusLed::set(LED_BLINK_FAST);
-        portal.run(cfg);
+        portal.run(cfg, handleSerial);
         break;
 
     case S_CONNECT:
@@ -187,7 +265,7 @@ void loop()
             DBG_WARN("WiFi failed (attempt %d/3)", wifiRetries);
             if (wifiRetries >= 3)
             {
-                DBG_ERR("WiFi failed 3 times — falling back to portal");
+                DBG_ERR("WiFi failed 3 times - falling back to portal");
                 wifiRetries = 0;
                 state = S_PORTAL;
             }
@@ -209,7 +287,7 @@ void loop()
         }
         else
         {
-            DBG_WARN("Registration failed — retrying in 5s");
+            DBG_WARN("Registration failed - retrying in 5s");
             uint32_t wait = millis();
             while (millis() - wait < 5000)
             {
@@ -229,7 +307,7 @@ void loop()
         hub.loop();
         StatusLed::set(hub.authenticated ? LED_SOLID : LED_BLINK_SLOW);
 
-        // Poll switches (input pins) — fires callback on state change
+        // Poll switches (input pins) - fires callback on state change
         if (hub.authenticated)
         {
             // Build relay state arrays for SwitchManager::loop()
@@ -245,7 +323,7 @@ void loop()
 
         if (WiFi.status() != WL_CONNECTED)
         {
-            DBG_WARN("WiFi connection lost — reconnecting");
+            DBG_WARN("WiFi connection lost - reconnecting");
             StatusLed::set(LED_BLINK_SLOW);
             hub.disconnect();
             if (connectWiFi())

@@ -51,13 +51,13 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 
 	const [connected, setConnected] = useState(false);
 
-	// These Sets persist for the lifetime of the provider — never recreated
+	// These Sets persist for the lifetime of the provider - never recreated
 	const deviceListeners = useRef<Set<Listener<DeviceUpdate>>>(new Set());
 	const relayListeners = useRef<Set<Listener<RelayUpdate>>>(new Set());
 	const otaProgressListeners = useRef<Set<Listener<OtaProgress>>>(new Set());
 	const otaResultListeners = useRef<Set<Listener<OtaResult>>>(new Set());
 
-	// Stable subscription functions — never change reference
+	// Stable subscription functions - never change reference
 	const onDeviceUpdate = useCallback((fn: Listener<DeviceUpdate>) => {
 		deviceListeners.current.add(fn);
 		console.log(`[WS Provider] deviceUpdate listener added (total: ${deviceListeners.current.size})`);
@@ -90,7 +90,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		};
 	}, []);
 
-	// Connect / reconnect — called whenever userId becomes available or changes
+	// Connect / reconnect - called whenever userId becomes available or changes
 	const connect = useCallback(() => {
 		const uid = userIdRef.current;
 		if (!uid || !mountedRef.current) return;
@@ -149,14 +149,14 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 			wsRef.current = null;
 			setConnected(false);
 			if (!mountedRef.current) return;
-			console.log(`[WS Provider] disconnected — retrying in ${appConfig.wsReconnectInterval}ms`);
+			console.log(`[WS Provider] disconnected - retrying in ${appConfig.wsReconnectInterval}ms`);
 			retryRef.current = setTimeout(connect, appConfig.wsReconnectInterval);
 		};
 
 		ws.onerror = () => ws.close();
-	}, []); // stable — reads userId from ref
+	}, []); // stable - reads userId from ref
 
-	// Mount once — listeners Set lives for the full component lifetime
+	// Mount once - listeners Set lives for the full component lifetime
 	useEffect(() => {
 		mountedRef.current = true;
 		return () => {

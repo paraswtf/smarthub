@@ -44,7 +44,7 @@ export function RelayScheduleDialog({ relayId, relayLabel, scheduleCount }: Prop
 			</DialogTrigger>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle className="text-base">Schedules — {relayLabel}</DialogTitle>
+					<DialogTitle className="text-base">Schedules - {relayLabel}</DialogTitle>
 				</DialogHeader>
 				{editing ? (
 					<ScheduleForm relayId={relayId} scheduleId={editing === "new" ? null : editing} onDone={() => setEditing(null)} />

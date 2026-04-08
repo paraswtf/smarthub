@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: "Device not found or key invalid" }, { status: 401 });
 		}
 
-		// ESP32 is authoritative for physical relay states — reconcile to DB
+		// ESP32 is authoritative for physical relay states - reconcile to DB
 		if (relayStates?.length) {
 			await Promise.all(
 				relayStates.map(({ id, state }) =>

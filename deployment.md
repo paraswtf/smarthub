@@ -23,11 +23,11 @@ Edit `.env` and fill in:
 | --------------------- | ------------------------------------------------------------------------------------ |
 | `AUTH_SECRET`         | Session secret. Generate with `openssl rand -base64 32`                              |
 | `WS_SECRET`           | Shared secret between Next.js and WS server. Generate with `openssl rand -base64 32` |
-| `NEXT_PUBLIC_API_URL` | `http://<YOUR_SERVER_IP>:3000` — the LAN IP of your server                           |
+| `NEXT_PUBLIC_API_URL` | `http://<YOUR_SERVER_IP>:3000` - the LAN IP of your server                           |
 | `NEXT_PUBLIC_WS_PORT` | `4001` (default)                                                                     |
 | `WEBHOOK_SECRET`      | Secret for GitHub webhook (see auto-deploy section)                                  |
-| `BREVO_API_KEY`       | Optional — for email notifications                                                   |
-| `BREVO_SENDER_EMAIL`  | Optional — verified sender in Brevo                                                  |
+| `BREVO_API_KEY`       | Optional - for email notifications                                                   |
+| `BREVO_SENDER_EMAIL`  | Optional - verified sender in Brevo                                                  |
 
 ### 2. Start services
 
@@ -37,11 +37,11 @@ docker compose up -d
 
 This starts 5 services:
 
-- **mongodb** — MongoDB 7 with replica set (required by Prisma)
-- **redis** — Redis 7 for rate limiting
-- **nextjs** — Dashboard on port 3000
-- **wsserver** — WebSocket server on port 4001
-- **webhook** — Auto-deploy listener on port 9000
+- **mongodb** - MongoDB 7 with replica set (required by Prisma)
+- **redis** - Redis 7 for rate limiting
+- **nextjs** - Dashboard on port 3000
+- **wsserver** - WebSocket server on port 4001
+- **webhook** - Auto-deploy listener on port 9000
 
 ### 3. Initialize the database
 
@@ -87,7 +87,7 @@ git pull origin main
 docker compose up --build -d nextjs wsserver
 ```
 
-Only the app containers are rebuilt — MongoDB and Redis data persist.
+Only the app containers are rebuilt - MongoDB and Redis data persist.
 
 ## Useful Commands
 

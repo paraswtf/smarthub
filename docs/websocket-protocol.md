@@ -41,7 +41,7 @@ sequenceDiagram
     Note over ESP,WS: Physical switch pressed
     ESP->>WS: switch_trigger { linkedRelayId, desiredState, isToggle }
     WS->>DB: verify ownership, update relay state
-    WS->>ESP: relay_cmd (to target device — may differ from triggering device)
+    WS->>ESP: relay_cmd (to target device - may differ from triggering device)
     WS->>BR: relay_update
 ```
 
@@ -50,7 +50,7 @@ sequenceDiagram
 | Message          | Fields                                      | Server action                                                                                                                                           |
 | ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`           | `apiKey`, `macAddress`, `deviceId?`         | Upsert device in DB; build subscriber set; send `auth_ok`; broadcast `device_update` to all subscribers                                                 |
-| `ping_ack`       | —                                           | Resolve pending on-demand ping; update `lastSeenAt` in DB                                                                                               |
+| `ping_ack`       | -                                           | Resolve pending on-demand ping; update `lastSeenAt` in DB                                                                                               |
 | `relay_ack`      | `relayId`, `state`                          | Write state to DB; broadcast `relay_update` to subscribers                                                                                              |
 | `switch_trigger` | `linkedRelayId`, `desiredState`, `isToggle` | Validate same-user ownership; compute new state (`isToggle` XORs current); write DB; send `relay_cmd` to target device socket; broadcast `relay_update` |
 
@@ -60,7 +60,7 @@ sequenceDiagram
 | ---------------------- | ------------------------------------ | ---------------------------------------------------- |
 | `auth_ok`              | `deviceId`, `relays[]`, `switches[]` | Successful authentication                            |
 | `auth_fail`            | `reason`                             | API key invalid or inactive                          |
-| `ping`                 | `relays: [{id, pin, state}]`         | Every 30s — keepalive + authoritative state sync     |
+| `ping`                 | `relays: [{id, pin, state}]`         | Every 30s - keepalive + authoritative state sync     |
 | `relay_cmd`            | `relayId`, `pin`, `state`            | User toggle, schedule fire, or cross-device switch   |
 | `relay_add`            | `relay`                              | Relay created in dashboard while device is connected |
 | `relay_update_config`  | `relay`                              | Relay pin/label/icon changed in dashboard            |
@@ -79,7 +79,7 @@ sequenceDiagram
 
     BR->>WS: (WebSocket connect to /browser)
     BR->>WS: subscribe { userId }
-    WS->>BR: (registered — future updates delivered)
+    WS->>BR: (registered - future updates delivered)
 
     Note over WS,BR: Any device relay changes
     WS->>BR: device_update { deviceId, lastSeenAt, relays[] }
@@ -131,4 +131,4 @@ All endpoints require:
 | `/ping-device`                | `{ deviceId, timeoutMs? }`          | `{ online }`              | Send `ping`, wait for `ping_ack` (default 3s timeout)       |
 | `/refresh-device-subscribers` | `{ deviceId }`                      | `{ ok, subscriberCount }` | Rebuild subscriber set from DB (call after sharing changes) |
 
-`pushed: false` means the device socket exists but wasn't open (device offline). The relay command is not queued — tRPC falls back to writing desired state to DB so the next heartbeat delivers it.
+`pushed: false` means the device socket exists but wasn't open (device offline). The relay command is not queued - tRPC falls back to writing desired state to DB so the next heartbeat delivers it.

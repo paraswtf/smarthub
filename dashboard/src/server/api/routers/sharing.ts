@@ -13,7 +13,7 @@ async function refreshDeviceSubscribers(deviceId: string) {
 			signal: AbortSignal.timeout(2000),
 		});
 	} catch {
-		// WS server unreachable — subscribers will refresh on next device connect
+		// WS server unreachable - subscribers will refresh on next device connect
 	}
 }
 

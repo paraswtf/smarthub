@@ -28,6 +28,9 @@ import {
 	Zap,
 	Lock,
 	LockOpen,
+	ChevronUp,
+	ChevronDown,
+	Star,
 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
@@ -43,6 +46,7 @@ import { cn } from "~/lib/utils";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../../../globals.config";
 import { PinoutEditor } from "~/components/dashboard/PinoutEditor";
+import { FirmwareDownloadButton } from "~/components/dashboard/FirmwareDownloadButton";
 
 const RELAY_ICONS: Record<string, React.ElementType> = {
 	lightbulb: Lightbulb,
@@ -104,17 +108,17 @@ export default function DeviceDetailPage() {
 	const { data: device, isLoading } = api.device.get.useQuery(
 		{ id },
 		{
-			refetchInterval: 30_000, // fallback poll — WS handles real-time
+			refetchInterval: 30_000, // fallback poll - WS handles real-time
 		},
 	);
 
 	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
 
-	// Online status — determined by on-demand ping, not DB field
+	// Online status - determined by on-demand ping, not DB field
 	const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = checking
 	const pingDevice = api.device.pingDevice.useMutation();
 
-	// Ping device on load — retry up to 3 times if offline (device may still be connecting)
+	// Ping device on load - retry up to 3 times if offline (device may still be connecting)
 	useEffect(() => {
 		if (!device) return;
 		setIsOnline(null);
@@ -198,7 +202,7 @@ export default function DeviceDetailPage() {
 				if (s[relayId] === "pending") return { ...s, [relayId]: "timeout" };
 				return s;
 			});
-			// Rollback optimistic update — fetch real DB state (which wasn't changed)
+			// Rollback optimistic update - fetch real DB state (which wasn't changed)
 			void utils.device.get.invalidate({ id });
 		}, 5000);
 	};
@@ -237,7 +241,7 @@ export default function DeviceDetailPage() {
 		},
 	});
 
-	// Optimistic relay toggle — update UI immediately, roll back on error
+	// Optimistic relay toggle - update UI immediately, roll back on error
 	const toggleRelay = api.device.toggleRelay.useMutation({
 		onMutate: async ({ relayId, state }) => {
 			await utils.device.get.cancel({ id });
@@ -258,11 +262,11 @@ export default function DeviceDetailPage() {
 		onSuccess: (result, { relayId, state }) => {
 			if (result.state === state) {
 				// DB was updated directly (device offline or WS push failed)
-				// Confirm immediately — no relay_ack expected
+				// Confirm immediately - no relay_ack expected
 				setRelayStatus((s) => ({ ...s, [relayId]: "confirmed" }));
 				setTimeout(() => clearRelayStatus(relayId), 1500);
 			} else {
-				// Command was pushed to ESP32 — wait for relay_ack via WS
+				// Command was pushed to ESP32 - wait for relay_ack via WS
 				setRelayPending(relayId);
 			}
 		},
@@ -334,6 +338,19 @@ export default function DeviceDetailPage() {
 			void utils.device.get.invalidate({ id });
 		},
 	});
+	const reorderWifi = api.device.reorderWifi.useMutation({
+		onSuccess: () => {
+			void utils.device.get.invalidate({ id });
+		},
+	});
+
+	const moveWifi = (fromIndex: number, toIndex: number) => {
+		const n = device?.wifiNetworks.length ?? 0;
+		if (toIndex < 0 || toIndex >= n) return;
+		const order = Array.from({ length: n }, (_, i) => i);
+		order.splice(toIndex, 0, order.splice(fromIndex, 1)[0]!);
+		reorderWifi.mutate({ deviceId: id, order });
+	};
 
 	// Server config mutation
 	const updateServerConfig = api.device.updateServerConfig.useMutation({
@@ -650,7 +667,7 @@ export default function DeviceDetailPage() {
 													<button
 														onClick={() => clearRelayStatus(relay.id)}
 														className="flex items-center gap-1 text-xs text-destructive hover:opacity-80 transition-opacity"
-														title="Device did not confirm — click to dismiss"
+														title="Device did not confirm - click to dismiss"
 													>
 														<AlertCircle className="w-3 h-3" />
 														Timed out
@@ -748,7 +765,7 @@ export default function DeviceDetailPage() {
 					{!isOnline && device.relays.length > 0 && (
 						<p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5 bg-muted/50 rounded-lg px-3 py-2 w-fit">
 							<WifiOff className="w-3.5 h-3.5" />
-							Device is offline — relay toggles will sync when it reconnects.
+							Device is offline - relay toggles will sync when it reconnects.
 						</p>
 					)}
 				</TabsContent>
@@ -802,10 +819,10 @@ export default function DeviceDetailPage() {
 												onChange={(e) => setEditSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
 												className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
 											>
-												<option value="">— select —</option>
+												<option value="">- select -</option>
 												{allRelays.map((r: AllRelayItem) => (
 													<option key={r.id} value={r.id}>
-														{r.deviceName} — {r.label} (GPIO {r.pin})
+														{r.deviceName} - {r.label} (GPIO {r.pin})
 													</option>
 												))}
 											</select>
@@ -848,7 +865,7 @@ export default function DeviceDetailPage() {
 											{`GPIO ${det.pin} · ${SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"))?.label ?? det.switchType}`} · →{" "}
 											{(() => {
 												const r = allRelays.find((x: AllRelayItem) => x.id === det.linkedRelayId);
-												return r ? `${r.deviceName} — ${r.label}` : "unknown";
+												return r ? `${r.deviceName} - ${r.label}` : "unknown";
 											})()}
 										</p>
 									</div>
@@ -911,10 +928,10 @@ export default function DeviceDetailPage() {
 											onChange={(e) => setNewSwitch((d) => ({ ...d, linkedRelayId: e.target.value }))}
 											className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
 										>
-											<option value="">— select —</option>
+											<option value="">- select -</option>
 											{allRelays.map((r: AllRelayItem) => (
 												<option key={r.id} value={r.id}>
-													{r.deviceName} — {r.label} (GPIO {r.pin})
+													{r.deviceName} - {r.label} (GPIO {r.pin})
 												</option>
 											))}
 										</select>
@@ -988,32 +1005,82 @@ export default function DeviceDetailPage() {
 									<Wifi className="w-4 h-4" />
 									WiFi Networks
 								</CardTitle>
-								<CardDescription>Extra networks the ESP32 tries if the primary (captive portal) fails — pushed live when device is online</CardDescription>
+								<CardDescription>Networks tried in order - captive portal primary first, then extras. Drag or use arrows to reprioritise.</CardDescription>
 							</CardHeader>
-							<CardContent className="space-y-3">
-								{device.wifiNetworks.length === 0 && !addingWifi && <p className="text-sm text-muted-foreground">No extra networks configured.</p>}
+							<CardContent className="space-y-1">
+								{/* Primary (captive portal) - always first, read-only */}
+								<div className="flex items-center gap-2 py-2 border-b border-border">
+									<div className="flex flex-col gap-0.5 w-full">
+										<div className="flex items-center gap-2">
+											<span className="text-sm font-medium">{device.ssid ?? "Unknown"}</span>
+											<Badge variant="outline" className="text-[10px] h-4 px-1.5 text-primary border-primary/30">
+												Primary
+											</Badge>
+											{device.ssid && device.wifiNetworks.some((n) => n.ssid === device.ssid) && (
+												<Badge variant="outline" className="text-[10px] h-4 px-1.5 text-muted-foreground">
+													also in extras
+												</Badge>
+											)}
+										</div>
+										<p className="text-xs text-muted-foreground">Configured via captive portal - edit on the device itself</p>
+									</div>
+									{/* spacer to align with delete button width below */}
+									<div className="w-16 shrink-0" />
+								</div>
+
+								{/* Extra networks (wn1–wn4) */}
+								{device.wifiNetworks.length === 0 && !addingWifi && <p className="text-sm text-muted-foreground py-2">No extra networks configured.</p>}
 								{device.wifiNetworks.map((nw, i) => (
-									<div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-										<div>
-											<p className="text-sm font-medium">{nw.ssid}</p>
+									<div key={i} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
+										<div className="flex flex-col gap-0.5 flex-1 min-w-0">
+											<div className="flex items-center gap-2">
+												<span className="text-sm font-medium truncate">{nw.ssid}</span>
+												{i === 0 && (
+													<Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">
+														Default
+													</Badge>
+												)}
+											</div>
 											<p className="text-xs text-muted-foreground">•••••••• (password saved)</p>
 										</div>
-										<Button
-											variant="ghost"
-											size="sm"
-											className="text-destructive hover:text-destructive h-7"
-											onClick={() => removeWifi.mutate({ deviceId: id, index: i })}
-											disabled={removeWifi.isPending}
-										>
-											<Trash2 className="w-3.5 h-3.5" />
-										</Button>
+										<div className="flex items-center gap-0.5 shrink-0">
+											{/* Set as default (move to top) */}
+											{i > 0 && (
+												<Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Set as default" onClick={() => moveWifi(i, 0)} disabled={reorderWifi.isPending}>
+													<Star className="w-3.5 h-3.5" />
+												</Button>
+											)}
+											<Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => moveWifi(i, i - 1)} disabled={i === 0 || reorderWifi.isPending}>
+												<ChevronUp className="w-3.5 h-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 w-7 p-0"
+												onClick={() => moveWifi(i, i + 1)}
+												disabled={i === device.wifiNetworks.length - 1 || reorderWifi.isPending}
+											>
+												<ChevronDown className="w-3.5 h-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+												onClick={() => removeWifi.mutate({ deviceId: id, index: i })}
+												disabled={removeWifi.isPending}
+											>
+												<Trash2 className="w-3.5 h-3.5" />
+											</Button>
+										</div>
 									</div>
 								))}
+
+								{/* Add network form */}
 								{addingWifi ? (
-									<div className="space-y-2 pt-1">
+									<div className="space-y-2 pt-2">
 										<Input placeholder="SSID" value={newWifi.ssid} onChange={(e) => setNewWifi((w) => ({ ...w, ssid: e.target.value }))} className="h-8 text-sm" autoFocus />
 										<Input
-											placeholder="Password (leave empty for open)"
+											placeholder="Password (leave empty for open network)"
 											type="password"
 											value={newWifi.password}
 											onChange={(e) => setNewWifi((w) => ({ ...w, password: e.target.value }))}
@@ -1035,8 +1102,8 @@ export default function DeviceDetailPage() {
 										</div>
 									</div>
 								) : (
-									<Button variant="outline" size="sm" className="w-full mt-1" onClick={() => setAddingWifi(true)} disabled={device.wifiNetworks.length >= 4}>
-										<Plus className="w-3.5 h-3.5" /> Add Network
+									<Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setAddingWifi(true)} disabled={device.wifiNetworks.length >= 4}>
+										<Plus className="w-3.5 h-3.5" /> Add Extra Network
 										{device.wifiNetworks.length >= 4 && <span className="ml-2 text-muted-foreground">(max 4)</span>}
 									</Button>
 								)}
@@ -1051,7 +1118,7 @@ export default function DeviceDetailPage() {
 								<div className="flex items-start justify-between">
 									<div>
 										<CardTitle className="text-base">Server Configuration</CardTitle>
-										<CardDescription>Host, port, and TLS setting pushed to the device</CardDescription>
+										<CardDescription>What the device is connecting to, and any dashboard override</CardDescription>
 									</div>
 									{!editingServerCfg && (
 										<Button variant="outline" size="sm" onClick={startEditServerCfg}>
@@ -1113,28 +1180,54 @@ export default function DeviceDetailPage() {
 										</div>
 									</div>
 								) : (
-									<div className="space-y-2">
-										{device.cfgServerHost ? (
-											<>
-												<div className="flex gap-2 text-sm">
-													<span className="text-muted-foreground min-w-[60px]">Host</span>
-													<span className="mono">{device.cfgServerHost}</span>
+									<div className="space-y-4">
+										{/* What the device is actually using */}
+										<div>
+											<p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Currently using</p>
+											{device.reportedServerHost ? (
+												<div className="space-y-1">
+													<div className="flex gap-2 text-sm">
+														<span className="text-muted-foreground min-w-[60px]">Host</span>
+														<span className="mono">{device.reportedServerHost}</span>
+													</div>
+													<div className="flex gap-2 text-sm">
+														<span className="text-muted-foreground min-w-[60px]">Port</span>
+														<span className="mono">{device.reportedServerPort}</span>
+													</div>
 												</div>
-												<div className="flex gap-2 text-sm">
-													<span className="text-muted-foreground min-w-[60px]">Port</span>
-													<span className="mono">{device.cfgServerPort}</span>
+											) : (
+												<p className="text-sm text-muted-foreground">Unknown - device hasn't registered yet with this firmware.</p>
+											)}
+										</div>
+
+										{/* Dashboard override */}
+										<div>
+											<p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Dashboard override</p>
+											{device.cfgServerHost ? (
+												<div className="space-y-1">
+													<div className="flex gap-2 text-sm">
+														<span className="text-muted-foreground min-w-[60px]">Host</span>
+														<span className="mono">{device.cfgServerHost}</span>
+													</div>
+													<div className="flex gap-2 text-sm">
+														<span className="text-muted-foreground min-w-[60px]">Port</span>
+														<span className="mono">{device.cfgServerPort}</span>
+													</div>
+													<div className="flex gap-2 text-sm">
+														<span className="text-muted-foreground min-w-[60px]">TLS</span>
+														<span className="flex items-center gap-1">
+															{device.cfgServerTLS ? <Lock className="w-3.5 h-3.5 text-primary" /> : <LockOpen className="w-3.5 h-3.5 text-muted-foreground" />}
+															{device.cfgServerTLS ? "Enabled" : "Disabled"}
+														</span>
+													</div>
+													{device.reportedServerHost && device.reportedServerHost !== device.cfgServerHost && (
+														<p className="text-xs text-amber-500 mt-1">Override differs from reported - device will switch on next reconnect.</p>
+													)}
 												</div>
-												<div className="flex gap-2 text-sm">
-													<span className="text-muted-foreground min-w-[60px]">TLS</span>
-													<span className="flex items-center gap-1">
-														{device.cfgServerTLS ? <Lock className="w-3.5 h-3.5 text-primary" /> : <LockOpen className="w-3.5 h-3.5 text-muted-foreground" />}
-														{device.cfgServerTLS ? "Enabled" : "Disabled"}
-													</span>
-												</div>
-											</>
-										) : (
-											<p className="text-sm text-muted-foreground">Not configured — device uses captive portal settings.</p>
-										)}
+											) : (
+												<p className="text-sm text-muted-foreground">No override - device uses its captive portal host.</p>
+											)}
+										</div>
 									</div>
 								)}
 							</CardContent>
@@ -1149,9 +1242,15 @@ export default function DeviceDetailPage() {
 									<Zap className="w-4 h-4" />
 									Firmware Update (OTA)
 								</CardTitle>
-								<CardDescription>Upload a .bin and push it over-the-air — device will restart after flashing</CardDescription>
+								<CardDescription>Upload a .bin and push it over-the-air - device will restart after flashing</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">
+								{/* Download latest */}
+								<div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+									<p className="text-xs text-muted-foreground">Need the latest firmware?</p>
+									<FirmwareDownloadButton size="sm" showVersion />
+								</div>
+
 								{/* Upload section */}
 								<div className="space-y-2">
 									<Label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">1. Upload firmware file</Label>
@@ -1229,7 +1328,7 @@ export default function DeviceDetailPage() {
 										</div>
 										{otaUploadStatus === "success" && (
 											<p className="text-xs text-primary flex items-center gap-1">
-												<CheckCircle2 className="w-3.5 h-3.5" /> Flashed — device is rebooting
+												<CheckCircle2 className="w-3.5 h-3.5" /> Flashed - device is rebooting
 											</p>
 										)}
 									</div>

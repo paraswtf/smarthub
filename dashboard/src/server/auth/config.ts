@@ -45,13 +45,13 @@ export const authConfig = {
 			},
 		}),
 	],
-	// CredentialsProvider requires JWT strategy — this is a NextAuth constraint.
+	// CredentialsProvider requires JWT strategy - this is a NextAuth constraint.
 	// To prevent stale/forged tokens from working, the session callback hits the
 	// DB on every request and returns null if the user no longer exists.
 	session: { strategy: "jwt" },
 	callbacks: {
 		async signIn({ user, account, profile }) {
-			// Google users — always allow (profile picture + verification handled in jwt callback)
+			// Google users - always allow (profile picture + verification handled in jwt callback)
 			if (account?.provider === "google") return true;
 
 			// Block unverified credential users and resend verification email

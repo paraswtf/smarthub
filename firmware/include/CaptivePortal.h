@@ -90,7 +90,7 @@ function toggleDev(){
 class CaptivePortal
 {
 public:
-  bool run(DeviceConfig &cfg)
+  bool run(DeviceConfig &cfg, void (*tickCb)() = nullptr)
   {
     _saved = false;
     _cfg = &cfg;
@@ -105,7 +105,7 @@ public:
         IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
     WiFi.softAP(apSSID, strlen(AP_PASSWORD) > 0 ? AP_PASSWORD : nullptr);
 
-    DBG_PORTAL("AP started — SSID: %s  IP: 192.168.4.1", apSSID);
+    DBG_PORTAL("AP started - SSID: %s  IP: 192.168.4.1", apSSID);
 
     _dns.start(53, "*", IPAddress(192, 168, 4, 1));
 
@@ -113,21 +113,22 @@ public:
                { _handleRoot(); });
     _server.on("/save", HTTP_POST, [this]()
                { _handleSave(); });
-    // Captive portal detection — redirect to portal page so OS shows the popup
+    // Captive portal detection - redirect to portal page so OS shows the popup
     _server.onNotFound([this]()
                        { _handleCaptiveRedirect(); });
     _server.begin();
 
-    DBG_PORTAL("Web server started — waiting for configuration…");
+    DBG_PORTAL("Web server started - waiting for configuration…");
 
     uint32_t start = millis();
     while (!_saved)
     {
       _dns.processNextRequest();
       _server.handleClient();
+      if (tickCb) tickCb();
       if (millis() - start > CONFIG_PORTAL_TIMEOUT_MS)
       {
-        DBG_WARN("Portal timeout (%d ms) — rebooting", CONFIG_PORTAL_TIMEOUT_MS);
+        DBG_WARN("Portal timeout (%d ms) - rebooting", CONFIG_PORTAL_TIMEOUT_MS);
         ESP.restart();
       }
       delay(2);
@@ -172,7 +173,7 @@ private:
   {
     if (!_server.hasArg("ssid") || !_server.hasArg("key") || !_server.hasArg("host"))
     {
-      DBG_ERR("Portal /save — missing fields");
+      DBG_ERR("Portal /save - missing fields");
       _server.send(400, "text/plain", "Missing fields");
       return;
     }
@@ -195,14 +196,14 @@ private:
       _cfg->serverSecure = true; // production always uses WSS
     }
 
-    DBG_PORTAL("Config saved — ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  name=%s",
+    DBG_PORTAL("Config saved - ssid=%s  host=%s  port=%d  tls=%d  devMode=%d  name=%s",
                _cfg->wifiSSID.c_str(), _cfg->serverHost.c_str(),
                _cfg->serverPort, _cfg->serverSecure,
                _cfg->devMode, _cfg->deviceName.c_str());
 
     Storage::save(*_cfg);
     // Also persist primary network in new wn0 slot so connectWiFi() logging is consistent
-    // (wn0 is never sent to the server — it lives in NVS only)
+    // (wn0 is never sent to the server - it lives in NVS only)
 
     _server.send(200, "text/html; charset=utf-8",
                  "<html><head><meta charset='UTF-8'></head>"

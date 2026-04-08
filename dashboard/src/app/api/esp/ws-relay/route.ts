@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 	});
 
 	// Attempt real-time push via WebSocket server
-	// The WS server runs on a different port — we call it via internal HTTP
+	// The WS server runs on a different port - we call it via internal HTTP
 	const wsApiUrl = process.env.WS_INTERNAL_URL ?? `http://localhost:${process.env.WS_PORT ?? 4001}`;
 	let pushed = false;
 	try {
@@ -68,12 +68,12 @@ export async function POST(req: NextRequest) {
 		});
 		pushed = res.ok;
 	} catch {
-		// WS server not reachable — state is in DB, device will sync on next heartbeat
+		// WS server not reachable - state is in DB, device will sync on next heartbeat
 	}
 
 	return NextResponse.json({
 		ok: true,
 		synced: pushed,
-		message: pushed ? "Command pushed to device in real-time" : "State saved — will sync on device's next heartbeat",
+		message: pushed ? "Command pushed to device in real-time" : "State saved - will sync on device's next heartbeat",
 	});
 }

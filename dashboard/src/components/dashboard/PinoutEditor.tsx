@@ -20,7 +20,7 @@ interface PinDef {
 	type: PinType;
 }
 
-// NodeMCU ESP32 DevKit V1 — 30-pin, USB port at top
+// NodeMCU ESP32 DevKit V1 - 30-pin, USB port at top
 const NODEMCU_LEFT: PinDef[] = [
 	{ id: "L0", gpio: null, label: "3V3", type: "power" },
 	{ id: "L1", gpio: null, label: "GND", type: "gnd" },
@@ -374,13 +374,13 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 
 							return (
 								<Fragment key={row}>
-									{/* Col 1 — left card */}
+									{/* Col 1 - left card */}
 									<div className="flex items-center justify-end pr-1 h-8">
 										{la?.relay && <RelayCard relay={la.relay} flip onClick={() => handlePinClick(lp)} />}
 										{la?.sw && <SwitchCard sw={la.sw} allRelays={allRelays} flip onClick={() => handlePinClick(lp)} />}
 									</div>
 
-									{/* Col 2 — left wire */}
+									{/* Col 2 - left wire */}
 									<div className="flex items-center h-8">
 										<div
 											className="w-full transition-all"
@@ -391,7 +391,7 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 										/>
 									</div>
 
-									{/* Col 3 — left pin */}
+									{/* Col 3 - left pin */}
 									<div
 										className={cn("flex items-center justify-end h-8 pr-1", lp.gpio !== null && (!!la || isOwner) && "cursor-pointer")}
 										onDragOver={(e) => {
@@ -420,14 +420,14 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 										/>
 									</div>
 
-									{/* Col 4 — PCB body */}
+									{/* Col 4 - PCB body */}
 									<div className={pcbCls}>
 										<span className="text-[9px] font-mono text-green-400/90">{lp.label}</span>
 										{row === 7 && <span className="absolute left-1/2 -translate-x-1/2 text-[7px] text-green-700 font-bold tracking-widest pointer-events-none">ESP32</span>}
 										<span className="text-[9px] font-mono text-green-400/90">{rp.label}</span>
 									</div>
 
-									{/* Col 5 — right pin */}
+									{/* Col 5 - right pin */}
 									<div
 										className={cn("flex items-center justify-start h-8 pl-1", rp.gpio !== null && (!!ra || isOwner) && "cursor-pointer")}
 										onDragOver={(e) => {
@@ -456,7 +456,7 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 										/>
 									</div>
 
-									{/* Col 6 — right wire */}
+									{/* Col 6 - right wire */}
 									<div className="flex items-center h-8">
 										<div
 											className="w-full transition-all"
@@ -467,7 +467,7 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 										/>
 									</div>
 
-									{/* Col 7 — right card */}
+									{/* Col 7 - right card */}
 									<div className="flex items-center justify-start pl-1 h-8">
 										{ra?.relay && <RelayCard relay={ra.relay} onClick={() => handlePinClick(rp)} />}
 										{ra?.sw && <SwitchCard sw={ra.sw} allRelays={allRelays} onClick={() => handlePinClick(rp)} />}
@@ -507,7 +507,7 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 							<DialogHeader>
 								<DialogTitle>GPIO {activeAction.gpio}</DialogTitle>
 								<DialogDescription>
-									{activeAction.pinType === "input-only" ? "Input-only — ideal for switches, cannot drive a relay output." : "General I/O — can drive a relay or read a switch."}
+									{activeAction.pinType === "input-only" ? "Input-only - ideal for switches, cannot drive a relay output." : "General I/O - can drive a relay or read a switch."}
 								</DialogDescription>
 							</DialogHeader>
 							<div className={cn("grid gap-2 pt-1", activeAction.pinType !== "input-only" && !atMaxRelays ? "grid-cols-2" : "grid-cols-1")}>
@@ -635,10 +635,10 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 								<div>
 									<Label className="text-xs">Linked Relay</Label>
 									<select value={swLinkedId} onChange={(e) => setSwLinkedId(e.target.value)} className="mt-1 h-8 w-full text-sm rounded-md border border-input bg-background px-2">
-										<option value="">— select relay —</option>
+										<option value="">- select relay -</option>
 										{allRelays.map((r) => (
 											<option key={r.id} value={r.id}>
-												{r.deviceName} — {r.label} (GPIO {r.pin})
+												{r.deviceName} - {r.label} (GPIO {r.pin})
 											</option>
 										))}
 									</select>

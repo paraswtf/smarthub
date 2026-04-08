@@ -8,10 +8,10 @@ export const env = createEnv({
 		AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
 		DATABASE_URL: z.string().min(1),
 		NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-		// Brevo — transactional email (API)
+		// Brevo - transactional email (API)
 		BREVO_API_KEY: z.string().optional(),
 		BREVO_SENDER_EMAIL: z.string().email().optional(),
-		// Redis — rate limiting (used when implemented)
+		// Redis - rate limiting (used when implemented)
 		REDIS_URL: z.string().optional(),
 		// WebSocket server
 		WS_PORT: z.string().optional(),
