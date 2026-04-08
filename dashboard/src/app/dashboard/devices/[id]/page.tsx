@@ -186,7 +186,7 @@ export default function DeviceDetailPage() {
 
 	// Edit relay state
 	const [editingRelayId, setEditingRelayId] = useState<string | null>(null);
-	const [editRelay, setEditRelay] = useState({ label: "", icon: "plug", pin: 2 });
+	const [editRelay, setEditRelay] = useState({ label: "", icon: "plug", pin: 2, activeLow: true });
 
 	// Per-relay confirmation state: null | "pending" | "confirmed" | "timeout"
 	const [relayStatus, setRelayStatus] = useState<Record<string, "pending" | "confirmed" | "timeout">>({});
@@ -497,7 +497,7 @@ export default function DeviceDetailPage() {
 	};
 
 	const startEditRelay = (relay: (typeof device.relays)[0]) => {
-		setEditRelay({ label: relay.label, icon: relay.icon, pin: relay.pin });
+		setEditRelay({ label: relay.label, icon: relay.icon, pin: relay.pin, activeLow: relay.activeLow });
 		setEditingRelayId(relay.id);
 	};
 
@@ -622,6 +622,17 @@ export default function DeviceDetailPage() {
 														))}
 													</select>
 												</div>
+											</div>
+											<div>
+												<Label className="text-[10px]">Trigger logic</Label>
+												<select
+													value={editRelay.activeLow ? "low" : "high"}
+													onChange={(e) => setEditRelay((r) => ({ ...r, activeLow: e.target.value === "low" }))}
+													className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+												>
+													<option value="low">Active-LOW (most relay modules)</option>
+													<option value="high">Active-HIGH (bare relay / custom driver)</option>
+												</select>
 											</div>
 											<div className="flex gap-1.5">
 												<Button
