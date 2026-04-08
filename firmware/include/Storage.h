@@ -261,13 +261,6 @@ public:
                 for (uint8_t k = 0; k < regs[i].speeds[j].onPinCount && k < MAX_REG_OUTPUTS; k++)
                     prefs.putUChar((sp + "p" + String(k)).c_str(), regs[i].speeds[j].onPins[k]);
             }
-            prefs.putUChar((p + "ipc").c_str(), regs[i].inputPinCount);
-            for (uint8_t j = 0; j < regs[i].inputPinCount && j < MAX_REG_INPUTS; j++)
-            {
-                String ip = p + "i" + String(j) + "_";
-                prefs.putUChar((ip + "spd").c_str(), regs[i].inputPins[j].speed);
-                prefs.putUChar((ip + "pin").c_str(), regs[i].inputPins[j].pin);
-            }
             prefs.putUChar((p + "spd").c_str(), regs[i].currentSpeed);
         }
         prefs.end();
@@ -306,17 +299,61 @@ public:
                 for (uint8_t k = 0; k < regs[i].speeds[j].onPinCount && k < MAX_REG_OUTPUTS; k++)
                     regs[i].speeds[j].onPins[k] = prefs.getUChar((sp + "p" + String(k)).c_str(), 0);
             }
-            regs[i].inputPinCount = prefs.getUChar((p + "ipc").c_str(), 0);
-            for (uint8_t j = 0; j < regs[i].inputPinCount && j < MAX_REG_INPUTS; j++)
-            {
-                String ip = p + "i" + String(j) + "_";
-                regs[i].inputPins[j].speed = prefs.getUChar((ip + "spd").c_str(), 0);
-                regs[i].inputPins[j].pin = prefs.getUChar((ip + "pin").c_str(), 0);
-            }
             regs[i].currentSpeed = prefs.getUChar((p + "spd").c_str(), 0);
-            DBG_STORAGE("  reg[%d] outputs=%d speeds=%d inputs=%d currentSpeed=%d label=%s",
+            DBG_STORAGE("  reg[%d] outputs=%d speeds=%d currentSpeed=%d label=%s",
                         i, regs[i].outputPinCount, regs[i].speedCount,
-                        regs[i].inputPinCount, regs[i].currentSpeed, regs[i].label.c_str());
+                        regs[i].currentSpeed, regs[i].label.c_str());
+        }
+        prefs.end();
+        return count;
+    }
+
+    // ── Regulator input storage ──────────────────────────────────
+    // NVS keys: ri_cnt, ri<i>_id, ri<i>_lbl, ri<i>_pc, ri<i>_p<j>_spd, ri<i>_p<j>_pin, ri<i>_lrid
+
+    static void saveRegulatorInputs(const RegulatorInputConfig ris[], uint8_t count)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        prefs.putUChar("ri_cnt", count);
+        for (uint8_t i = 0; i < count && i < MAX_REG_INPUTS; i++)
+        {
+            String p = "ri" + String(i) + "_";
+            prefs.putString((p + "id").c_str(), ris[i].id);
+            prefs.putString((p + "lbl").c_str(), ris[i].label);
+            prefs.putString((p + "lrid").c_str(), ris[i].linkedRegulatorId);
+            prefs.putUChar((p + "pc").c_str(), ris[i].pinCount);
+            for (uint8_t j = 0; j < ris[i].pinCount && j < MAX_REG_INPUT_PINS; j++)
+            {
+                String pp = p + "p" + String(j) + "_";
+                prefs.putUChar((pp + "spd").c_str(), ris[i].pins[j].speed);
+                prefs.putUChar((pp + "pin").c_str(), ris[i].pins[j].pin);
+            }
+        }
+        prefs.end();
+        DBG_STORAGE("saveRegulatorInputs() - %d input(s)", count);
+    }
+
+    static uint8_t loadRegulatorInputs(RegulatorInputConfig ris[])
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, true);
+        uint8_t count = prefs.getUChar("ri_cnt", 0);
+        for (uint8_t i = 0; i < count && i < MAX_REG_INPUTS; i++)
+        {
+            String p = "ri" + String(i) + "_";
+            ris[i].id = prefs.getString((p + "id").c_str(), "");
+            ris[i].label = prefs.getString((p + "lbl").c_str(), "Reg Input");
+            ris[i].linkedRegulatorId = prefs.getString((p + "lrid").c_str(), "");
+            ris[i].pinCount = prefs.getUChar((p + "pc").c_str(), 0);
+            for (uint8_t j = 0; j < ris[i].pinCount && j < MAX_REG_INPUT_PINS; j++)
+            {
+                String pp = p + "p" + String(j) + "_";
+                ris[i].pins[j].speed = prefs.getUChar((pp + "spd").c_str(), 0);
+                ris[i].pins[j].pin = prefs.getUChar((pp + "pin").c_str(), 0);
+            }
+            DBG_STORAGE("  regInput[%d] pins=%d linked=%s label=%s",
+                        i, ris[i].pinCount, ris[i].linkedRegulatorId.c_str(), ris[i].label.c_str());
         }
         prefs.end();
         return count;

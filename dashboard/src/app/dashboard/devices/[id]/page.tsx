@@ -156,6 +156,8 @@ export default function DeviceDetailPage() {
 	type DeviceGetOutput = RouterOutputs["device"]["get"];
 	type SwitchItem = RouterOutputs["switch"]["list"][number];
 	type AllRelayItem = RouterOutputs["switch"]["listAllRelays"][number];
+	type RegInputItem = RouterOutputs["regulatorInput"]["list"][number];
+	type AllRegulatorItem = RouterOutputs["regulatorInput"]["listAllRegulators"][number];
 
 	useEffect(() => {
 		return onRelayUpdate((update) => {
@@ -449,15 +451,13 @@ export default function DeviceDetailPage() {
 		label: string;
 		outputPins: string; // comma-separated for input ease
 		speeds: { speed: number; onPins: number[] }[];
-		inputPins: { speed: number; pin: number }[];
-	}>({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }], inputPins: [] });
+	}>({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }] });
 	const [editingRegulatorId, setEditingRegulatorId] = useState<string | null>(null);
 	const [editRegulator, setEditRegulator] = useState<{
 		label: string;
 		outputPins: string;
 		speeds: { speed: number; onPins: number[] }[];
-		inputPins: { speed: number; pin: number }[];
-	}>({ label: "", outputPins: "", speeds: [], inputPins: [] });
+	}>({ label: "", outputPins: "", speeds: [] });
 
 	// Per-regulator speed confirmation state
 	const [regStatus, setRegStatus] = useState<Record<string, "pending" | "confirmed" | "timeout">>({});
@@ -527,7 +527,7 @@ export default function DeviceDetailPage() {
 		onSuccess: () => {
 			void utils.regulator.list.invalidate({ deviceId: id });
 			setAddingRegulator(false);
-			setNewRegulator({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }], inputPins: [] });
+			setNewRegulator({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }] });
 		},
 	});
 	const updateRegulatorMut = api.regulator.update.useMutation({
@@ -554,9 +554,54 @@ export default function DeviceDetailPage() {
 			label: reg.label,
 			outputPins: reg.outputPins.join(", "),
 			speeds: reg.speeds.map((s) => ({ speed: s.speed, onPins: [...s.onPins] })),
-			inputPins: reg.inputPins.map((ip) => ({ speed: ip.speed, pin: ip.pin })),
 		});
 		setEditingRegulatorId(reg.id);
+	};
+
+	// ── Regulator Input state & mutations ──────────────────
+	const { data: regInputList = [] } = api.regulatorInput.list.useQuery({ deviceId: id });
+	const { data: allRegulators = [] } = api.regulatorInput.listAllRegulators.useQuery();
+	const [addingRegInput, setAddingRegInput] = useState(false);
+	const [newRegInput, setNewRegInput] = useState<{
+		label: string;
+		pins: { speed: number; pin: number }[];
+		linkedRegulatorId: string;
+	}>({ label: "Regulator Input", pins: [{ speed: 1, pin: 36 }], linkedRegulatorId: "" });
+	const [editingRegInputId, setEditingRegInputId] = useState<string | null>(null);
+	const [editRegInput, setEditRegInput] = useState<{
+		label: string;
+		pins: { speed: number; pin: number }[];
+		linkedRegulatorId: string;
+	}>({ label: "", pins: [], linkedRegulatorId: "" });
+	const [deleteRegInputId, setDeleteRegInputId] = useState<string | null>(null);
+
+	const addRegInputMut = api.regulatorInput.add.useMutation({
+		onSuccess: () => {
+			void utils.regulatorInput.list.invalidate({ deviceId: id });
+			setAddingRegInput(false);
+			setNewRegInput({ label: "Regulator Input", pins: [{ speed: 1, pin: 36 }], linkedRegulatorId: "" });
+		},
+	});
+	const updateRegInputMut = api.regulatorInput.update.useMutation({
+		onSuccess: () => {
+			void utils.regulatorInput.list.invalidate({ deviceId: id });
+			setEditingRegInputId(null);
+		},
+	});
+	const deleteRegInputMut = api.regulatorInput.delete.useMutation({
+		onSuccess: () => {
+			void utils.regulatorInput.list.invalidate({ deviceId: id });
+			setDeleteRegInputId(null);
+		},
+	});
+
+	const startEditRegInput = (ri: RegInputItem) => {
+		setEditRegInput({
+			label: ri.label,
+			pins: ri.pins.map((p) => ({ speed: p.speed, pin: p.pin })),
+			linkedRegulatorId: ri.linkedRegulatorId,
+		});
+		setEditingRegInputId(ri.id);
 	};
 
 	// Delete confirm
@@ -707,6 +752,7 @@ export default function DeviceDetailPage() {
 						<Fan className="w-3 h-3" />
 						Regulators ({regulatorList.length})
 					</TabsTrigger>
+					<TabsTrigger value="regInputs">Reg Inputs ({regInputList.length})</TabsTrigger>
 					<TabsTrigger value="wiring" className="flex items-center gap-1.5">
 						<GitBranch className="w-3 h-3" />
 						Wiring
@@ -1189,62 +1235,6 @@ export default function DeviceDetailPage() {
 												);
 											})}
 										</div>
-										{/* Input pins */}
-										<div className="space-y-2">
-											<div className="flex items-center justify-between">
-												<Label className="text-[10px]">Input Pins (optional)</Label>
-												<Button
-													size="sm"
-													variant="ghost"
-													className="h-6 text-xs"
-													onClick={() => setEditRegulator((r) => ({ ...r, inputPins: [...r.inputPins, { speed: 1, pin: 36 }] }))}
-													disabled={editRegulator.inputPins.length >= 7}
-												>
-													<Plus className="w-3 h-3 mr-1" /> Add Input
-												</Button>
-											</div>
-											{editRegulator.inputPins.map((ip, ii) => (
-												<div key={ii} className="flex items-center gap-2 text-xs">
-													<span className="w-16 shrink-0">Speed {ip.speed}:</span>
-													<Input
-														type="number"
-														value={ip.speed}
-														onChange={(e) =>
-															setEditRegulator((r) => ({
-																...r,
-																inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
-															}))
-														}
-														className="h-7 w-16 text-xs"
-														min={1}
-														max={7}
-														placeholder="Speed"
-													/>
-													<span className="text-muted-foreground">→ GPIO</span>
-													<Input
-														type="number"
-														value={ip.pin}
-														onChange={(e) =>
-															setEditRegulator((r) => ({
-																...r,
-																inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
-															}))
-														}
-														className="h-7 w-16 text-xs"
-														min={0}
-														max={39}
-													/>
-													<Button
-														size="sm"
-														variant="ghost"
-														className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
-														onClick={() => setEditRegulator((r) => ({ ...r, inputPins: r.inputPins.filter((_, i) => i !== ii) }))}
-													>
-														<X className="w-3 h-3" />
-													</Button>
-												</div>
-											))}
-										</div>
 										<div className="flex gap-2">
 											<Button
 												size="sm"
@@ -1255,7 +1245,6 @@ export default function DeviceDetailPage() {
 														label: editRegulator.label,
 														outputPins: parseOutputPins(editRegulator.outputPins),
 														speeds: editRegulator.speeds,
-														inputPins: editRegulator.inputPins,
 													})
 												}
 												disabled={
@@ -1328,7 +1317,7 @@ export default function DeviceDetailPage() {
 										{/* Info line */}
 										<div className="text-[10px] text-muted-foreground flex flex-wrap gap-3">
 											<span>Output: GPIO {reg.outputPins.join(", ")}</span>
-											{reg.inputPins.length > 0 && <span>Input: {reg.inputPins.map((ip) => `GPIO${ip.pin}→S${ip.speed}`).join(", ")}</span>}
+
 											<span>
 												{reg.speeds.length} speed level{reg.speeds.length !== 1 ? "s" : ""}
 											</span>
@@ -1409,61 +1398,6 @@ export default function DeviceDetailPage() {
 										);
 									})}
 								</div>
-								{/* Input pins */}
-								<div className="space-y-2">
-									<div className="flex items-center justify-between">
-										<Label className="text-[10px]">Input Pins (optional)</Label>
-										<Button
-											size="sm"
-											variant="ghost"
-											className="h-6 text-xs"
-											onClick={() => setNewRegulator((r) => ({ ...r, inputPins: [...r.inputPins, { speed: 1, pin: 36 }] }))}
-											disabled={newRegulator.inputPins.length >= 7}
-										>
-											<Plus className="w-3 h-3 mr-1" /> Add Input
-										</Button>
-									</div>
-									{newRegulator.inputPins.map((ip, ii) => (
-										<div key={ii} className="flex items-center gap-2 text-xs">
-											<Input
-												type="number"
-												value={ip.speed}
-												onChange={(e) =>
-													setNewRegulator((r) => ({
-														...r,
-														inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
-													}))
-												}
-												className="h-7 w-16 text-xs"
-												min={1}
-												max={7}
-												placeholder="Speed"
-											/>
-											<span className="text-muted-foreground">→ GPIO</span>
-											<Input
-												type="number"
-												value={ip.pin}
-												onChange={(e) =>
-													setNewRegulator((r) => ({
-														...r,
-														inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
-													}))
-												}
-												className="h-7 w-16 text-xs"
-												min={0}
-												max={39}
-											/>
-											<Button
-												size="sm"
-												variant="ghost"
-												className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
-												onClick={() => setNewRegulator((r) => ({ ...r, inputPins: r.inputPins.filter((_, i) => i !== ii) }))}
-											>
-												<X className="w-3 h-3" />
-											</Button>
-										</div>
-									))}
-								</div>
 								<div className="flex gap-2">
 									<Button
 										size="sm"
@@ -1474,7 +1408,6 @@ export default function DeviceDetailPage() {
 												label: newRegulator.label,
 												outputPins: parseOutputPins(newRegulator.outputPins),
 												speeds: newRegulator.speeds,
-												inputPins: newRegulator.inputPins,
 											})
 										}
 										disabled={addRegulatorMut.isPending || !newRegulator.label || parseOutputPins(newRegulator.outputPins).length === 0 || newRegulator.speeds.length === 0}
@@ -1490,6 +1423,257 @@ export default function DeviceDetailPage() {
 						) : (
 							<Button variant="outline" size="sm" className="w-full" onClick={() => setAddingRegulator(true)} disabled={regulatorList.length >= appConfig.maxRegulatorsPerDevice}>
 								<Plus className="w-3.5 h-3.5" /> Add Regulator
+							</Button>
+						))}
+				</TabsContent>
+
+				{/* REGULATOR INPUTS TAB */}
+				<TabsContent value="regInputs" className="mt-4 space-y-3">
+					<p className="text-xs text-muted-foreground">
+						Regulator inputs monitor physical rotary switch pins (one-pin-per-speed, shorted to 3V3) and control a linked regulator on any of your devices.
+					</p>
+
+					{regInputList.map((ri: RegInputItem) => (
+						<div key={ri.id} className="relay-card p-4">
+							{editingRegInputId === ri.id ? (
+								<div className="space-y-2.5">
+									<Input value={editRegInput.label} onChange={(e) => setEditRegInput((d) => ({ ...d, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" />
+									{/* Pins */}
+									<div className="space-y-2">
+										<div className="flex items-center justify-between">
+											<Label className="text-[10px]">Speed Pins</Label>
+											<Button
+												size="sm"
+												variant="ghost"
+												className="h-6 text-xs"
+												onClick={() => setEditRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36 }] }))}
+												disabled={editRegInput.pins.length >= 7}
+											>
+												<Plus className="w-3 h-3 mr-1" /> Add Pin
+											</Button>
+										</div>
+										{editRegInput.pins.map((ip, ii) => (
+											<div key={ii} className="flex items-center gap-2 text-xs">
+												<span className="text-muted-foreground shrink-0">Speed</span>
+												<Input
+													type="number"
+													value={ip.speed}
+													onChange={(e) =>
+														setEditRegInput((d) => ({
+															...d,
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
+														}))
+													}
+													className="h-7 w-16 text-xs"
+													min={1}
+													max={7}
+												/>
+												<span className="text-muted-foreground">→ GPIO</span>
+												<Input
+													type="number"
+													value={ip.pin}
+													onChange={(e) =>
+														setEditRegInput((d) => ({
+															...d,
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
+														}))
+													}
+													className="h-7 w-16 text-xs"
+													min={0}
+													max={39}
+												/>
+												<Button
+													size="sm"
+													variant="ghost"
+													className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+													onClick={() => setEditRegInput((d) => ({ ...d, pins: d.pins.filter((_, i) => i !== ii) }))}
+												>
+													<X className="w-3 h-3" />
+												</Button>
+											</div>
+										))}
+									</div>
+									{/* Linked regulator */}
+									<div>
+										<Label className="text-[10px]">Linked Regulator</Label>
+										<select
+											value={editRegInput.linkedRegulatorId}
+											onChange={(e) => setEditRegInput((d) => ({ ...d, linkedRegulatorId: e.target.value }))}
+											className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+										>
+											<option value="">- select -</option>
+											{allRegulators.map((r: AllRegulatorItem) => (
+												<option key={r.id} value={r.id}>
+													{r.deviceName} - {r.label}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="flex gap-1.5">
+										<Button
+											size="sm"
+											className="flex-1 h-7 text-xs"
+											onClick={() =>
+												updateRegInputMut.mutate({
+													regulatorInputId: ri.id,
+													label: editRegInput.label,
+													pins: editRegInput.pins,
+													linkedRegulatorId: editRegInput.linkedRegulatorId,
+												})
+											}
+											disabled={updateRegInputMut.isPending || !editRegInput.label || editRegInput.pins.length === 0 || !editRegInput.linkedRegulatorId}
+										>
+											{updateRegInputMut.isPending ? (
+												<Loader2 className="w-3 h-3 animate-spin" />
+											) : (
+												<>
+													<Save className="w-3 h-3" /> Save
+												</>
+											)}
+										</Button>
+										<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingRegInputId(null)}>
+											Cancel
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											className="h-7 text-xs text-destructive hover:text-destructive"
+											onClick={() => deleteRegInputMut.mutate({ regulatorInputId: ri.id })}
+											disabled={deleteRegInputMut.isPending}
+										>
+											<Trash2 className="w-3 h-3" />
+										</Button>
+									</div>
+								</div>
+							) : (
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="font-semibold text-sm">{ri.label}</p>
+										<p className="text-xs text-muted-foreground mono mt-0.5">
+											{ri.pins.map((p) => `GPIO${p.pin}→S${p.speed}`).join(", ")} · →{" "}
+											{(() => {
+												const r = allRegulators.find((x: AllRegulatorItem) => x.id === ri.linkedRegulatorId);
+												return r ? `${r.deviceName} - ${r.label}` : "unknown";
+											})()}
+										</p>
+									</div>
+									{isOwner && (
+										<button onClick={() => startEditRegInput(ri)} className="text-muted-foreground hover:text-foreground">
+											<Pencil className="w-3.5 h-3.5" />
+										</button>
+									)}
+								</div>
+							)}
+						</div>
+					))}
+
+					{/* Add regulator input (owner only) */}
+					{isOwner &&
+						(addingRegInput ? (
+							<div className="relay-card p-4 space-y-2.5">
+								<Input value={newRegInput.label} onChange={(e) => setNewRegInput((d) => ({ ...d, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" autoFocus />
+								{/* Pins */}
+								<div className="space-y-2">
+									<div className="flex items-center justify-between">
+										<Label className="text-[10px]">Speed Pins</Label>
+										<Button
+											size="sm"
+											variant="ghost"
+											className="h-6 text-xs"
+											onClick={() => setNewRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36 }] }))}
+											disabled={newRegInput.pins.length >= 7}
+										>
+											<Plus className="w-3 h-3 mr-1" /> Add Pin
+										</Button>
+									</div>
+									{newRegInput.pins.map((ip, ii) => (
+										<div key={ii} className="flex items-center gap-2 text-xs">
+											<span className="text-muted-foreground shrink-0">Speed</span>
+											<Input
+												type="number"
+												value={ip.speed}
+												onChange={(e) =>
+													setNewRegInput((d) => ({
+														...d,
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={1}
+												max={7}
+											/>
+											<span className="text-muted-foreground">→ GPIO</span>
+											<Input
+												type="number"
+												value={ip.pin}
+												onChange={(e) =>
+													setNewRegInput((d) => ({
+														...d,
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={0}
+												max={39}
+											/>
+											<Button
+												size="sm"
+												variant="ghost"
+												className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+												onClick={() => setNewRegInput((d) => ({ ...d, pins: d.pins.filter((_, i) => i !== ii) }))}
+											>
+												<X className="w-3 h-3" />
+											</Button>
+										</div>
+									))}
+								</div>
+								{/* Linked regulator */}
+								<div>
+									<Label className="text-[10px]">Linked Regulator</Label>
+									<select
+										value={newRegInput.linkedRegulatorId}
+										onChange={(e) => setNewRegInput((d) => ({ ...d, linkedRegulatorId: e.target.value }))}
+										className="h-8 w-full mt-0.5 text-sm rounded-md border border-input bg-background px-2"
+									>
+										<option value="">- select -</option>
+										{allRegulators.map((r: AllRegulatorItem) => (
+											<option key={r.id} value={r.id}>
+												{r.deviceName} - {r.label}
+											</option>
+										))}
+									</select>
+								</div>
+								<div className="flex gap-1.5">
+									<Button
+										size="sm"
+										className="flex-1 h-7 text-xs"
+										onClick={() =>
+											addRegInputMut.mutate({
+												deviceId: device!.id,
+												label: newRegInput.label,
+												pins: newRegInput.pins,
+												linkedRegulatorId: newRegInput.linkedRegulatorId,
+											})
+										}
+										disabled={addRegInputMut.isPending || !newRegInput.label || newRegInput.pins.length === 0 || !newRegInput.linkedRegulatorId}
+									>
+										{addRegInputMut.isPending ? (
+											<Loader2 className="w-3 h-3 animate-spin" />
+										) : (
+											<>
+												<Plus className="w-3 h-3" /> Add Reg Input
+											</>
+										)}
+									</Button>
+									<Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingRegInput(false)}>
+										Cancel
+									</Button>
+								</div>
+							</div>
+						) : (
+							<Button variant="outline" size="sm" className="w-full" onClick={() => setAddingRegInput(true)} disabled={allRegulators.length === 0}>
+								<Plus className="w-3.5 h-3.5" /> Add Reg Input
+								{allRegulators.length === 0 && <span className="ml-2 text-muted-foreground">(add a regulator to any device first)</span>}
 							</Button>
 						))}
 				</TabsContent>

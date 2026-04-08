@@ -5,23 +5,19 @@
 #include "Config.h"
 #include "RegulatorTypes.h"
 
-using RegulatorCallback = void (*)(const String &regulatorId, uint8_t speed);
-
 class RegulatorManager
 {
 public:
     uint8_t count = 0;
     RegulatorConfig regulators[MAX_REGULATORS];
 
-    void begin(RegulatorCallback cb)
+    void begin()
     {
-        _callback = cb;
         count = Storage::loadRegulators(regulators);
         DBG_RELAY("RegulatorManager: loaded %d regulator(s) from NVS", count);
         for (uint8_t i = 0; i < count; i++)
         {
             _initOutputPins(i);
-            _initInputPins(i);
             _applySpeed(i);
         }
     }
@@ -31,10 +27,7 @@ public:
     {
         // Release old pins
         for (uint8_t i = 0; i < count; i++)
-        {
             _releaseOutputPins(i);
-            _releaseInputPins(i);
-        }
 
         count = newCount;
         DBG_RELAY("RegulatorManager: applying %d regulator(s) from server", count);
@@ -43,7 +36,6 @@ public:
             regulators[i] = newRegs[i];
             _lastChanged[i] = 0;
             _initOutputPins(i);
-            _initInputPins(i);
             _applySpeed(i);
         }
         Storage::saveRegulators(regulators, count);
@@ -56,7 +48,6 @@ public:
         regulators[count] = reg;
         _lastChanged[count] = 0;
         _initOutputPins(count);
-        _initInputPins(count);
         _applySpeed(count);
         count++;
         Storage::saveRegulators(regulators, count);
@@ -70,10 +61,8 @@ public:
             if (regulators[i].id == id)
             {
                 _releaseOutputPins(i);
-                _releaseInputPins(i);
                 regulators[i] = updated;
                 _initOutputPins(i);
-                _initInputPins(i);
                 _applySpeed(i);
                 Storage::saveRegulators(regulators, count);
                 DBG_RELAY("RegulatorManager: updated '%s'", id.c_str());
@@ -90,7 +79,6 @@ public:
             if (regulators[i].id == id)
             {
                 _releaseOutputPins(i);
-                _releaseInputPins(i);
                 // Shift remaining regulators down
                 for (uint8_t j = i; j < count - 1; j++)
                 {
@@ -127,57 +115,6 @@ public:
         return false;
     }
 
-    // Poll input pins and fire callback on speed change
-    void loop(uint32_t debounceMs = 80)
-    {
-        uint32_t now = millis();
-        for (uint8_t i = 0; i < count; i++)
-        {
-            if (regulators[i].inputPinCount == 0)
-                continue;
-
-            // Skip input polling if speed was set by server within last 10s
-            if (_lastChanged[i] != 0 && (now - _lastChanged[i]) < 10000)
-                continue;
-
-            // Check which input pin is HIGH (one-pin-per-speed rotary)
-            uint8_t detectedSpeed = 0; // default: no pin HIGH = OFF
-            for (uint8_t j = 0; j < regulators[i].inputPinCount; j++)
-            {
-                uint8_t pin = regulators[i].inputPins[j].pin;
-                if (digitalRead(pin) == HIGH)
-                {
-                    detectedSpeed = regulators[i].inputPins[j].speed;
-                    break; // only one pin HIGH at a time
-                }
-            }
-
-            // Debounce: require stable reading
-            uint8_t flatIdx = i * MAX_REG_INPUTS;
-            if (detectedSpeed != _pendingSpeed[i])
-            {
-                _pendingSpeed[i] = detectedSpeed;
-                _pendingTime[i] = now;
-                continue;
-            }
-
-            if ((now - _pendingTime[i]) < debounceMs)
-                continue;
-
-            // Stable reading - apply if different from current
-            if (detectedSpeed != regulators[i].currentSpeed)
-            {
-                DBG_RELAY("RegulatorManager: input detected speed %d → %d for '%s'",
-                          regulators[i].currentSpeed, detectedSpeed, regulators[i].label.c_str());
-                regulators[i].currentSpeed = detectedSpeed;
-                _applySpeed(i);
-                Storage::saveRegulatorSpeed(i, detectedSpeed);
-                if (_callback)
-                    _callback(regulators[i].id, detectedSpeed);
-            }
-        }
-    }
-
     void flush()
     {
         Storage::saveRegulators(regulators, count);
@@ -209,18 +146,15 @@ public:
         DBG_RELAY("── Regulator table (%d) ──────────────────", count);
         for (uint8_t i = 0; i < count; i++)
         {
-            DBG_RELAY("  [%d] speed=%d  outputs=%d  inputs=%d  label=%s  id=%s",
+            DBG_RELAY("  [%d] speed=%d  outputs=%d  label=%s  id=%s",
                       i, regulators[i].currentSpeed,
-                      regulators[i].outputPinCount, regulators[i].inputPinCount,
+                      regulators[i].outputPinCount,
                       regulators[i].label.c_str(), regulators[i].id.c_str());
         }
     }
 
 private:
-    RegulatorCallback _callback = nullptr;
     uint32_t _lastChanged[MAX_REGULATORS] = {};
-    uint8_t _pendingSpeed[MAX_REGULATORS] = {};
-    uint32_t _pendingTime[MAX_REGULATORS] = {};
 
     // GPIO 34–39 are input-only on all ESP32 variants
     static bool _isOutputCapable(uint8_t pin)
@@ -242,22 +176,6 @@ private:
                 continue;
             pinMode(pin, OUTPUT);
             digitalWrite(pin, HIGH); // active-LOW: OFF = HIGH
-        }
-    }
-
-    void _initInputPins(uint8_t i)
-    {
-        for (uint8_t j = 0; j < regulators[i].inputPinCount; j++)
-        {
-            uint8_t pin = regulators[i].inputPins[j].pin;
-            if (pin == 0)
-                continue;
-            // Input-only pins (34-39) don't support internal pull-down;
-            // user must add external pull-down resistor
-            if (pin >= 34 && pin <= 39)
-                pinMode(pin, INPUT);
-            else
-                pinMode(pin, INPUT_PULLDOWN);
         }
     }
 
@@ -327,17 +245,6 @@ private:
             if (pin == 0 || !_isOutputCapable(pin))
                 continue;
             digitalWrite(pin, HIGH); // active-LOW: OFF
-            pinMode(pin, INPUT);
-        }
-    }
-
-    void _releaseInputPins(uint8_t i)
-    {
-        for (uint8_t j = 0; j < regulators[i].inputPinCount; j++)
-        {
-            uint8_t pin = regulators[i].inputPins[j].pin;
-            if (pin == 0)
-                continue;
             pinMode(pin, INPUT);
         }
     }

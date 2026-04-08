@@ -10,6 +10,7 @@
 #include "SwitchTypes.h"
 #include "SwitchManager.h"
 #include "RegulatorManager.h"
+#include "RegulatorInputManager.h"
 #include "Debug.h"
 #include "Config.h"
 
@@ -19,12 +20,14 @@ public:
     bool connected = false;
     bool authenticated = false;
 
-    void begin(DeviceConfig &cfg, RelayManager &relays, SwitchManager &switches, RegulatorManager &regulators)
+    void begin(DeviceConfig &cfg, RelayManager &relays, SwitchManager &switches,
+               RegulatorManager &regulators, RegulatorInputManager &regInputs)
     {
         _cfg = &cfg;
         _relays = &relays;
         _switches = &switches;
         _regulators = &regulators;
+        _regInputs = &regInputs;
     }
 
     // ── REST registration ─────────────────────────────────────
@@ -162,6 +165,7 @@ public:
     {
         _relays->flush();
         _regulators->flush();
+        _regInputs->flush();
         _resetState();
     }
 
@@ -180,15 +184,16 @@ public:
         _send(doc);
     }
 
-    // Send regulator input notification (physical rotary switch changed speed)
-    void sendRegulatorInput(const String &regulatorId, uint8_t speed)
+    // Send regulator input trigger (physical rotary switch changed speed)
+    // Server resolves linkedRegulatorId → target device and sends regulator_cmd
+    void sendRegulatorInputTrigger(const String &linkedRegulatorId, uint8_t speed)
     {
         if (!authenticated) return;
         JsonDocument doc;
-        doc["type"] = "regulator_input";
-        doc["regulatorId"] = regulatorId;
+        doc["type"] = "regulator_input_trigger";
+        doc["linkedRegulatorId"] = linkedRegulatorId;
         doc["speed"] = speed;
-        DBG_WS("→ regulator_input id=%s speed=%d", regulatorId.c_str(), speed);
+        DBG_WS("→ regulator_input_trigger linked=%s speed=%d", linkedRegulatorId.c_str(), speed);
         _send(doc);
     }
 
@@ -210,7 +215,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.5.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.5.1";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -218,6 +223,7 @@ private:
     RelayManager *_relays = nullptr;
     SwitchManager *_switches = nullptr;
     RegulatorManager *_regulators = nullptr;
+    RegulatorInputManager *_regInputs = nullptr;
     uint32_t _lastActivity = 0;
 
     void _resetState()
@@ -231,6 +237,7 @@ private:
         DBG_WS("Force reconnect triggered");
         _relays->flush();
         _regulators->flush();
+        _regInputs->flush();
         _resetState();
         _ws.disconnect(); // triggers auto-reconnect via setReconnectInterval
     }
@@ -421,24 +428,43 @@ private:
                         }
                         reg.speedCount++;
                     }
-                    // Input pins
-                    JsonArray ipArr = g["inputPins"].as<JsonArray>();
-                    reg.inputPinCount = 0;
-                    for (JsonObject ip : ipArr)
-                    {
-                        if (reg.inputPinCount >= MAX_REG_INPUTS) break;
-                        reg.inputPins[reg.inputPinCount].speed = ip["speed"].as<uint8_t>();
-                        reg.inputPins[reg.inputPinCount].pin = ip["pin"].as<uint8_t>();
-                        reg.inputPinCount++;
-                    }
                     reg.currentSpeed = g["speed"].as<uint8_t>();
-                    DBG_HUB("  reg[%d] id=%s label=%s outputs=%d speeds=%d inputs=%d speed=%d",
+                    DBG_HUB("  reg[%d] id=%s label=%s outputs=%d speeds=%d speed=%d",
                             regCount, reg.id.c_str(), reg.label.c_str(),
-                            reg.outputPinCount, reg.speedCount, reg.inputPinCount, reg.currentSpeed);
+                            reg.outputPinCount, reg.speedCount, reg.currentSpeed);
                     regCount++;
                 }
             }
             _regulators->applyServerConfig(regBuf, regCount);
+
+            // ── Parse regulator inputs ──────────────────────────────
+            JsonArray riArr = doc["regulatorInputs"].as<JsonArray>();
+            RegulatorInputConfig riBuf[MAX_REG_INPUTS];
+            uint8_t riCount = 0;
+            if (!riArr.isNull())
+            {
+                for (JsonObject ri : riArr)
+                {
+                    if (riCount >= MAX_REG_INPUTS) break;
+                    auto &inp = riBuf[riCount];
+                    inp.id = ri["id"].as<String>();
+                    inp.label = ri["label"].as<String>();
+                    inp.linkedRegulatorId = ri["linkedRegulatorId"].as<String>();
+                    JsonArray pArr = ri["pins"].as<JsonArray>();
+                    inp.pinCount = 0;
+                    for (JsonObject p : pArr)
+                    {
+                        if (inp.pinCount >= MAX_REG_INPUT_PINS) break;
+                        inp.pins[inp.pinCount].speed = p["speed"].as<uint8_t>();
+                        inp.pins[inp.pinCount].pin = p["pin"].as<uint8_t>();
+                        inp.pinCount++;
+                    }
+                    DBG_HUB("  regInput[%d] id=%s pins=%d linked=%s",
+                            riCount, inp.id.c_str(), inp.pinCount, inp.linkedRegulatorId.c_str());
+                    riCount++;
+                }
+            }
+            _regInputs->applyServerConfig(riBuf, riCount);
 
             // Apply server-managed WiFi networks (wn1–wn4) if provided
             JsonArray wnArr = doc["wifiNetworks"].as<JsonArray>();
@@ -715,14 +741,6 @@ private:
                 }
                 nd.speedCount++;
             }
-            nd.inputPinCount = 0;
-            for (JsonObject ip : g["inputPins"].as<JsonArray>())
-            {
-                if (nd.inputPinCount >= MAX_REG_INPUTS) break;
-                nd.inputPins[nd.inputPinCount].speed = ip["speed"].as<uint8_t>();
-                nd.inputPins[nd.inputPinCount].pin = ip["pin"].as<uint8_t>();
-                nd.inputPinCount++;
-            }
             nd.currentSpeed = g["speed"].as<uint8_t>();
             _regulators->add(nd);
             DBG_WS("regulator_add: id=%s label=%s", nd.id.c_str(), nd.label.c_str());
@@ -755,14 +773,6 @@ private:
                 }
                 nd.speedCount++;
             }
-            nd.inputPinCount = 0;
-            for (JsonObject ip : g["inputPins"].as<JsonArray>())
-            {
-                if (nd.inputPinCount >= MAX_REG_INPUTS) break;
-                nd.inputPins[nd.inputPinCount].speed = ip["speed"].as<uint8_t>();
-                nd.inputPins[nd.inputPinCount].pin = ip["pin"].as<uint8_t>();
-                nd.inputPinCount++;
-            }
             nd.currentSpeed = g["speed"].as<uint8_t>();
             _regulators->updateById(nd.id, nd);
             DBG_WS("regulator_update_config: id=%s", nd.id.c_str());
@@ -774,6 +784,55 @@ private:
             String regulatorId = doc["regulatorId"].as<String>();
             _regulators->deleteById(regulatorId);
             DBG_WS("regulator_delete: id=%s", regulatorId.c_str());
+        }
+
+        // ── Regulator input messages ─────────────────────────
+        else if (strcmp(type, "reg_input_add") == 0)
+        {
+            if (!authenticated) { DBG_WARN("reg_input_add before auth - ignored"); return; }
+            JsonObject ri = doc["regInput"].as<JsonObject>();
+            RegulatorInputConfig nd;
+            nd.id = ri["id"].as<String>();
+            nd.label = ri["label"].as<String>();
+            nd.linkedRegulatorId = ri["linkedRegulatorId"].as<String>();
+            nd.pinCount = 0;
+            for (JsonObject p : ri["pins"].as<JsonArray>())
+            {
+                if (nd.pinCount >= MAX_REG_INPUT_PINS) break;
+                nd.pins[nd.pinCount].speed = p["speed"].as<uint8_t>();
+                nd.pins[nd.pinCount].pin = p["pin"].as<uint8_t>();
+                nd.pinCount++;
+            }
+            _regInputs->add(nd);
+            DBG_WS("reg_input_add: id=%s label=%s", nd.id.c_str(), nd.label.c_str());
+        }
+
+        else if (strcmp(type, "reg_input_update_config") == 0)
+        {
+            if (!authenticated) { DBG_WARN("reg_input_update_config before auth - ignored"); return; }
+            JsonObject ri = doc["regInput"].as<JsonObject>();
+            RegulatorInputConfig nd;
+            nd.id = ri["id"].as<String>();
+            nd.label = ri["label"].as<String>();
+            nd.linkedRegulatorId = ri["linkedRegulatorId"].as<String>();
+            nd.pinCount = 0;
+            for (JsonObject p : ri["pins"].as<JsonArray>())
+            {
+                if (nd.pinCount >= MAX_REG_INPUT_PINS) break;
+                nd.pins[nd.pinCount].speed = p["speed"].as<uint8_t>();
+                nd.pins[nd.pinCount].pin = p["pin"].as<uint8_t>();
+                nd.pinCount++;
+            }
+            _regInputs->updateById(nd.id, nd);
+            DBG_WS("reg_input_update_config: id=%s", nd.id.c_str());
+        }
+
+        else if (strcmp(type, "reg_input_delete") == 0)
+        {
+            if (!authenticated) { DBG_WARN("reg_input_delete before auth - ignored"); return; }
+            String regInputId = doc["regulatorInputId"].as<String>();
+            _regInputs->deleteById(regInputId);
+            DBG_WS("reg_input_delete: id=%s", regInputId.c_str());
         }
 
         else if (strcmp(type, "wifi_config") == 0)

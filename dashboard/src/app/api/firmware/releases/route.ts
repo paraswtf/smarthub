@@ -15,7 +15,7 @@ export async function GET() {
 	try {
 		const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
 			headers: { Accept: "application/vnd.github.v3+json" },
-			next: { revalidate: 3600 },
+			next: { revalidate: 60 },
 		});
 		if (!res.ok) throw new Error(`GitHub API ${res.status}`);
 
@@ -40,7 +40,7 @@ export async function GET() {
 			}));
 
 		return NextResponse.json(firmware, {
-			headers: { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" },
+			headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
 		});
 	} catch {
 		return NextResponse.json([], { status: 200 });

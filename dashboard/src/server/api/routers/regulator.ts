@@ -24,11 +24,6 @@ const speedComboSchema = z.object({
 	onPins: z.array(z.number().int().min(0).max(33)).max(8),
 });
 
-const inputPinSchema = z.object({
-	speed: z.number().int().min(1).max(7),
-	pin: z.number().int().min(0).max(39),
-});
-
 function assertDeviceOwned(deviceId: string, userId: string, ctx: { db: typeof import("~/server/db").db }) {
 	return ctx.db.device.findFirst({
 		where: { id: deviceId, apiKey: { userId } },
@@ -65,7 +60,6 @@ export const regulatorRouter = createTRPCRouter({
 				label: z.string().min(1).max(40).default("Fan Regulator"),
 				outputPins: z.array(z.number().int().min(0).max(33)).min(1).max(8),
 				speeds: z.array(speedComboSchema).min(1).max(7),
-				inputPins: z.array(inputPinSchema).max(7).default([]),
 				icon: z.string().default("fan"),
 			}),
 		)
@@ -86,7 +80,7 @@ export const regulatorRouter = createTRPCRouter({
 					label: input.label,
 					outputPins: input.outputPins,
 					speeds: input.speeds,
-					inputPins: input.inputPins,
+
 					icon: input.icon,
 					order: existing,
 				},
@@ -100,7 +94,7 @@ export const regulatorRouter = createTRPCRouter({
 						label: reg.label,
 						outputPins: reg.outputPins,
 						speeds: reg.speeds,
-						inputPins: reg.inputPins,
+
 						speed: reg.speed,
 					},
 				});
@@ -119,7 +113,7 @@ export const regulatorRouter = createTRPCRouter({
 				label: z.string().min(1).max(40).optional(),
 				outputPins: z.array(z.number().int().min(0).max(33)).min(1).max(8).optional(),
 				speeds: z.array(speedComboSchema).min(1).max(7).optional(),
-				inputPins: z.array(inputPinSchema).max(7).optional(),
+
 				icon: z.string().optional(),
 			}),
 		)
@@ -142,7 +136,7 @@ export const regulatorRouter = createTRPCRouter({
 						label: updated.label,
 						outputPins: updated.outputPins,
 						speeds: updated.speeds,
-						inputPins: updated.inputPins,
+
 						speed: updated.speed,
 					},
 				});

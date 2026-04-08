@@ -89,12 +89,12 @@ interface RegulatorAckMsg {
 	regulatorId: string;
 	speed: number;
 }
-interface RegulatorInputMsg {
-	type: "regulator_input";
-	regulatorId: string;
+interface RegulatorInputTriggerMsg {
+	type: "regulator_input_trigger";
+	linkedRegulatorId: string;
 	speed: number;
 }
-type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg | OtaProgressMsg | OtaResultMsg | RegulatorAckMsg | RegulatorInputMsg;
+type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg | OtaProgressMsg | OtaResultMsg | RegulatorAckMsg | RegulatorInputTriggerMsg;
 interface BrowserSubscribeMsg {
 	type: "subscribe";
 	userId: string;
@@ -290,6 +290,20 @@ export async function wsRequestHandler(req: IncomingMessage, res: ServerResponse
 				console.log(`[HTTP] ${req.url} → device=${deviceId} pushed=${pushed}`);
 				break;
 			}
+			case "/push-reg-input-add":
+			case "/push-reg-input-update":
+			case "/push-reg-input-delete": {
+				const { deviceId } = body as { deviceId: string };
+				const riTypeMap: Record<string, string> = {
+					"/push-reg-input-add": "reg_input_add",
+					"/push-reg-input-update": "reg_input_update_config",
+					"/push-reg-input-delete": "reg_input_delete",
+				};
+				const pushed = pushToDevice(deviceId, { type: riTypeMap[req.url!], ...body });
+				jsonOk(res, { ok: true, pushed });
+				console.log(`[HTTP] ${req.url} → device=${deviceId} pushed=${pushed}`);
+				break;
+			}
 			case "/ping-device": {
 				const { deviceId, timeoutMs } = body as { deviceId: string; timeoutMs?: number };
 				const ws = deviceSockets.get(deviceId);
@@ -444,6 +458,7 @@ function handleDeviceConnection(ws: WebSocket) {
 						relays: { orderBy: { order: "asc" } },
 						switches: { orderBy: { createdAt: "asc" } },
 						regulators: { orderBy: { order: "asc" } },
+						regulatorInputs: { orderBy: { createdAt: "asc" } },
 					},
 				});
 				// wifiNetworks, cfgServerHost/Port/TLS are scalar fields included automatically
@@ -460,7 +475,8 @@ function handleDeviceConnection(ws: WebSocket) {
 						deviceId: device.id,
 						relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
 						switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
-						regulators: device.regulators.map((g) => ({ id: g.id, label: g.label, outputPins: g.outputPins, speeds: g.speeds, inputPins: g.inputPins, speed: g.speed })),
+						regulators: device.regulators.map((g) => ({ id: g.id, label: g.label, outputPins: g.outputPins, speeds: g.speeds, speed: g.speed })),
+						regulatorInputs: device.regulatorInputs.map((ri) => ({ id: ri.id, label: ri.label, pins: ri.pins, linkedRegulatorId: ri.linkedRegulatorId })),
 						wifiNetworks: device.wifiNetworks, // server-managed extra networks (wn1–wn4)
 						serverConfig: device.cfgServerHost ? { host: device.cfgServerHost, port: device.cfgServerPort, tls: device.cfgServerTLS } : null,
 					}),
@@ -535,8 +551,8 @@ function handleDeviceConnection(ws: WebSocket) {
 				console.log(`[WS] Relay ack: ${msg.relayId} → ${msg.state ? "ON" : "OFF"}`);
 			}
 
-			// ── REGULATOR ACK / INPUT ────────────────────────────
-			if ((msg.type === "regulator_ack" || msg.type === "regulator_input") && authenticatedDeviceId) {
+			// ── REGULATOR ACK ────────────────────────────────────
+			if (msg.type === "regulator_ack" && authenticatedDeviceId) {
 				await db.regulator.updateMany({
 					where: { id: msg.regulatorId, deviceId: authenticatedDeviceId },
 					data: { speed: msg.speed, updatedAt: new Date() },
@@ -548,7 +564,41 @@ function handleDeviceConnection(ws: WebSocket) {
 					regulatorId: msg.regulatorId,
 					speed: msg.speed,
 				});
-				console.log(`[WS] Regulator ${msg.type}: ${msg.regulatorId} → speed ${msg.speed}`);
+				console.log(`[WS] Regulator ack: ${msg.regulatorId} → speed ${msg.speed}`);
+			}
+
+			// ── REGULATOR INPUT TRIGGER ─────────────────────────
+			// Physical rotary switch detected speed → resolve cross-device regulator
+			if (msg.type === "regulator_input_trigger" && authenticatedDeviceId) {
+				const { linkedRegulatorId, speed } = msg;
+
+				const regulator = await db.regulator.findFirst({
+					where: { id: linkedRegulatorId },
+					include: { device: { include: { apiKey: true } } },
+				});
+				if (!regulator) {
+					console.log(`[WS] regulator_input_trigger: regulator ${linkedRegulatorId} not found`);
+					return;
+				}
+
+				const triggeringDevice = await db.device.findUnique({
+					where: { id: authenticatedDeviceId },
+					include: { apiKey: true },
+				});
+				if (regulator.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
+					console.log(`[WS] regulator_input_trigger: cross-user regulator access denied`);
+					return;
+				}
+
+				await db.regulator.update({ where: { id: linkedRegulatorId }, data: { speed, updatedAt: new Date() } });
+				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+
+				const targetWs = deviceSockets.get(regulator.deviceId);
+				if (targetWs?.readyState === WebSocket.OPEN) {
+					targetWs.send(JSON.stringify({ type: "regulator_cmd", regulatorId: regulator.id, speed }));
+					console.log(`[WS] regulator_input_trigger: regulator_cmd → device ${regulator.deviceId} regulator ${regulator.id} → speed ${speed}`);
+				}
+				broadcastToDeviceSubscribers(regulator.deviceId, { type: "regulator_update", deviceId: regulator.deviceId, regulatorId: regulator.id, speed });
 			}
 
 			// ── OTA PROGRESS ─────────────────────────────────────
