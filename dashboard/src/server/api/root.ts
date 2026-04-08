@@ -7,6 +7,7 @@ import { homeRouter } from "./routers/home";
 import { roomRouter } from "./routers/room";
 import { sharingRouter } from "./routers/sharing";
 import { scheduleRouter } from "./routers/schedule";
+import { regulatorRouter } from "./routers/regulator";
 
 export const appRouter = createTRPCRouter({
 	user: userRouter,
@@ -17,6 +18,7 @@ export const appRouter = createTRPCRouter({
 	room: roomRouter,
 	sharing: sharingRouter,
 	schedule: scheduleRouter,
+	regulator: regulatorRouter,
 });
 
 export type AppRouter = typeof appRouter;

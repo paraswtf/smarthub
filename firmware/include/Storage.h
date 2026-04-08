@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "Debug.h"
 #include "SwitchTypes.h"
+#include "RegulatorTypes.h"
 
 struct WifiNetworkEntry
 {
@@ -234,6 +235,91 @@ public:
         }
         prefs.end();
         DBG_STORAGE("saveExtraWifi() - %d network(s)", count);
+    }
+
+    // ── Regulator storage ─────────────────────────────────────
+
+    static void saveRegulators(const RegulatorConfig regs[], uint8_t count)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        prefs.putUChar("reg_cnt", count);
+        for (uint8_t i = 0; i < count && i < MAX_REGULATORS; i++)
+        {
+            String p = "g" + String(i) + "_";
+            prefs.putString((p + "id").c_str(), regs[i].id);
+            prefs.putString((p + "lbl").c_str(), regs[i].label);
+            prefs.putUChar((p + "opc").c_str(), regs[i].outputPinCount);
+            for (uint8_t j = 0; j < regs[i].outputPinCount && j < MAX_REG_OUTPUTS; j++)
+                prefs.putUChar((p + "op" + String(j)).c_str(), regs[i].outputPins[j]);
+            prefs.putUChar((p + "spc").c_str(), regs[i].speedCount);
+            for (uint8_t j = 0; j < regs[i].speedCount && j < MAX_REG_SPEEDS; j++)
+            {
+                String sp = p + "s" + String(j) + "_";
+                prefs.putUChar((sp + "spd").c_str(), regs[i].speeds[j].speed);
+                prefs.putUChar((sp + "cnt").c_str(), regs[i].speeds[j].onPinCount);
+                for (uint8_t k = 0; k < regs[i].speeds[j].onPinCount && k < MAX_REG_OUTPUTS; k++)
+                    prefs.putUChar((sp + "p" + String(k)).c_str(), regs[i].speeds[j].onPins[k]);
+            }
+            prefs.putUChar((p + "ipc").c_str(), regs[i].inputPinCount);
+            for (uint8_t j = 0; j < regs[i].inputPinCount && j < MAX_REG_INPUTS; j++)
+            {
+                String ip = p + "i" + String(j) + "_";
+                prefs.putUChar((ip + "spd").c_str(), regs[i].inputPins[j].speed);
+                prefs.putUChar((ip + "pin").c_str(), regs[i].inputPins[j].pin);
+            }
+            prefs.putUChar((p + "spd").c_str(), regs[i].currentSpeed);
+        }
+        prefs.end();
+        DBG_STORAGE("saveRegulators() - %d regulator(s)", count);
+    }
+
+    static void saveRegulatorSpeed(uint8_t index, uint8_t speed)
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, false);
+        String key = "g" + String(index) + "_spd";
+        prefs.putUChar(key.c_str(), speed);
+        prefs.end();
+        DBG_STORAGE("saveRegulatorSpeed(%d) → %d", index, speed);
+    }
+
+    static uint8_t loadRegulators(RegulatorConfig regs[])
+    {
+        Preferences prefs;
+        prefs.begin(NVS_NAMESPACE, true);
+        uint8_t count = prefs.getUChar("reg_cnt", 0);
+        for (uint8_t i = 0; i < count && i < MAX_REGULATORS; i++)
+        {
+            String p = "g" + String(i) + "_";
+            regs[i].id = prefs.getString((p + "id").c_str(), "");
+            regs[i].label = prefs.getString((p + "lbl").c_str(), "Regulator");
+            regs[i].outputPinCount = prefs.getUChar((p + "opc").c_str(), 0);
+            for (uint8_t j = 0; j < regs[i].outputPinCount && j < MAX_REG_OUTPUTS; j++)
+                regs[i].outputPins[j] = prefs.getUChar((p + "op" + String(j)).c_str(), 0);
+            regs[i].speedCount = prefs.getUChar((p + "spc").c_str(), 0);
+            for (uint8_t j = 0; j < regs[i].speedCount && j < MAX_REG_SPEEDS; j++)
+            {
+                String sp = p + "s" + String(j) + "_";
+                regs[i].speeds[j].speed = prefs.getUChar((sp + "spd").c_str(), 0);
+                regs[i].speeds[j].onPinCount = prefs.getUChar((sp + "cnt").c_str(), 0);
+                for (uint8_t k = 0; k < regs[i].speeds[j].onPinCount && k < MAX_REG_OUTPUTS; k++)
+                    regs[i].speeds[j].onPins[k] = prefs.getUChar((sp + "p" + String(k)).c_str(), 0);
+            }
+            regs[i].inputPinCount = prefs.getUChar((p + "ipc").c_str(), 0);
+            for (uint8_t j = 0; j < regs[i].inputPinCount && j < MAX_REG_INPUTS; j++)
+            {
+                String ip = p + "i" + String(j) + "_";
+                regs[i].inputPins[j].speed = prefs.getUChar((ip + "spd").c_str(), 0);
+                regs[i].inputPins[j].pin = prefs.getUChar((ip + "pin").c_str(), 0);
+            }
+            regs[i].currentSpeed = prefs.getUChar((p + "spd").c_str(), 0);
+            DBG_STORAGE("  reg[%d] outputs=%d speeds=%d inputs=%d currentSpeed=%d label=%s",
+                        i, regs[i].outputPinCount, regs[i].speedCount,
+                        regs[i].inputPinCount, regs[i].currentSpeed, regs[i].label.c_str());
+        }
+        prefs.end();
+        return count;
     }
 
     // ── Server config override ────────────────────────────────

@@ -111,7 +111,7 @@ export default function DeviceDetailPage() {
 		},
 	);
 
-	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
+	const { onDeviceUpdate, onRelayUpdate, onRegulatorUpdate } = useDeviceSocket();
 
 	// Online status - determined by on-demand ping, not DB field
 	const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = checking
@@ -441,6 +441,124 @@ export default function DeviceDetailPage() {
 		},
 	});
 
+	// ── Regulator state & mutations ────────────────────────
+	type RegulatorItem = RouterOutputs["regulator"]["list"][number];
+	const { data: regulatorList = [] } = api.regulator.list.useQuery({ deviceId: id });
+	const [addingRegulator, setAddingRegulator] = useState(false);
+	const [newRegulator, setNewRegulator] = useState<{
+		label: string;
+		outputPins: string; // comma-separated for input ease
+		speeds: { speed: number; onPins: number[] }[];
+		inputPins: { speed: number; pin: number }[];
+	}>({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }], inputPins: [] });
+	const [editingRegulatorId, setEditingRegulatorId] = useState<string | null>(null);
+	const [editRegulator, setEditRegulator] = useState<{
+		label: string;
+		outputPins: string;
+		speeds: { speed: number; onPins: number[] }[];
+		inputPins: { speed: number; pin: number }[];
+	}>({ label: "", outputPins: "", speeds: [], inputPins: [] });
+
+	// Per-regulator speed confirmation state
+	const [regStatus, setRegStatus] = useState<Record<string, "pending" | "confirmed" | "timeout">>({});
+	const regTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+	const setRegPending = (regId: string) => {
+		if (regTimers.current[regId]) clearTimeout(regTimers.current[regId]);
+		setRegStatus((s) => ({ ...s, [regId]: "pending" }));
+		regTimers.current[regId] = setTimeout(() => {
+			setRegStatus((s) => (s[regId] === "pending" ? { ...s, [regId]: "timeout" } : s));
+			void utils.regulator.list.invalidate({ deviceId: id });
+		}, 5000);
+	};
+
+	const clearRegStatus = (regId: string) => {
+		if (regTimers.current[regId]) {
+			clearTimeout(regTimers.current[regId]);
+			delete regTimers.current[regId];
+		}
+		setRegStatus((s) => {
+			const next = { ...s };
+			delete next[regId];
+			return next;
+		});
+	};
+
+	// WS listener for regulator updates
+	useEffect(() => {
+		return onRegulatorUpdate((update) => {
+			if (update.deviceId !== id) return;
+			utilsRef.current.regulator.list.setData({ deviceId: id }, (old: RegulatorItem[] | undefined) => {
+				if (!old) return old;
+				return old.map((reg) => (reg.id === update.regulatorId ? { ...reg, speed: update.speed } : reg));
+			});
+			setRegStatus((s) => {
+				if (s[update.regulatorId] !== "pending") return s;
+				setTimeout(() => clearRegStatus(update.regulatorId), 1500);
+				return { ...s, [update.regulatorId]: "confirmed" };
+			});
+		});
+	}, [onRegulatorUpdate, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const setRegulatorSpeed = api.regulator.setSpeed.useMutation({
+		onMutate: async ({ regulatorId, speed }) => {
+			await utils.regulator.list.cancel({ deviceId: id });
+			const prev = utils.regulator.list.getData({ deviceId: id });
+			utils.regulator.list.setData({ deviceId: id }, (old: RegulatorItem[] | undefined) => {
+				if (!old) return old;
+				return old.map((reg) => (reg.id === regulatorId ? { ...reg, speed } : reg));
+			});
+			return { prev };
+		},
+		onError: (_err, _vars, ctx) => {
+			if (ctx?.prev) utilsRef.current.regulator.list.setData({ deviceId: id }, ctx.prev);
+			clearRegStatus(_vars.regulatorId);
+		},
+		onSuccess: (result, { regulatorId, speed }) => {
+			if (result.speed === speed) {
+				setRegStatus((s) => ({ ...s, [regulatorId]: "confirmed" }));
+				setTimeout(() => clearRegStatus(regulatorId), 1500);
+			} else {
+				setRegPending(regulatorId);
+			}
+		},
+	});
+	const addRegulatorMut = api.regulator.add.useMutation({
+		onSuccess: () => {
+			void utils.regulator.list.invalidate({ deviceId: id });
+			setAddingRegulator(false);
+			setNewRegulator({ label: "Fan Regulator", outputPins: "", speeds: [{ speed: 1, onPins: [] }], inputPins: [] });
+		},
+	});
+	const updateRegulatorMut = api.regulator.update.useMutation({
+		onSuccess: () => {
+			void utils.regulator.list.invalidate({ deviceId: id });
+			setEditingRegulatorId(null);
+		},
+	});
+	const deleteRegulatorMut = api.regulator.delete.useMutation({
+		onSuccess: () => {
+			void utils.regulator.list.invalidate({ deviceId: id });
+		},
+	});
+	const [deleteRegulatorId, setDeleteRegulatorId] = useState<string | null>(null);
+
+	const parseOutputPins = (s: string): number[] =>
+		s
+			.split(",")
+			.map((p) => parseInt(p.trim(), 10))
+			.filter((n) => !isNaN(n) && n >= 0 && n <= 33);
+
+	const startEditRegulator = (reg: RegulatorItem) => {
+		setEditRegulator({
+			label: reg.label,
+			outputPins: reg.outputPins.join(", "),
+			speeds: reg.speeds.map((s) => ({ speed: s.speed, onPins: [...s.onPins] })),
+			inputPins: reg.inputPins.map((ip) => ({ speed: ip.speed, pin: ip.pin })),
+		});
+		setEditingRegulatorId(reg.id);
+	};
+
 	// Delete confirm
 	const [deleteDeviceOpen, setDeleteDeviceOpen] = useState(false);
 	const [deleteRelayId, setDeleteRelayId] = useState<string | null>(null);
@@ -585,6 +703,10 @@ export default function DeviceDetailPage() {
 						Relays ({device.relays.length}/{appConfig.maxRelaysPerDevice})
 					</TabsTrigger>
 					<TabsTrigger value="switches">Switches ({switchList.length})</TabsTrigger>
+					<TabsTrigger value="regulators" className="flex items-center gap-1.5">
+						<Fan className="w-3 h-3" />
+						Regulators ({regulatorList.length})
+					</TabsTrigger>
 					<TabsTrigger value="wiring" className="flex items-center gap-1.5">
 						<GitBranch className="w-3 h-3" />
 						Wiring
@@ -982,6 +1104,392 @@ export default function DeviceDetailPage() {
 							<Button variant="outline" size="sm" className="w-full" onClick={() => setAddingSwitch(true)} disabled={allRelays.length === 0}>
 								<Plus className="w-3.5 h-3.5" /> Add Switch
 								{device.relays.length === 0 && <span className="ml-2 text-muted-foreground">(add a relay to any device first)</span>}
+							</Button>
+						))}
+				</TabsContent>
+
+				{/* REGULATORS TAB */}
+				<TabsContent value="regulators" className="mt-4 space-y-3">
+					<p className="text-xs text-muted-foreground">
+						Fan regulators control speed by activating different combinations of output GPIO pins per speed level. Optionally, a physical rotary switch provides input.
+					</p>
+
+					{regulatorList.map((reg: RegulatorItem) => {
+						const isEditing = editingRegulatorId === reg.id;
+						const maxSpeed = reg.speeds.length > 0 ? Math.max(...reg.speeds.map((s) => s.speed)) : 0;
+
+						return (
+							<div key={reg.id} className="relay-card p-4">
+								{isEditing ? (
+									<div className="space-y-3">
+										<Input value={editRegulator.label} onChange={(e) => setEditRegulator((r) => ({ ...r, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" />
+										<div>
+											<Label className="text-[10px]">Output Pins (comma-separated)</Label>
+											<Input
+												value={editRegulator.outputPins}
+												onChange={(e) => setEditRegulator((r) => ({ ...r, outputPins: e.target.value }))}
+												placeholder="e.g. 14, 15, 16"
+												className="h-8 text-sm mt-0.5"
+											/>
+										</div>
+										{/* Speed combos */}
+										<div className="space-y-2">
+											<div className="flex items-center justify-between">
+												<Label className="text-[10px]">Speed Combos</Label>
+												<Button
+													size="sm"
+													variant="ghost"
+													className="h-6 text-xs"
+													onClick={() => {
+														const next = editRegulator.speeds.length + 1;
+														if (next <= 7) setEditRegulator((r) => ({ ...r, speeds: [...r.speeds, { speed: next, onPins: [] }] }));
+													}}
+													disabled={editRegulator.speeds.length >= 7}
+												>
+													<Plus className="w-3 h-3 mr-1" /> Add Speed
+												</Button>
+											</div>
+											{editRegulator.speeds.map((combo, si) => {
+												const pins = parseOutputPins(editRegulator.outputPins);
+												return (
+													<div key={si} className="flex items-center gap-2 text-xs">
+														<span className="w-16 font-medium shrink-0">Speed {combo.speed}:</span>
+														<div className="flex flex-wrap gap-1">
+															{pins.map((pin) => (
+																<button
+																	key={pin}
+																	type="button"
+																	className={cn(
+																		"px-2 py-0.5 rounded text-[10px] border transition-colors",
+																		combo.onPins.includes(pin) ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border hover:bg-accent",
+																	)}
+																	onClick={() =>
+																		setEditRegulator((r) => ({
+																			...r,
+																			speeds: r.speeds.map((s, i) =>
+																				i === si ? { ...s, onPins: s.onPins.includes(pin) ? s.onPins.filter((p) => p !== pin) : [...s.onPins, pin] } : s,
+																			),
+																		}))
+																	}
+																>
+																	GPIO {pin}
+																</button>
+															))}
+															{pins.length === 0 && <span className="text-muted-foreground">Enter output pins above</span>}
+														</div>
+														<Button
+															size="sm"
+															variant="ghost"
+															className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+															onClick={() => setEditRegulator((r) => ({ ...r, speeds: r.speeds.filter((_, i) => i !== si) }))}
+														>
+															<X className="w-3 h-3" />
+														</Button>
+													</div>
+												);
+											})}
+										</div>
+										{/* Input pins */}
+										<div className="space-y-2">
+											<div className="flex items-center justify-between">
+												<Label className="text-[10px]">Input Pins (optional)</Label>
+												<Button
+													size="sm"
+													variant="ghost"
+													className="h-6 text-xs"
+													onClick={() => setEditRegulator((r) => ({ ...r, inputPins: [...r.inputPins, { speed: 1, pin: 36 }] }))}
+													disabled={editRegulator.inputPins.length >= 7}
+												>
+													<Plus className="w-3 h-3 mr-1" /> Add Input
+												</Button>
+											</div>
+											{editRegulator.inputPins.map((ip, ii) => (
+												<div key={ii} className="flex items-center gap-2 text-xs">
+													<span className="w-16 shrink-0">Speed {ip.speed}:</span>
+													<Input
+														type="number"
+														value={ip.speed}
+														onChange={(e) =>
+															setEditRegulator((r) => ({
+																...r,
+																inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
+															}))
+														}
+														className="h-7 w-16 text-xs"
+														min={1}
+														max={7}
+														placeholder="Speed"
+													/>
+													<span className="text-muted-foreground">→ GPIO</span>
+													<Input
+														type="number"
+														value={ip.pin}
+														onChange={(e) =>
+															setEditRegulator((r) => ({
+																...r,
+																inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
+															}))
+														}
+														className="h-7 w-16 text-xs"
+														min={0}
+														max={39}
+													/>
+													<Button
+														size="sm"
+														variant="ghost"
+														className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+														onClick={() => setEditRegulator((r) => ({ ...r, inputPins: r.inputPins.filter((_, i) => i !== ii) }))}
+													>
+														<X className="w-3 h-3" />
+													</Button>
+												</div>
+											))}
+										</div>
+										<div className="flex gap-2">
+											<Button
+												size="sm"
+												className="h-7"
+												onClick={() =>
+													updateRegulatorMut.mutate({
+														regulatorId: reg.id,
+														label: editRegulator.label,
+														outputPins: parseOutputPins(editRegulator.outputPins),
+														speeds: editRegulator.speeds,
+														inputPins: editRegulator.inputPins,
+													})
+												}
+												disabled={
+													updateRegulatorMut.isPending || !editRegulator.label || parseOutputPins(editRegulator.outputPins).length === 0 || editRegulator.speeds.length === 0
+												}
+											>
+												{updateRegulatorMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+												Save
+											</Button>
+											<Button size="sm" variant="ghost" className="h-7" onClick={() => setEditingRegulatorId(null)}>
+												Cancel
+											</Button>
+										</div>
+									</div>
+								) : (
+									<div className="space-y-3">
+										<div className="flex items-center justify-between">
+											<div className="flex items-center gap-2">
+												<Fan className="w-4 h-4 text-primary" />
+												<span className="font-medium text-sm">{reg.label}</span>
+											</div>
+											<div className="flex items-center gap-1">
+												{regStatus[reg.id] === "pending" && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+												{regStatus[reg.id] === "confirmed" && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+												{regStatus[reg.id] === "timeout" && <AlertCircle className="w-3 h-3 text-destructive" />}
+												{isOwner && (
+													<>
+														<Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditRegulator(reg)}>
+															<Pencil className="w-3 h-3" />
+														</Button>
+														<Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteRegulatorId(reg.id)}>
+															<Trash2 className="w-3 h-3" />
+														</Button>
+													</>
+												)}
+											</div>
+										</div>
+										{/* Speed buttons */}
+										<div className="flex flex-wrap gap-1.5">
+											<button
+												type="button"
+												className={cn(
+													"px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+													reg.speed === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border hover:bg-accent",
+												)}
+												onClick={() => {
+													setRegulatorSpeed.mutate({ regulatorId: reg.id, speed: 0 });
+													setRegPending(reg.id);
+												}}
+											>
+												OFF
+											</button>
+											{Array.from({ length: maxSpeed }, (_, i) => i + 1).map((spd) => (
+												<button
+													key={spd}
+													type="button"
+													className={cn(
+														"px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+														reg.speed === spd ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border hover:bg-accent",
+													)}
+													onClick={() => {
+														setRegulatorSpeed.mutate({ regulatorId: reg.id, speed: spd });
+														setRegPending(reg.id);
+													}}
+												>
+													{spd}
+												</button>
+											))}
+										</div>
+										{/* Info line */}
+										<div className="text-[10px] text-muted-foreground flex flex-wrap gap-3">
+											<span>Output: GPIO {reg.outputPins.join(", ")}</span>
+											{reg.inputPins.length > 0 && <span>Input: {reg.inputPins.map((ip) => `GPIO${ip.pin}→S${ip.speed}`).join(", ")}</span>}
+											<span>
+												{reg.speeds.length} speed level{reg.speeds.length !== 1 ? "s" : ""}
+											</span>
+										</div>
+									</div>
+								)}
+							</div>
+						);
+					})}
+
+					{isOwner &&
+						(addingRegulator ? (
+							<div className="relay-card p-4 space-y-3">
+								<Input value={newRegulator.label} onChange={(e) => setNewRegulator((r) => ({ ...r, label: e.target.value }))} placeholder="Label" className="h-8 text-sm" />
+								<div>
+									<Label className="text-[10px]">Output Pins (comma-separated)</Label>
+									<Input
+										value={newRegulator.outputPins}
+										onChange={(e) => setNewRegulator((r) => ({ ...r, outputPins: e.target.value }))}
+										placeholder="e.g. 14, 15, 16"
+										className="h-8 text-sm mt-0.5"
+									/>
+								</div>
+								{/* Speed combos */}
+								<div className="space-y-2">
+									<div className="flex items-center justify-between">
+										<Label className="text-[10px]">Speed Combos</Label>
+										<Button
+											size="sm"
+											variant="ghost"
+											className="h-6 text-xs"
+											onClick={() => {
+												const next = newRegulator.speeds.length + 1;
+												if (next <= 7) setNewRegulator((r) => ({ ...r, speeds: [...r.speeds, { speed: next, onPins: [] }] }));
+											}}
+											disabled={newRegulator.speeds.length >= 7}
+										>
+											<Plus className="w-3 h-3 mr-1" /> Add Speed
+										</Button>
+									</div>
+									{newRegulator.speeds.map((combo, si) => {
+										const pins = parseOutputPins(newRegulator.outputPins);
+										return (
+											<div key={si} className="flex items-center gap-2 text-xs">
+												<span className="w-16 font-medium shrink-0">Speed {combo.speed}:</span>
+												<div className="flex flex-wrap gap-1">
+													{pins.map((pin) => (
+														<button
+															key={pin}
+															type="button"
+															className={cn(
+																"px-2 py-0.5 rounded text-[10px] border transition-colors",
+																combo.onPins.includes(pin) ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border hover:bg-accent",
+															)}
+															onClick={() =>
+																setNewRegulator((r) => ({
+																	...r,
+																	speeds: r.speeds.map((s, i) =>
+																		i === si ? { ...s, onPins: s.onPins.includes(pin) ? s.onPins.filter((p) => p !== pin) : [...s.onPins, pin] } : s,
+																	),
+																}))
+															}
+														>
+															GPIO {pin}
+														</button>
+													))}
+													{pins.length === 0 && <span className="text-muted-foreground">Enter output pins above</span>}
+												</div>
+												<Button
+													size="sm"
+													variant="ghost"
+													className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+													onClick={() => setNewRegulator((r) => ({ ...r, speeds: r.speeds.filter((_, i) => i !== si) }))}
+												>
+													<X className="w-3 h-3" />
+												</Button>
+											</div>
+										);
+									})}
+								</div>
+								{/* Input pins */}
+								<div className="space-y-2">
+									<div className="flex items-center justify-between">
+										<Label className="text-[10px]">Input Pins (optional)</Label>
+										<Button
+											size="sm"
+											variant="ghost"
+											className="h-6 text-xs"
+											onClick={() => setNewRegulator((r) => ({ ...r, inputPins: [...r.inputPins, { speed: 1, pin: 36 }] }))}
+											disabled={newRegulator.inputPins.length >= 7}
+										>
+											<Plus className="w-3 h-3 mr-1" /> Add Input
+										</Button>
+									</div>
+									{newRegulator.inputPins.map((ip, ii) => (
+										<div key={ii} className="flex items-center gap-2 text-xs">
+											<Input
+												type="number"
+												value={ip.speed}
+												onChange={(e) =>
+													setNewRegulator((r) => ({
+														...r,
+														inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={1}
+												max={7}
+												placeholder="Speed"
+											/>
+											<span className="text-muted-foreground">→ GPIO</span>
+											<Input
+												type="number"
+												value={ip.pin}
+												onChange={(e) =>
+													setNewRegulator((r) => ({
+														...r,
+														inputPins: r.inputPins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={0}
+												max={39}
+											/>
+											<Button
+												size="sm"
+												variant="ghost"
+												className="h-5 w-5 p-0 text-destructive hover:text-destructive shrink-0"
+												onClick={() => setNewRegulator((r) => ({ ...r, inputPins: r.inputPins.filter((_, i) => i !== ii) }))}
+											>
+												<X className="w-3 h-3" />
+											</Button>
+										</div>
+									))}
+								</div>
+								<div className="flex gap-2">
+									<Button
+										size="sm"
+										className="h-7"
+										onClick={() =>
+											addRegulatorMut.mutate({
+												deviceId: device!.id,
+												label: newRegulator.label,
+												outputPins: parseOutputPins(newRegulator.outputPins),
+												speeds: newRegulator.speeds,
+												inputPins: newRegulator.inputPins,
+											})
+										}
+										disabled={addRegulatorMut.isPending || !newRegulator.label || parseOutputPins(newRegulator.outputPins).length === 0 || newRegulator.speeds.length === 0}
+									>
+										{addRegulatorMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3 mr-1" />}
+										Add Regulator
+									</Button>
+									<Button size="sm" variant="ghost" className="h-7" onClick={() => setAddingRegulator(false)}>
+										Cancel
+									</Button>
+								</div>
+							</div>
+						) : (
+							<Button variant="outline" size="sm" className="w-full" onClick={() => setAddingRegulator(true)} disabled={regulatorList.length >= appConfig.maxRegulatorsPerDevice}>
+								<Plus className="w-3.5 h-3.5" /> Add Regulator
 							</Button>
 						))}
 				</TabsContent>
@@ -1438,6 +1946,24 @@ export default function DeviceDetailPage() {
 						<Button variant="destructive" onClick={() => deleteDevice.mutate({ id })} disabled={deleteDevice.isPending}>
 							{deleteDevice.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
 							Delete Device
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Delete regulator dialog */}
+			<Dialog open={!!deleteRegulatorId} onOpenChange={(o) => !o && setDeleteRegulatorId(null)}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Delete Regulator</DialogTitle>
+						<DialogDescription>Remove this fan regulator? All output pins will be released.</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setDeleteRegulatorId(null)}>
+							Cancel
+						</Button>
+						<Button variant="destructive" onClick={() => deleteRegulatorId && deleteRegulatorMut.mutate({ regulatorId: deleteRegulatorId })} disabled={deleteRegulatorMut.isPending}>
+							{deleteRegulatorMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

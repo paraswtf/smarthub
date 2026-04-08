@@ -101,6 +101,7 @@ model Device {
     home               Home?         @relation(fields: [homeId], references: [id])
     relays             Relay[]
     switches           Switch[]
+    regulators         Regulator[]
     // Dashboard-managed WiFi networks (pushed to ESP32 via WS; does not include captive-portal primary)
     wifiNetworks       WifiNetwork[]
     // Desired server config - pushed to ESP32 via WS when changed from dashboard
@@ -143,6 +144,35 @@ model Switch {
     linkedRelayId String   @db.ObjectId
     deviceId      String   @db.ObjectId
     device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+// ─── Fan Regulators ─────────────────────────────────────────
+
+// A fan regulator activates different combinations of output GPIO pins per speed level.
+// Optional rotary input pins (one-pin-per-speed, shorted to 3V3) allow physical control.
+type SpeedCombo {
+    speed  Int // 1-7 (speed 0 = OFF is implicit)
+    onPins Int[] // output pins that should be HIGH at this speed
+}
+
+type RegulatorInputPin {
+    speed Int // which speed level this pin activates (1-7)
+    pin   Int // GPIO pin number
+}
+
+model Regulator {
+    id         String              @id @default(auto()) @map("_id") @db.ObjectId
+    createdAt  DateTime            @default(now())
+    updatedAt  DateTime            @updatedAt
+    label      String              @default("Fan Regulator")
+    outputPins Int[] // all output GPIO pins (up to 8)
+    speeds     SpeedCombo[] // speed-to-pin mappings (up to 7)
+    inputPins  RegulatorInputPin[] // optional physical input (up to 7)
+    speed      Int                 @default(0) // current speed (0=OFF)
+    order      Int                 @default(0)
+    icon       String              @default("fan")
+    deviceId   String              @db.ObjectId
+    device     Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
 
 // ─── Homes, Rooms & Sharing ─────────────────────────────────

@@ -21,6 +21,7 @@ static State state = S_PORTAL;
 static DeviceConfig cfg;
 static RelayManager relays;
 static SwitchManager switches;
+static RegulatorManager regulators;
 static HubClient hub;
 static CaptivePortal portal;
 
@@ -109,6 +110,13 @@ void onSwitchTriggered(const String &relayId, bool newState, bool isToggle)
     DBG_RELAY("Switch triggered: relay=%s → %s (%s)",
               relayId.c_str(), newState ? "ON" : "OFF", isToggle ? "toggle" : "follow");
     hub.sendSwitchTrigger(relayId, newState, isToggle);
+}
+
+// Regulator input callback - physical rotary switch changed speed
+void onRegulatorInput(const String &regulatorId, uint8_t speed)
+{
+    DBG_RELAY("Regulator input: id=%s → speed %d", regulatorId.c_str(), speed);
+    hub.sendRegulatorInput(regulatorId, speed);
 }
 
 // ─── WiFi connection ──────────────────────────────────────────
@@ -206,6 +214,7 @@ void setup()
 
     relays.begin();
     switches.begin(onSwitchTriggered);
+    regulators.begin(onRegulatorInput);
     DBG_HEAP();
 }
 
@@ -276,7 +285,7 @@ void loop()
     case S_REGISTER:
         DBG_BANNER("State: REGISTER");
         StatusLed::set(LED_BLINK_SLOW);
-        hub.begin(cfg, relays, switches);
+        hub.begin(cfg, relays, switches, regulators);
         if (hub.registerDevice())
         {
             hub.connectWebSocket();
@@ -319,6 +328,7 @@ void loop()
                 relayIds[i] = relays.relays[i].id;
             }
             switches.loop(relayStates, relayIds, relays.count);
+            regulators.loop();
         }
 
         if (WiFi.status() != WL_CONNECTED)

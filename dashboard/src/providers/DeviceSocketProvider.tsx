@@ -30,7 +30,14 @@ export interface OtaResult {
 	error?: string;
 }
 
-type WsMessage = DeviceUpdate | RelayUpdate | OtaProgress | OtaResult;
+export interface RegulatorUpdate {
+	type: "regulator_update";
+	deviceId: string;
+	regulatorId: string;
+	speed: number;
+}
+
+type WsMessage = DeviceUpdate | RelayUpdate | OtaProgress | OtaResult | RegulatorUpdate;
 type Listener<T> = (msg: T) => void;
 
 interface DeviceSocketContextValue {
@@ -39,6 +46,7 @@ interface DeviceSocketContextValue {
 	onRelayUpdate: (fn: Listener<RelayUpdate>) => () => void;
 	onOtaProgress: (fn: Listener<OtaProgress>) => () => void;
 	onOtaResult: (fn: Listener<OtaResult>) => () => void;
+	onRegulatorUpdate: (fn: Listener<RegulatorUpdate>) => () => void;
 }
 
 const DeviceSocketContext = createContext<DeviceSocketContextValue | null>(null);
@@ -56,6 +64,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 	const relayListeners = useRef<Set<Listener<RelayUpdate>>>(new Set());
 	const otaProgressListeners = useRef<Set<Listener<OtaProgress>>>(new Set());
 	const otaResultListeners = useRef<Set<Listener<OtaResult>>>(new Set());
+	const regulatorListeners = useRef<Set<Listener<RegulatorUpdate>>>(new Set());
 
 	// Stable subscription functions - never change reference
 	const onDeviceUpdate = useCallback((fn: Listener<DeviceUpdate>) => {
@@ -87,6 +96,13 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		otaResultListeners.current.add(fn);
 		return () => {
 			otaResultListeners.current.delete(fn);
+		};
+	}, []);
+
+	const onRegulatorUpdate = useCallback((fn: Listener<RegulatorUpdate>) => {
+		regulatorListeners.current.add(fn);
+		return () => {
+			regulatorListeners.current.delete(fn);
 		};
 	}, []);
 
@@ -143,6 +159,9 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 			if (msg.type === "ota_result") {
 				otaResultListeners.current.forEach((fn) => fn(msg));
 			}
+			if (msg.type === "regulator_update") {
+				regulatorListeners.current.forEach((fn) => fn(msg));
+			}
 		};
 
 		ws.onclose = () => {
@@ -175,7 +194,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		if (userId) connect();
 	}, [userId, connect]);
 
-	return <DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate, onOtaProgress, onOtaResult }}>{children}</DeviceSocketContext.Provider>;
+	return <DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate, onOtaProgress, onOtaResult, onRegulatorUpdate }}>{children}</DeviceSocketContext.Provider>;
 }
 
 export function useDeviceSocket() {

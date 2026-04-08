@@ -19,6 +19,8 @@ export const appConfig = {
 	version: "1.0.0",
 	/** Max relays the UI will render per device */
 	maxRelaysPerDevice: 8,
+	/** Max fan regulators per device */
+	maxRegulatorsPerDevice: 4,
 	/** WebSocket reconnect interval in milliseconds */
 	wsReconnectInterval: 5000,
 	/** Milliseconds after last heartbeat before a device is considered offline (2.5× heartbeat) */

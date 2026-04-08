@@ -19,8 +19,9 @@
 #define HEARTBEAT_INTERVAL_MS 60000     // how often to send heartbeat (60s)
 #define CONFIG_PORTAL_TIMEOUT_MS 300000 // 5 min - reboot if nobody configures
 
-// ─── Max relays ───────────────────────────────────────────────
+// ─── Max relays / regulators ──────────────────────────────────
 #define MAX_RELAYS 8
+#define MAX_REGULATORS 4
 
 // ─── Max server-managed WiFi networks (wn1–wn4, in addition to captive-portal wn0) ──
 #define MAX_WIFI_NETWORKS 4
