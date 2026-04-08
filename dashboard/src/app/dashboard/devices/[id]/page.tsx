@@ -454,6 +454,17 @@ export default function DeviceDetailPage() {
 	const [serverCfg, setServerCfg] = useState({ host: "", port: 4001, tls: false });
 
 	// ── OTA ─────────────────────────────────────────────────
+	const [latestVersion, setLatestVersion] = useState<string | null>(null);
+	useEffect(() => {
+		fetch("/api/firmware/releases")
+			.then((r) => r.json())
+			.then((data: { tag_name: string }[]) => {
+				const tag = data[0]?.tag_name;
+				if (tag) setLatestVersion(tag.replace("firmware-v", ""));
+			})
+			.catch(() => null);
+	}, []);
+
 	const [otaFile, setOtaFile] = useState<File | null>(null);
 	const [otaUploadStatus, setOtaUploadStatus] = useState<"idle" | "uploading" | "ready" | "triggering" | "flashing" | "success" | "failed">("idle");
 	const [otaProgress, setOtaProgress] = useState(0);
@@ -1278,31 +1289,59 @@ export default function DeviceDetailPage() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{/* One-click update */}
-								<div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
-									<div>
-										<p className="text-sm font-medium text-foreground">Update to Latest</p>
-										<p className="text-xs text-muted-foreground mt-0.5">Downloads and flashes the newest release automatically</p>
-									</div>
-									<Button
-										size="sm"
-										onClick={() => {
-											setOtaError(null);
-											setOtaUploadStatus("idle");
-											flashLatest.mutate({ deviceId: id });
-										}}
-										disabled={!isOnline || flashLatest.isPending || otaUploadStatus === "flashing"}
-									>
-										{flashLatest.isPending ? (
-											<>
-												<Loader2 className="w-3.5 h-3.5 animate-spin" /> Downloading…
-											</>
-										) : (
-											<>
-												<Zap className="w-3.5 h-3.5" /> Flash Latest
-											</>
-										)}
-									</Button>
-								</div>
+								{(() => {
+									const deviceVer = device.firmwareVersion ?? null;
+									const isUpToDate = !!latestVersion && !!deviceVer && deviceVer === latestVersion;
+									return (
+										<div
+											className={cn("flex items-center justify-between gap-3 p-3 rounded-lg border", isUpToDate ? "bg-muted/50 border-border" : "bg-primary/5 border-primary/20")}
+										>
+											<div className="min-w-0">
+												<p className="text-sm font-medium text-foreground flex items-center gap-2">
+													Update to Latest
+													{latestVersion && (
+														<Badge variant="outline" className="text-[10px] h-4 px-1.5 font-mono">
+															v{latestVersion}
+														</Badge>
+													)}
+												</p>
+												<p className="text-xs text-muted-foreground mt-0.5">
+													{isUpToDate
+														? `Device is already on v${deviceVer}`
+														: deviceVer && latestVersion
+															? `Device is on v${deviceVer}`
+															: "Downloads and flashes the newest release automatically"}
+												</p>
+											</div>
+											{isUpToDate ? (
+												<span className="flex items-center gap-1 text-xs text-primary font-medium shrink-0">
+													<CheckCircle2 className="w-3.5 h-3.5" /> Up to date
+												</span>
+											) : (
+												<Button
+													size="sm"
+													className="shrink-0"
+													onClick={() => {
+														setOtaError(null);
+														setOtaUploadStatus("idle");
+														flashLatest.mutate({ deviceId: id });
+													}}
+													disabled={!isOnline || flashLatest.isPending || otaUploadStatus === "flashing"}
+												>
+													{flashLatest.isPending ? (
+														<>
+															<Loader2 className="w-3.5 h-3.5 animate-spin" /> Downloading…
+														</>
+													) : (
+														<>
+															<Zap className="w-3.5 h-3.5" /> Flash Latest
+														</>
+													)}
+												</Button>
+											)}
+										</div>
+									);
+								})()}
 
 								{!isOnline && <p className="text-xs text-muted-foreground -mt-2">Device must be online to receive OTA.</p>}
 
