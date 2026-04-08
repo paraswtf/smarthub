@@ -6,7 +6,6 @@ on:
         paths:
             - "firmware/**"
             - "platformio.ini"
-            - ".github/workflows/firmware.yml"
 
 jobs:
     build:
