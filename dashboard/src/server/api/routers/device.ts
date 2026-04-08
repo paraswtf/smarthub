@@ -162,7 +162,6 @@ export const deviceRouter = createTRPCRouter({
 				label: z.string().min(1).max(40).optional(),
 				icon: z.string().optional(),
 				pin: z.number().int().min(0).max(39).optional(),
-				activeLow: z.boolean().optional(),
 				order: z.number().int().optional(),
 			}),
 		)
@@ -196,7 +195,6 @@ export const deviceRouter = createTRPCRouter({
 							label: updated.label,
 							state: updated.state,
 							icon: updated.icon,
-							activeLow: updated.activeLow ?? true,
 						},
 					}),
 					signal: AbortSignal.timeout(2000),
@@ -216,7 +214,6 @@ export const deviceRouter = createTRPCRouter({
 				pin: z.number().int().min(0).max(39),
 				label: z.string().min(1).max(40),
 				icon: z.string().default("plug"),
-				activeLow: z.boolean().default(true),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -233,7 +230,6 @@ export const deviceRouter = createTRPCRouter({
 					pin: input.pin,
 					label: input.label,
 					icon: input.icon,
-					activeLow: input.activeLow,
 					order: owned._count.relays,
 				},
 			});
@@ -255,7 +251,6 @@ export const deviceRouter = createTRPCRouter({
 							label: relay.label,
 							state: relay.state,
 							icon: relay.icon,
-							activeLow: relay.activeLow ?? true,
 						},
 					}),
 					signal: AbortSignal.timeout(2000),

@@ -119,7 +119,6 @@ model Relay {
     pin       Int
     label     String          @default("Relay")
     state     Boolean         @default(false)
-    activeLow Boolean?        @default(true)
     order     Int             @default(0)
     icon      String          @default("plug")
     deviceId  String          @db.ObjectId

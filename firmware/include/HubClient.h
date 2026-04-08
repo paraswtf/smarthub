@@ -183,7 +183,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.4.1";
+    static constexpr const char *FIRMWARE_VERSION = "1.4.2";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -325,7 +325,6 @@ private:
                 rBuf[rCount].pin = r["pin"].as<uint8_t>();
                 rBuf[rCount].label = r["label"].as<String>();
                 rBuf[rCount].state = r["state"].as<bool>();
-                rBuf[rCount].activeLow = r["activeLow"] | true;
                 rCount++;
             }
             _relays->applyServerConfig(rBuf, rCount);
@@ -469,11 +468,10 @@ private:
             nr.pin = r["pin"].as<uint8_t>();
             nr.label = r["label"].as<String>();
             nr.state = r["state"].as<bool>();
-            nr.activeLow = r["activeLow"] | true;
             _relays->relays[_relays->count] = nr;
             _relays->count++;
             _relays->applyServerConfig(_relays->relays, _relays->count);
-            DBG_WS("relay_add: id=%s pin=%d activeLow=%d", nr.id.c_str(), nr.pin, nr.activeLow);
+            DBG_WS("relay_add: id=%s pin=%d", nr.id.c_str(), nr.pin);
         }
 
         else if (strcmp(type, "relay_update_config") == 0)
@@ -488,8 +486,6 @@ private:
             uint8_t newPin = r["pin"].as<uint8_t>();
             String newLabel = r["label"].as<String>();
             bool newState = r["state"].as<bool>();
-            bool newActiveLow = r["activeLow"] | true;
-
             for (uint8_t i = 0; i < _relays->count; i++)
             {
                 if (_relays->relays[i].id == id)
@@ -500,11 +496,10 @@ private:
                     _relays->relays[i].pin = newPin;
                     _relays->relays[i].label = newLabel;
                     _relays->relays[i].state = newState;
-                    _relays->relays[i].activeLow = newActiveLow;
                     _relays->reinitPin(i);
                     Storage::saveRelays(_relays->relays, _relays->count);
-                    DBG_WS("relay_update_config: id=%s pin=%d→%d activeLow=%d label=%s",
-                           id.c_str(), oldPin, newPin, newActiveLow, newLabel.c_str());
+                    DBG_WS("relay_update_config: id=%s pin=%d→%d label=%s",
+                           id.c_str(), oldPin, newPin, newLabel.c_str());
                     return;
                 }
             }
