@@ -46,7 +46,6 @@ import { cn } from "~/lib/utils";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../../../globals.config";
 import { PinoutEditor } from "~/components/dashboard/PinoutEditor";
-import { FirmwareDownloadButton } from "~/components/dashboard/FirmwareDownloadButton";
 
 const RELAY_ICONS: Record<string, React.ElementType> = {
 	lightbulb: Lightbulb,
@@ -360,8 +359,19 @@ export default function DeviceDetailPage() {
 		},
 	});
 
-	// OTA mutation
+	// OTA mutations
 	const triggerOta = api.device.triggerOta.useMutation({
+		onSuccess: () => {
+			setOtaUploadStatus("flashing");
+			setOtaProgress(0);
+		},
+		onError: (err) => {
+			setOtaUploadStatus("failed");
+			setOtaError(err.message);
+		},
+	});
+
+	const flashLatest = api.device.flashLatest.useMutation({
 		onSuccess: () => {
 			setOtaUploadStatus("flashing");
 			setOtaProgress(0);
@@ -1256,10 +1266,39 @@ export default function DeviceDetailPage() {
 								<CardDescription>Upload a .bin and push it over-the-air - device will restart after flashing</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">
-								{/* Download latest */}
-								<div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-									<p className="text-xs text-muted-foreground">Need the latest firmware?</p>
-									<FirmwareDownloadButton size="sm" showVersion />
+								{/* One-click update */}
+								<div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
+									<div>
+										<p className="text-sm font-medium text-foreground">Update to Latest</p>
+										<p className="text-xs text-muted-foreground mt-0.5">Downloads and flashes the newest release automatically</p>
+									</div>
+									<Button
+										size="sm"
+										onClick={() => {
+											setOtaError(null);
+											setOtaUploadStatus("idle");
+											flashLatest.mutate({ deviceId: id });
+										}}
+										disabled={!isOnline || flashLatest.isPending || otaUploadStatus === "flashing"}
+									>
+										{flashLatest.isPending ? (
+											<>
+												<Loader2 className="w-3.5 h-3.5 animate-spin" /> Downloading…
+											</>
+										) : (
+											<>
+												<Zap className="w-3.5 h-3.5" /> Flash Latest
+											</>
+										)}
+									</Button>
+								</div>
+
+								{!isOnline && <p className="text-xs text-muted-foreground -mt-2">Device must be online to receive OTA.</p>}
+
+								<div className="relative flex items-center gap-2">
+									<div className="flex-1 h-px bg-border" />
+									<span className="text-[10px] text-muted-foreground uppercase tracking-wide">or upload manually</span>
+									<div className="flex-1 h-px bg-border" />
 								</div>
 
 								{/* Upload section */}
@@ -1321,7 +1360,6 @@ export default function DeviceDetailPage() {
 											</>
 										)}
 									</Button>
-									{!isOnline && <p className="text-xs text-muted-foreground">Device must be online to receive OTA.</p>}
 								</div>
 
 								{/* Progress */}

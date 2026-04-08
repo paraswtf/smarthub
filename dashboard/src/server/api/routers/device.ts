@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 import { getDeviceAccess, getRelayAccess } from "~/server/api/lib/permissions";
 
 const FIRMWARE_DIR = process.env.FIRMWARE_DIR ?? "/data/firmware";
@@ -374,6 +375,49 @@ export const deviceRouter = createTRPCRouter({
 			const data = (await res.json()) as { pushed?: boolean };
 			if (!data.pushed) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Device is offline" });
 			return { ok: true };
+		} catch (err) {
+			if (err instanceof TRPCError) throw err;
+			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not reach WS server" });
+		}
+	}),
+
+	/** Download latest firmware from GitHub and push OTA to device in one step */
+	flashLatest: protectedProcedure.input(z.object({ deviceId: z.string() })).mutation(async ({ ctx, input }) => {
+		const owned = await ctx.db.device.findFirst({ where: { id: input.deviceId, apiKey: { userId: ctx.session.user.id } } });
+		if (!owned) throw new TRPCError({ code: "FORBIDDEN" });
+
+		// Fetch latest firmware release from GitHub
+		const ghRes = await fetch("https://api.github.com/repos/paraswtf/smarthub/releases?per_page=30", {
+			headers: { Accept: "application/vnd.github.v3+json" },
+			signal: AbortSignal.timeout(10000),
+		}).catch(() => null);
+		if (!ghRes?.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not reach GitHub releases API" });
+
+		const releases = (await ghRes.json()) as Array<{ tag_name: string; assets: Array<{ name: string; browser_download_url: string }> }>;
+		const latest = releases.find((r) => r.tag_name.startsWith("firmware-"));
+		if (!latest) throw new TRPCError({ code: "NOT_FOUND", message: "No firmware releases found on GitHub" });
+
+		const asset = latest.assets.find((a) => a.name.endsWith(".bin"));
+		if (!asset) throw new TRPCError({ code: "NOT_FOUND", message: "Latest release has no .bin asset" });
+
+		// Download the binary
+		const binRes = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(30000) }).catch(() => null);
+		if (!binRes?.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to download firmware binary" });
+
+		const buffer = Buffer.from(await binRes.arrayBuffer());
+		const dir = join(FIRMWARE_DIR, input.deviceId);
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, "latest.bin"), buffer);
+
+		// Push OTA to device
+		const baseUrl = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
+		const downloadUrl = `${baseUrl}/api/device/${input.deviceId}/firmware`;
+
+		try {
+			const res = await callWs("/push-ota", { deviceId: input.deviceId, downloadUrl });
+			const data = (await res.json()) as { pushed?: boolean };
+			if (!data.pushed) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Device is offline" });
+			return { ok: true, version: latest.tag_name.replace("firmware-v", "") };
 		} catch (err) {
 			if (err instanceof TRPCError) throw err;
 			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not reach WS server" });
