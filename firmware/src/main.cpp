@@ -271,14 +271,16 @@ void loop()
         {
             static uint8_t wifiRetries = 0;
             wifiRetries++;
-            DBG_WARN("WiFi failed (attempt %d/3)", wifiRetries);
-            if (wifiRetries >= 3)
+            // Exponential backoff: 3s, 6s, 12s, capped at 30s
+            uint32_t backoff = min(3000UL << min(wifiRetries, (uint8_t)4), 30000UL);
+            DBG_WARN("WiFi failed (attempt %d) - retrying in %lums", wifiRetries, backoff);
+            uint32_t wait = millis();
+            while (millis() - wait < backoff)
             {
-                DBG_ERR("WiFi failed 3 times - falling back to portal");
-                wifiRetries = 0;
-                state = S_PORTAL;
+                checkFactoryReset();
+                StatusLed::tick();
+                delay(10);
             }
-            delay(3000);
         }
         break;
 
