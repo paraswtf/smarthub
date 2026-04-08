@@ -277,7 +277,7 @@ export default function DeviceDetailPage() {
 			void utils.switch.listAllRelays.invalidate();
 			void utils.room.unassignedRelays.invalidate();
 			setAddingRelay(false);
-			setNewRelay({ pin: 2, label: "", icon: "plug" });
+			setNewRelay({ pin: 2, label: "", icon: "plug", activeLow: true });
 		},
 	});
 	const updateRelay = api.device.updateRelay.useMutation({
