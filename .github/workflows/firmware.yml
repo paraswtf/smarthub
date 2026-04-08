@@ -25,16 +25,18 @@ jobs:
                   echo "tag=firmware-v$VERSION" >> "$GITHUB_OUTPUT"
 
             - name: Check for duplicate release
+              id: check
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   TAG="${{ steps.version.outputs.tag }}"
                   if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-                    echo "::error::Release $TAG already exists. Bump FIRMWARE_VERSION in firmware/include/HubClient.h before merging."
-                    exit 1
+                    echo "::notice::Release $TAG already exists — skipping build. Bump FIRMWARE_VERSION to publish a new release."
+                    echo "skip=true" >> "$GITHUB_OUTPUT"
                   fi
 
             - name: Cache PlatformIO packages
+              if: steps.check.outputs.skip != 'true'
               uses: actions/cache@v4
               with:
                   path: ~/.platformio
@@ -42,22 +44,27 @@ jobs:
                   restore-keys: pio-
 
             - name: Set up Python
+              if: steps.check.outputs.skip != 'true'
               uses: actions/setup-python@v5
               with:
                   python-version: "3.12"
 
             - name: Install PlatformIO
+              if: steps.check.outputs.skip != 'true'
               run: pip install platformio
 
             - name: Build firmware
+              if: steps.check.outputs.skip != 'true'
               run: pio run -e esp32dev
 
             - name: Rename binary
+              if: steps.check.outputs.skip != 'true'
               run: |
                   VERSION="${{ steps.version.outputs.version }}"
                   cp .pio/build/esp32dev/firmware.bin "smarthub-firmware-v${VERSION}.bin"
 
             - name: Create GitHub Release
+              if: steps.check.outputs.skip != 'true'
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |

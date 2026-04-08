@@ -3,6 +3,10 @@ name: Deploy
 on:
   push:
     branches: [main]
+    paths:
+      - "dashboard/**"
+      - "docker-compose.yml"
+      - ".github/workflows/deploy.yml"
 
 env:
   IMAGE_BASE: ghcr.io/${{ github.repository }}

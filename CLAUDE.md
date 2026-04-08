@@ -289,6 +289,7 @@ Only update docs sections that are directly affected - don't rewrite unrelated c
 ## Conventions & Rules
 
 - **Formatting**: Prettier on pre-commit via Husky/lint-staged. Run `npm run format` manually.
+- **Firmware version**: Whenever any file under `firmware/` is modified, bump `FIRMWARE_VERSION` in `firmware/include/HubClient.h` (semver patch for bug fixes, minor for new features). The CI pipeline rejects builds if the tag already exists — failing to bump blocks the release.
 - **Relay pins**: 0–33 and 32–39 valid GPIO. Pins 34–39 are **input-only** - rejected for relay output by `device.ts` `updateRelay`/`addRelay`.
 - **Switch pins**: Pins 34–39 are ideal (input-only, no accidental output).
 - **Max relays per device**: 8 (`appConfig.maxRelaysPerDevice`).
