@@ -508,7 +508,7 @@ export default function DeviceDetailPage() {
 	};
 
 	const startEditRelay = (relay: (typeof device.relays)[0]) => {
-		setEditRelay({ label: relay.label, icon: relay.icon, pin: relay.pin, activeLow: relay.activeLow });
+		setEditRelay({ label: relay.label, icon: relay.icon, pin: relay.pin, activeLow: relay.activeLow ?? true });
 		setEditingRelayId(relay.id);
 	};
 

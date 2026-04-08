@@ -420,7 +420,7 @@ function handleDeviceConnection(ws: WebSocket) {
 					JSON.stringify({
 						type: "auth_ok",
 						deviceId: device.id,
-						relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon, activeLow: r.activeLow })),
+						relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon, activeLow: r.activeLow ?? true })),
 						switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
 						wifiNetworks: device.wifiNetworks, // server-managed extra networks (wn1–wn4)
 						serverConfig: device.cfgServerHost ? { host: device.cfgServerHost, port: device.cfgServerPort, tls: device.cfgServerTLS } : null,
