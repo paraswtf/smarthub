@@ -42,6 +42,8 @@ services:
         restart: unless-stopped
         ports:
             - "127.0.0.1:3002:3000"
+        volumes:
+            - firmware_data:/data/firmware
         environment:
             - DATABASE_URL=mongodb://mongodb:27017/esphub?replicaSet=rs0&directConnection=true
             - WS_INTERNAL_URL=http://wsserver:4001
@@ -80,3 +82,4 @@ services:
 
 volumes:
     mongodb_data:
+    firmware_data:

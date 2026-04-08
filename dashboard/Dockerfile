@@ -36,7 +36,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+    adduser --system --uid 1001 nextjs && \
+    mkdir -p /data/firmware && chown nextjs:nodejs /data/firmware
 
 COPY --from=builder /app/dashboard/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone ./
