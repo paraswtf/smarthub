@@ -92,15 +92,13 @@ public:
             if (now - _lastLogTime[i] >= 2000)
             {
                 _lastLogTime[i] = now;
-                String pinLog = "RegInput[" + String(i) + "] pins:";
+                String pinLog = "RegInput[" + String(i) + "]";
                 for (uint8_t j = 0; j < inputs[i].pinCount; j++)
                 {
                     uint8_t pin = inputs[i].pins[j].pin;
-                    uint16_t raw = analogRead(pin);
-                    float volts = (raw * 3.3f) / 4095.0f;
-                    pinLog += " GPIO" + String(pin) + "(S" + String(inputs[i].pins[j].speed) +
-                              " " + String(inputs[i].pins[j].minRaw) + "-" + String(inputs[i].pins[j].maxRaw) + ")=" +
-                              String(raw) + "(" + String(volts, 2) + "V)";
+                    float volts = (analogRead(pin) * 3.3f) / 4095.0f;
+                    pinLog += (j == 0 ? " " : " | ");
+                    pinLog += "GPIO" + String(pin) + " - s" + String(inputs[i].pins[j].speed) + "=" + String(volts, 2);
                 }
                 DBG_RELAY("%s", pinLog.c_str());
             }
@@ -118,8 +116,9 @@ public:
                 }
             }
 
-            // Debounce: reading must stay stable for 100ms before firing.
-            // Prevents crosstalk spikes during connection/disconnection.
+            // Asymmetric debounce: going to a specific speed requires the longer window
+            // (sweep crosstalk briefly pulls multiple pins HIGH). Going to OFF only requires
+            // the shorter window since "no pin in window" is hard to false-trigger.
             if (speed != _pendingSpeed[i])
             {
                 _pendingSpeed[i] = speed;
@@ -127,7 +126,8 @@ public:
                 continue;
             }
 
-            if ((now - _pendingTime[i]) < DEBOUNCE_MS)
+            uint32_t needed = (speed == 0) ? DEBOUNCE_OFF_MS : DEBOUNCE_MS;
+            if ((now - _pendingTime[i]) < needed)
                 continue;
 
             if (speed != _lastSpeed[i])
@@ -153,7 +153,11 @@ private:
     uint32_t _lastLogTime[MAX_REG_INPUTS] = {};
 
     // Per-pin minRaw/maxRaw ADC windows are stored on each pin (configured from dashboard).
-    static constexpr uint32_t DEBOUNCE_MS = 100;
+    static constexpr uint32_t DEBOUNCE_MS = 100;      // for any non-zero speed
+    // OFF needs a longer wait so a between-speed sweep gap (rotary leaving one pad
+    // before contacting the next) doesn't briefly fire OFF before the new speed settles.
+    // Real OFF stays "no pin in window" forever, so 300ms still feels responsive.
+    static constexpr uint32_t DEBOUNCE_OFF_MS = 300;
 
     void _initPins(uint8_t i)
     {

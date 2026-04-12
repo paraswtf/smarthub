@@ -215,7 +215,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.5.2";
+    static constexpr const char *FIRMWARE_VERSION = "1.5.3";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
