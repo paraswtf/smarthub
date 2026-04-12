@@ -328,6 +328,8 @@ public:
                 String pp = p + "p" + String(j) + "_";
                 prefs.putUChar((pp + "spd").c_str(), ris[i].pins[j].speed);
                 prefs.putUChar((pp + "pin").c_str(), ris[i].pins[j].pin);
+                prefs.putUShort((pp + "min").c_str(), ris[i].pins[j].minRaw);
+                prefs.putUShort((pp + "max").c_str(), ris[i].pins[j].maxRaw);
             }
         }
         prefs.end();
@@ -351,6 +353,8 @@ public:
                 String pp = p + "p" + String(j) + "_";
                 ris[i].pins[j].speed = prefs.getUChar((pp + "spd").c_str(), 0);
                 ris[i].pins[j].pin = prefs.getUChar((pp + "pin").c_str(), 0);
+                ris[i].pins[j].minRaw = prefs.getUShort((pp + "min").c_str(), 3970);
+                ris[i].pins[j].maxRaw = prefs.getUShort((pp + "max").c_str(), 4095);
             }
             DBG_STORAGE("  regInput[%d] pins=%d linked=%s label=%s",
                         i, ris[i].pinCount, ris[i].linkedRegulatorId.c_str(), ris[i].label.c_str());

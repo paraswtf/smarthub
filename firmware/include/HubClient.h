@@ -215,7 +215,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.5.1";
+    static constexpr const char *FIRMWARE_VERSION = "1.5.2";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -457,6 +457,8 @@ private:
                         if (inp.pinCount >= MAX_REG_INPUT_PINS) break;
                         inp.pins[inp.pinCount].speed = p["speed"].as<uint8_t>();
                         inp.pins[inp.pinCount].pin = p["pin"].as<uint8_t>();
+                        inp.pins[inp.pinCount].minRaw = p["minRaw"] | 3970;
+                        inp.pins[inp.pinCount].maxRaw = p["maxRaw"] | 4095;
                         inp.pinCount++;
                     }
                     DBG_HUB("  regInput[%d] id=%s pins=%d linked=%s",
@@ -801,6 +803,8 @@ private:
                 if (nd.pinCount >= MAX_REG_INPUT_PINS) break;
                 nd.pins[nd.pinCount].speed = p["speed"].as<uint8_t>();
                 nd.pins[nd.pinCount].pin = p["pin"].as<uint8_t>();
+                nd.pins[nd.pinCount].minRaw = p["minRaw"] | 3970;
+                nd.pins[nd.pinCount].maxRaw = p["maxRaw"] | 4095;
                 nd.pinCount++;
             }
             _regInputs->add(nd);
@@ -821,6 +825,8 @@ private:
                 if (nd.pinCount >= MAX_REG_INPUT_PINS) break;
                 nd.pins[nd.pinCount].speed = p["speed"].as<uint8_t>();
                 nd.pins[nd.pinCount].pin = p["pin"].as<uint8_t>();
+                nd.pins[nd.pinCount].minRaw = p["minRaw"] | 3970;
+                nd.pins[nd.pinCount].maxRaw = p["maxRaw"] | 4095;
                 nd.pinCount++;
             }
             _regInputs->updateById(nd.id, nd);

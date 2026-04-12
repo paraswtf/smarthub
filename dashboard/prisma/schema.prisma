@@ -173,8 +173,10 @@ model Regulator {
 // and sets the speed on a linked regulator (potentially on a different device).
 // Mirrors the Switch → Relay pattern.
 type RegulatorInputSpeedPin {
-    speed Int // which speed this input pin activates (1-7)
-    pin   Int // GPIO pin number
+    speed  Int // which speed this input pin activates (1-7)
+    pin    Int // GPIO pin number
+    minRaw Int @default(3970) // ADC threshold lower bound (0-4095) — pin reads as HIGH when min ≤ value ≤ max
+    maxRaw Int @default(4095) // ADC threshold upper bound (0-4095)
 }
 
 model RegulatorInput {

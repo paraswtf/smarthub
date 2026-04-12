@@ -5,7 +5,6 @@
 #include "Config.h"
 #include "RegulatorTypes.h"
 
-// Callback: (linkedRegulatorId, speed)
 using RegulatorInputCallback = void (*)(const String &linkedRegulatorId, uint8_t speed);
 
 class RegulatorInputManager
@@ -27,13 +26,11 @@ public:
     {
         for (uint8_t i = 0; i < count; i++)
             _releasePins(i);
-
         count = newCount;
-        DBG_RELAY("RegInputManager: applying %d input(s) from server", count);
         for (uint8_t i = 0; i < count; i++)
         {
             inputs[i] = newInputs[i];
-            _lastTriggered[i] = 0;
+            _lastSpeed[i] = 0xFF;
             _initPins(i);
         }
         Storage::saveRegulatorInputs(inputs, count);
@@ -41,14 +38,12 @@ public:
 
     void add(const RegulatorInputConfig &ri)
     {
-        if (count >= MAX_REG_INPUTS)
-            return;
+        if (count >= MAX_REG_INPUTS) return;
         inputs[count] = ri;
-        _lastTriggered[count] = 0;
+        _lastSpeed[count] = 0xFF;
         _initPins(count);
         count++;
         Storage::saveRegulatorInputs(inputs, count);
-        DBG_RELAY("RegInputManager: added '%s' (now %d)", ri.label.c_str(), count);
     }
 
     void updateById(const String &id, const RegulatorInputConfig &updated)
@@ -59,13 +54,12 @@ public:
             {
                 _releasePins(i);
                 inputs[i] = updated;
+                _lastSpeed[i] = 0xFF;
                 _initPins(i);
                 Storage::saveRegulatorInputs(inputs, count);
-                DBG_RELAY("RegInputManager: updated '%s'", id.c_str());
                 return;
             }
         }
-        DBG_WARN("RegInputManager: updateById id=%s not found", id.c_str());
     }
 
     void deleteById(const String &id)
@@ -78,65 +72,70 @@ public:
                 for (uint8_t j = i; j < count - 1; j++)
                 {
                     inputs[j] = inputs[j + 1];
-                    _lastTriggered[j] = _lastTriggered[j + 1];
-                    _pendingSpeed[j] = _pendingSpeed[j + 1];
-                    _pendingTime[j] = _pendingTime[j + 1];
+                    _lastSpeed[j] = _lastSpeed[j + 1];
                 }
                 count--;
                 Storage::saveRegulatorInputs(inputs, count);
-                DBG_RELAY("RegInputManager: deleted '%s' (now %d)", id.c_str(), count);
                 return;
             }
         }
-        DBG_WARN("RegInputManager: deleteById id=%s not found", id.c_str());
     }
 
-    // Poll input pins and fire callback on speed change
-    void loop(uint32_t debounceMs = 80)
+    void loop()
     {
-        uint32_t now = millis();
         for (uint8_t i = 0; i < count; i++)
         {
-            if (inputs[i].pinCount == 0)
-                continue;
+            if (inputs[i].pinCount == 0) continue;
 
-            // Skip input polling if recently triggered (10s cooldown to avoid
-            // thrashing between physical input and server-applied speed)
-            if (_lastTriggered[i] != 0 && (now - _lastTriggered[i]) < 10000)
-                continue;
+            // Log all pin states every 2s for debugging
+            uint32_t now = millis();
+            if (now - _lastLogTime[i] >= 2000)
+            {
+                _lastLogTime[i] = now;
+                String pinLog = "RegInput[" + String(i) + "] pins:";
+                for (uint8_t j = 0; j < inputs[i].pinCount; j++)
+                {
+                    uint8_t pin = inputs[i].pins[j].pin;
+                    uint16_t raw = analogRead(pin);
+                    float volts = (raw * 3.3f) / 4095.0f;
+                    pinLog += " GPIO" + String(pin) + "(S" + String(inputs[i].pins[j].speed) +
+                              " " + String(inputs[i].pins[j].minRaw) + "-" + String(inputs[i].pins[j].maxRaw) + ")=" +
+                              String(raw) + "(" + String(volts, 2) + "V)";
+                }
+                DBG_RELAY("%s", pinLog.c_str());
+            }
 
-            // Check which input pin is HIGH (one-pin-per-speed rotary)
-            uint8_t detectedSpeed = 0; // no pin HIGH = OFF
+            // Find first pin within its configured min/max ADC window → that pin's speed.
+            // analogRead returns 0-4095 for 0-3.3V (saturates above 3.3V).
+            uint8_t speed = 0;
             for (uint8_t j = 0; j < inputs[i].pinCount; j++)
             {
-                uint8_t pin = inputs[i].pins[j].pin;
-                if (digitalRead(pin) == HIGH)
+                uint16_t raw = analogRead(inputs[i].pins[j].pin);
+                if (raw >= inputs[i].pins[j].minRaw && raw <= inputs[i].pins[j].maxRaw)
                 {
-                    detectedSpeed = inputs[i].pins[j].speed;
-                    break; // only one pin HIGH at a time
+                    speed = inputs[i].pins[j].speed;
+                    break;
                 }
             }
 
-            // Debounce: require stable reading
-            if (detectedSpeed != _pendingSpeed[i])
+            // Debounce: reading must stay stable for 100ms before firing.
+            // Prevents crosstalk spikes during connection/disconnection.
+            if (speed != _pendingSpeed[i])
             {
-                _pendingSpeed[i] = detectedSpeed;
+                _pendingSpeed[i] = speed;
                 _pendingTime[i] = now;
                 continue;
             }
 
-            if ((now - _pendingTime[i]) < debounceMs)
+            if ((now - _pendingTime[i]) < DEBOUNCE_MS)
                 continue;
 
-            // Stable reading - send trigger if different from last known
-            if (detectedSpeed != _lastSpeed[i])
+            if (speed != _lastSpeed[i])
             {
-                DBG_RELAY("RegInputManager: input[%d] detected speed %d → %d  linked=%s",
-                          i, _lastSpeed[i], detectedSpeed, inputs[i].linkedRegulatorId.c_str());
-                _lastSpeed[i] = detectedSpeed;
-                _lastTriggered[i] = now;
+                DBG_RELAY("RegInput[%d] speed change: %d → %d", i, _lastSpeed[i], speed);
+                _lastSpeed[i] = speed;
                 if (_callback)
-                    _callback(inputs[i].linkedRegulatorId, detectedSpeed);
+                    _callback(inputs[i].linkedRegulatorId, speed);
             }
         }
     }
@@ -144,25 +143,24 @@ public:
     void flush()
     {
         Storage::saveRegulatorInputs(inputs, count);
-        DBG_RELAY("RegInputManager: flushed %d input(s) to NVS", count);
     }
 
 private:
     RegulatorInputCallback _callback = nullptr;
-    uint32_t _lastTriggered[MAX_REG_INPUTS] = {};
+    uint8_t _lastSpeed[MAX_REG_INPUTS] = {};
     uint8_t _pendingSpeed[MAX_REG_INPUTS] = {};
     uint32_t _pendingTime[MAX_REG_INPUTS] = {};
-    uint8_t _lastSpeed[MAX_REG_INPUTS] = {};
+    uint32_t _lastLogTime[MAX_REG_INPUTS] = {};
+
+    // Per-pin minRaw/maxRaw ADC windows are stored on each pin (configured from dashboard).
+    static constexpr uint32_t DEBOUNCE_MS = 100;
 
     void _initPins(uint8_t i)
     {
         for (uint8_t j = 0; j < inputs[i].pinCount; j++)
         {
             uint8_t pin = inputs[i].pins[j].pin;
-            if (pin == 0)
-                continue;
-            // Input-only pins (34-39) don't support internal pull-down;
-            // user must add external pull-down resistor
+            if (pin == 0) continue;
             if (pin >= 34 && pin <= 39)
                 pinMode(pin, INPUT);
             else
@@ -175,8 +173,7 @@ private:
         for (uint8_t j = 0; j < inputs[i].pinCount; j++)
         {
             uint8_t pin = inputs[i].pins[j].pin;
-            if (pin == 0)
-                continue;
+            if (pin == 0) continue;
             pinMode(pin, INPUT);
         }
     }

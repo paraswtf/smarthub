@@ -29,8 +29,10 @@ struct RegulatorConfig
 // Regulator input pin mapping — one GPIO per speed level
 struct RegInputSpeedPin
 {
-    uint8_t speed; // which speed this input activates (1-7)
-    uint8_t pin;   // GPIO pin number
+    uint8_t  speed;  // which speed this input activates (1-7)
+    uint8_t  pin;    // GPIO pin number
+    uint16_t minRaw; // ADC threshold lower bound (0-4095)
+    uint16_t maxRaw; // ADC threshold upper bound (0-4095)
 };
 
 // Regulator input config — monitors physical rotary switch, controls a linked regulator

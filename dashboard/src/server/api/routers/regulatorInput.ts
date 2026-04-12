@@ -6,6 +6,8 @@ import { getDeviceAccess } from "~/server/api/lib/permissions";
 const speedPinSchema = z.object({
 	speed: z.number().int().min(1).max(7),
 	pin: z.number().int().min(0).max(39),
+	minRaw: z.number().int().min(0).max(4095).default(3970),
+	maxRaw: z.number().int().min(0).max(4095).default(4095),
 });
 
 function wsUrl(path: string) {

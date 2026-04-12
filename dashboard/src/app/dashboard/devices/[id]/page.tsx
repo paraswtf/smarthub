@@ -564,13 +564,13 @@ export default function DeviceDetailPage() {
 	const [addingRegInput, setAddingRegInput] = useState(false);
 	const [newRegInput, setNewRegInput] = useState<{
 		label: string;
-		pins: { speed: number; pin: number }[];
+		pins: { speed: number; pin: number; minRaw: number; maxRaw: number }[];
 		linkedRegulatorId: string;
-	}>({ label: "Regulator Input", pins: [{ speed: 1, pin: 36 }], linkedRegulatorId: "" });
+	}>({ label: "Regulator Input", pins: [{ speed: 1, pin: 36, minRaw: 3970, maxRaw: 4095 }], linkedRegulatorId: "" });
 	const [editingRegInputId, setEditingRegInputId] = useState<string | null>(null);
 	const [editRegInput, setEditRegInput] = useState<{
 		label: string;
-		pins: { speed: number; pin: number }[];
+		pins: { speed: number; pin: number; minRaw: number; maxRaw: number }[];
 		linkedRegulatorId: string;
 	}>({ label: "", pins: [], linkedRegulatorId: "" });
 	const [deleteRegInputId, setDeleteRegInputId] = useState<string | null>(null);
@@ -579,7 +579,7 @@ export default function DeviceDetailPage() {
 		onSuccess: () => {
 			void utils.regulatorInput.list.invalidate({ deviceId: id });
 			setAddingRegInput(false);
-			setNewRegInput({ label: "Regulator Input", pins: [{ speed: 1, pin: 36 }], linkedRegulatorId: "" });
+			setNewRegInput({ label: "Regulator Input", pins: [{ speed: 1, pin: 36, minRaw: 3970, maxRaw: 4095 }], linkedRegulatorId: "" });
 		},
 	});
 	const updateRegInputMut = api.regulatorInput.update.useMutation({
@@ -598,7 +598,7 @@ export default function DeviceDetailPage() {
 	const startEditRegInput = (ri: RegInputItem) => {
 		setEditRegInput({
 			label: ri.label,
-			pins: ri.pins.map((p) => ({ speed: p.speed, pin: p.pin })),
+			pins: ri.pins.map((p) => ({ speed: p.speed, pin: p.pin, minRaw: p.minRaw ?? 3970, maxRaw: p.maxRaw ?? 4095 })),
 			linkedRegulatorId: ri.linkedRegulatorId,
 		});
 		setEditingRegInputId(ri.id);
@@ -1446,15 +1446,15 @@ export default function DeviceDetailPage() {
 												size="sm"
 												variant="ghost"
 												className="h-6 text-xs"
-												onClick={() => setEditRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36 }] }))}
+												onClick={() => setEditRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36, minRaw: 3970, maxRaw: 4095 }] }))}
 												disabled={editRegInput.pins.length >= 7}
 											>
 												<Plus className="w-3 h-3 mr-1" /> Add Pin
 											</Button>
 										</div>
 										{editRegInput.pins.map((ip, ii) => (
-											<div key={ii} className="flex items-center gap-2 text-xs">
-												<span className="text-muted-foreground shrink-0">Speed</span>
+											<div key={ii} className="flex flex-wrap items-center gap-1.5 text-xs">
+												<span className="text-muted-foreground shrink-0">S</span>
 												<Input
 													type="number"
 													value={ip.speed}
@@ -1464,11 +1464,11 @@ export default function DeviceDetailPage() {
 															pins: d.pins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
 														}))
 													}
-													className="h-7 w-16 text-xs"
+													className="h-7 w-12 text-xs"
 													min={1}
 													max={7}
 												/>
-												<span className="text-muted-foreground">→ GPIO</span>
+												<span className="text-muted-foreground">GPIO</span>
 												<Input
 													type="number"
 													value={ip.pin}
@@ -1478,9 +1478,37 @@ export default function DeviceDetailPage() {
 															pins: d.pins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
 														}))
 													}
-													className="h-7 w-16 text-xs"
+													className="h-7 w-14 text-xs"
 													min={0}
 													max={39}
+												/>
+												<span className="text-muted-foreground">min</span>
+												<Input
+													type="number"
+													value={ip.minRaw}
+													onChange={(e) =>
+														setEditRegInput((d) => ({
+															...d,
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: Number(e.target.value) } : p)),
+														}))
+													}
+													className="h-7 w-16 text-xs"
+													min={0}
+													max={4095}
+												/>
+												<span className="text-muted-foreground">max</span>
+												<Input
+													type="number"
+													value={ip.maxRaw}
+													onChange={(e) =>
+														setEditRegInput((d) => ({
+															...d,
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: Number(e.target.value) } : p)),
+														}))
+													}
+													className="h-7 w-16 text-xs"
+													min={0}
+													max={4095}
 												/>
 												<Button
 													size="sm"
@@ -1580,15 +1608,15 @@ export default function DeviceDetailPage() {
 											size="sm"
 											variant="ghost"
 											className="h-6 text-xs"
-											onClick={() => setNewRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36 }] }))}
+											onClick={() => setNewRegInput((d) => ({ ...d, pins: [...d.pins, { speed: d.pins.length + 1, pin: 36, minRaw: 3970, maxRaw: 4095 }] }))}
 											disabled={newRegInput.pins.length >= 7}
 										>
 											<Plus className="w-3 h-3 mr-1" /> Add Pin
 										</Button>
 									</div>
 									{newRegInput.pins.map((ip, ii) => (
-										<div key={ii} className="flex items-center gap-2 text-xs">
-											<span className="text-muted-foreground shrink-0">Speed</span>
+										<div key={ii} className="flex flex-wrap items-center gap-1.5 text-xs">
+											<span className="text-muted-foreground shrink-0">S</span>
 											<Input
 												type="number"
 												value={ip.speed}
@@ -1598,11 +1626,11 @@ export default function DeviceDetailPage() {
 														pins: d.pins.map((p, i) => (i === ii ? { ...p, speed: Number(e.target.value) } : p)),
 													}))
 												}
-												className="h-7 w-16 text-xs"
+												className="h-7 w-12 text-xs"
 												min={1}
 												max={7}
 											/>
-											<span className="text-muted-foreground">→ GPIO</span>
+											<span className="text-muted-foreground">GPIO</span>
 											<Input
 												type="number"
 												value={ip.pin}
@@ -1612,9 +1640,37 @@ export default function DeviceDetailPage() {
 														pins: d.pins.map((p, i) => (i === ii ? { ...p, pin: Number(e.target.value) } : p)),
 													}))
 												}
-												className="h-7 w-16 text-xs"
+												className="h-7 w-14 text-xs"
 												min={0}
 												max={39}
+											/>
+											<span className="text-muted-foreground">min</span>
+											<Input
+												type="number"
+												value={ip.minRaw}
+												onChange={(e) =>
+													setNewRegInput((d) => ({
+														...d,
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={0}
+												max={4095}
+											/>
+											<span className="text-muted-foreground">max</span>
+											<Input
+												type="number"
+												value={ip.maxRaw}
+												onChange={(e) =>
+													setNewRegInput((d) => ({
+														...d,
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: Number(e.target.value) } : p)),
+													}))
+												}
+												className="h-7 w-16 text-xs"
+												min={0}
+												max={4095}
 											/>
 											<Button
 												size="sm"
