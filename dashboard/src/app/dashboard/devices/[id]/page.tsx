@@ -595,6 +595,10 @@ export default function DeviceDetailPage() {
 		},
 	});
 
+	// ADC raw (0-4095) ↔ volts (0-3.3V) helpers — UI shows volts, backend stores raw
+	const rawToVolts = (raw: number) => ((raw * 3.3) / 4095).toFixed(2);
+	const voltsToRaw = (v: number) => Math.max(0, Math.min(4095, Math.round((v * 4095) / 3.3)));
+
 	const startEditRegInput = (ri: RegInputItem) => {
 		setEditRegInput({
 			label: ri.label,
@@ -1485,31 +1489,34 @@ export default function DeviceDetailPage() {
 												<span className="text-muted-foreground">min</span>
 												<Input
 													type="number"
-													value={ip.minRaw}
+													value={rawToVolts(ip.minRaw)}
 													onChange={(e) =>
 														setEditRegInput((d) => ({
 															...d,
-															pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: Number(e.target.value) } : p)),
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: voltsToRaw(Number(e.target.value)) } : p)),
 														}))
 													}
 													className="h-7 w-16 text-xs"
 													min={0}
-													max={4095}
+													max={3.3}
+													step={0.01}
 												/>
-												<span className="text-muted-foreground">max</span>
+												<span className="text-muted-foreground">V max</span>
 												<Input
 													type="number"
-													value={ip.maxRaw}
+													value={rawToVolts(ip.maxRaw)}
 													onChange={(e) =>
 														setEditRegInput((d) => ({
 															...d,
-															pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: Number(e.target.value) } : p)),
+															pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: voltsToRaw(Number(e.target.value)) } : p)),
 														}))
 													}
 													className="h-7 w-16 text-xs"
 													min={0}
-													max={4095}
+													max={3.3}
+													step={0.01}
 												/>
+												<span className="text-muted-foreground">V</span>
 												<Button
 													size="sm"
 													variant="ghost"
@@ -1647,31 +1654,34 @@ export default function DeviceDetailPage() {
 											<span className="text-muted-foreground">min</span>
 											<Input
 												type="number"
-												value={ip.minRaw}
+												value={rawToVolts(ip.minRaw)}
 												onChange={(e) =>
 													setNewRegInput((d) => ({
 														...d,
-														pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: Number(e.target.value) } : p)),
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, minRaw: voltsToRaw(Number(e.target.value)) } : p)),
 													}))
 												}
-												className="h-7 w-16 text-xs"
+												className="h-7 w-20 text-xs"
 												min={0}
-												max={4095}
+												max={3.3}
+												step={0.01}
 											/>
-											<span className="text-muted-foreground">max</span>
+											<span className="text-muted-foreground">V max</span>
 											<Input
 												type="number"
-												value={ip.maxRaw}
+												value={rawToVolts(ip.maxRaw)}
 												onChange={(e) =>
 													setNewRegInput((d) => ({
 														...d,
-														pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: Number(e.target.value) } : p)),
+														pins: d.pins.map((p, i) => (i === ii ? { ...p, maxRaw: voltsToRaw(Number(e.target.value)) } : p)),
 													}))
 												}
-												className="h-7 w-16 text-xs"
+												className="h-7 w-20 text-xs"
 												min={0}
-												max={4095}
+												max={3.3}
+												step={0.01}
 											/>
+											<span className="text-muted-foreground">V</span>
 											<Button
 												size="sm"
 												variant="ghost"
