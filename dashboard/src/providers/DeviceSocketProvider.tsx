@@ -37,7 +37,16 @@ export interface RegulatorUpdate {
 	speed: number;
 }
 
-type WsMessage = DeviceUpdate | RelayUpdate | OtaProgress | OtaResult | RegulatorUpdate;
+export interface RegInputCalibrationSample {
+	type: "reg_input_calibration_sample";
+	deviceId: string;
+	regInputId: string;
+	pin: number;
+	raw: number;
+	ts: number;
+}
+
+type WsMessage = DeviceUpdate | RelayUpdate | OtaProgress | OtaResult | RegulatorUpdate | RegInputCalibrationSample;
 type Listener<T> = (msg: T) => void;
 
 interface DeviceSocketContextValue {
@@ -47,6 +56,7 @@ interface DeviceSocketContextValue {
 	onOtaProgress: (fn: Listener<OtaProgress>) => () => void;
 	onOtaResult: (fn: Listener<OtaResult>) => () => void;
 	onRegulatorUpdate: (fn: Listener<RegulatorUpdate>) => () => void;
+	onRegInputCalibrationSample: (fn: Listener<RegInputCalibrationSample>) => () => void;
 }
 
 const DeviceSocketContext = createContext<DeviceSocketContextValue | null>(null);
@@ -65,6 +75,7 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 	const otaProgressListeners = useRef<Set<Listener<OtaProgress>>>(new Set());
 	const otaResultListeners = useRef<Set<Listener<OtaResult>>>(new Set());
 	const regulatorListeners = useRef<Set<Listener<RegulatorUpdate>>>(new Set());
+	const regInputCalSampleListeners = useRef<Set<Listener<RegInputCalibrationSample>>>(new Set());
 
 	// Stable subscription functions - never change reference
 	const onDeviceUpdate = useCallback((fn: Listener<DeviceUpdate>) => {
@@ -103,6 +114,13 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		regulatorListeners.current.add(fn);
 		return () => {
 			regulatorListeners.current.delete(fn);
+		};
+	}, []);
+
+	const onRegInputCalibrationSample = useCallback((fn: Listener<RegInputCalibrationSample>) => {
+		regInputCalSampleListeners.current.add(fn);
+		return () => {
+			regInputCalSampleListeners.current.delete(fn);
 		};
 	}, []);
 
@@ -162,6 +180,9 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 			if (msg.type === "regulator_update") {
 				regulatorListeners.current.forEach((fn) => fn(msg));
 			}
+			if (msg.type === "reg_input_calibration_sample") {
+				regInputCalSampleListeners.current.forEach((fn) => fn(msg));
+			}
 		};
 
 		ws.onclose = () => {
@@ -194,7 +215,11 @@ export function DeviceSocketProvider({ userId, children }: { userId: string | nu
 		if (userId) connect();
 	}, [userId, connect]);
 
-	return <DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate, onOtaProgress, onOtaResult, onRegulatorUpdate }}>{children}</DeviceSocketContext.Provider>;
+	return (
+		<DeviceSocketContext.Provider value={{ connected, onDeviceUpdate, onRelayUpdate, onOtaProgress, onOtaResult, onRegulatorUpdate, onRegInputCalibrationSample }}>
+			{children}
+		</DeviceSocketContext.Provider>
+	);
 }
 
 export function useDeviceSocket() {

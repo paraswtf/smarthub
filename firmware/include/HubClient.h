@@ -166,6 +166,7 @@ public:
         _relays->flush();
         _regulators->flush();
         _regInputs->flush();
+        _regInputs->onDisconnect();
         _resetState();
     }
 
@@ -197,6 +198,18 @@ public:
         _send(doc);
     }
 
+    // Stream a single raw ADC reading during reg-input calibration
+    void sendRegInputCalibrationSample(const String &id, uint8_t pin, uint16_t raw)
+    {
+        if (!authenticated) return;
+        JsonDocument doc;
+        doc["type"] = "reg_input_calibration_sample";
+        doc["id"] = id;
+        doc["pin"] = pin;
+        doc["raw"] = raw;
+        _send(doc);
+    }
+
     // Send switch trigger to server - server resolves cross-device relay
     void sendSwitchTrigger(const String &linkedRelayId, const String &linkedRegulatorId, bool desiredState, bool isToggle)
     {
@@ -217,7 +230,7 @@ public:
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.6.0";
+    static constexpr const char *FIRMWARE_VERSION = "1.7.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -844,6 +857,17 @@ private:
             String regInputId = doc["regulatorInputId"].as<String>();
             _regInputs->deleteById(regInputId);
             DBG_WS("reg_input_delete: id=%s", regInputId.c_str());
+        }
+
+        else if (strcmp(type, "reg_input_calibration_start") == 0)
+        {
+            if (!authenticated) { DBG_WARN("reg_input_calibration_start before auth - ignored"); return; }
+            _regInputs->startCalibration(doc["id"].as<String>());
+        }
+        else if (strcmp(type, "reg_input_calibration_stop") == 0)
+        {
+            if (!authenticated) { DBG_WARN("reg_input_calibration_stop before auth - ignored"); return; }
+            _regInputs->stopCalibration();
         }
 
         else if (strcmp(type, "wifi_config") == 0)

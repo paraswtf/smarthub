@@ -6,6 +6,7 @@
 #include "RegulatorTypes.h"
 
 using RegulatorInputCallback = void (*)(const String &linkedRegulatorId, uint8_t speed);
+using RegInputSampleCallback = void (*)(const String &id, uint8_t pin, uint16_t raw);
 
 class RegulatorInputManager
 {
@@ -81,8 +82,50 @@ public:
         }
     }
 
+    void setSampleCallback(RegInputSampleCallback cb) { _sampleCallback = cb; }
+
+    void startCalibration(const String &id)
+    {
+        _calibratingId = id;
+        _lastCalSample = 0;
+        DBG_RELAY("RegInput cal start id=%s", id.c_str());
+    }
+
+    void stopCalibration()
+    {
+        if (_calibratingId.length() > 0)
+            DBG_RELAY("RegInput cal stop id=%s", _calibratingId.c_str());
+        _calibratingId = "";
+    }
+
+    // Call when the WS link drops to avoid streaming forever after reconnect.
+    void onDisconnect() { stopCalibration(); }
+
     void loop()
     {
+        // ── Calibration mode: stream raw ADC for one input, skip normal matching ─
+        if (_calibratingId.length() > 0)
+        {
+            uint32_t now = millis();
+            if (now - _lastCalSample < CAL_INTERVAL_MS)
+                return;
+            _lastCalSample = now;
+            for (uint8_t i = 0; i < count; i++)
+            {
+                if (inputs[i].id != _calibratingId) continue;
+                for (uint8_t j = 0; j < inputs[i].pinCount; j++)
+                {
+                    uint8_t pin = inputs[i].pins[j].pin;
+                    if (pin == 0) continue;
+                    uint16_t raw = analogRead(pin);
+                    if (_sampleCallback)
+                        _sampleCallback(_calibratingId, pin, raw);
+                }
+                break;
+            }
+            return;
+        }
+
         for (uint8_t i = 0; i < count; i++)
         {
             if (inputs[i].pinCount == 0) continue;
@@ -147,6 +190,10 @@ public:
 
 private:
     RegulatorInputCallback _callback = nullptr;
+    RegInputSampleCallback _sampleCallback = nullptr;
+    String _calibratingId = "";
+    uint32_t _lastCalSample = 0;
+    static constexpr uint32_t CAL_INTERVAL_MS = 100; // 10 Hz stream
     uint8_t _lastSpeed[MAX_REG_INPUTS] = {};
     uint8_t _pendingSpeed[MAX_REG_INPUTS] = {};
     uint32_t _pendingTime[MAX_REG_INPUTS] = {};

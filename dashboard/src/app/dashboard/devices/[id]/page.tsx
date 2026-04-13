@@ -46,6 +46,7 @@ import { cn } from "~/lib/utils";
 import { useDeviceSocket } from "~/providers/DeviceSocketProvider";
 import { appConfig } from "../../../../../globals.config";
 import { PinoutEditor } from "~/components/dashboard/PinoutEditor";
+import { RegInputCalibrationDialog } from "~/components/dashboard/RegInputCalibrationDialog";
 
 const RELAY_ICONS: Record<string, React.ElementType> = {
 	lightbulb: Lightbulb,
@@ -588,6 +589,7 @@ export default function DeviceDetailPage() {
 		linkedRegulatorId: string;
 	}>({ label: "", pins: [], linkedRegulatorId: "" });
 	const [deleteRegInputId, setDeleteRegInputId] = useState<string | null>(null);
+	const [calibratingRegInputId, setCalibratingRegInputId] = useState<string | null>(null);
 
 	const addRegInputMut = api.regulatorInput.add.useMutation({
 		onSuccess: () => {
@@ -1596,6 +1598,16 @@ export default function DeviceDetailPage() {
 										</Button>
 										<Button
 											size="sm"
+											variant="outline"
+											className="h-7 text-xs"
+											onClick={() => setCalibratingRegInputId(ri.id)}
+											disabled={editRegInput.pins.length === 0}
+											title="Stream live ADC values from the device and capture min/max for each speed"
+										>
+											<Zap className="w-3 h-3 mr-1" /> Auto Calibrate
+										</Button>
+										<Button
+											size="sm"
 											variant="ghost"
 											className="h-7 text-xs text-destructive hover:text-destructive"
 											onClick={() => deleteRegInputMut.mutate({ regulatorInputId: ri.id })}
@@ -2261,6 +2273,18 @@ export default function DeviceDetailPage() {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			{calibratingRegInputId && (
+				<RegInputCalibrationDialog
+					open={!!calibratingRegInputId}
+					onClose={() => setCalibratingRegInputId(null)}
+					deviceId={id}
+					regInputId={calibratingRegInputId}
+					label={editRegInput.label}
+					pins={editRegInput.pins}
+					onApply={(pins) => setEditRegInput((d) => ({ ...d, pins }))}
+				/>
+			)}
 		</div>
 	);
 }

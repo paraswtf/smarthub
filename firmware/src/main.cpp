@@ -122,6 +122,12 @@ void onRegulatorInputTriggered(const String &linkedRegulatorId, uint8_t speed)
     hub.sendRegulatorInputTrigger(linkedRegulatorId, speed);
 }
 
+// Reg input calibration sample callback - forward raw ADC reading to server
+void onRegInputCalibrationSample(const String &id, uint8_t pin, uint16_t raw)
+{
+    hub.sendRegInputCalibrationSample(id, pin, raw);
+}
+
 // ─── WiFi connection ──────────────────────────────────────────
 // Tries the captive-portal primary network (wn0), then server-managed extras (wn1–wn4).
 bool connectWiFi()
@@ -219,6 +225,7 @@ void setup()
     switches.begin(onSwitchTriggered);
     regulators.begin();
     regInputs.begin(onRegulatorInputTriggered);
+    regInputs.setSampleCallback(onRegInputCalibrationSample);
     DBG_HEAP();
 }
 

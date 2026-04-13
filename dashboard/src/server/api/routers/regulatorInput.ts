@@ -143,4 +143,39 @@ export const regulatorInputRouter = createTRPCRouter({
 
 		return { ok: true };
 	}),
+
+	/** Start streaming raw ADC samples from the device for calibration (owner only) */
+	startCalibration: protectedProcedure.input(z.object({ regulatorInputId: z.string() })).mutation(async ({ ctx, input }) => {
+		const ri = await ctx.db.regulatorInput.findFirst({
+			where: { id: input.regulatorInputId, device: { apiKey: { userId: ctx.session.user.id } } },
+		});
+		if (!ri) throw new TRPCError({ code: "FORBIDDEN" });
+
+		const res = await callWs("/start-reg-input-calibration", {
+			deviceId: ri.deviceId,
+			regInputId: ri.id,
+		}).catch(() => null);
+
+		if (!res || !res.ok) {
+			const message = res ? await res.text().catch(() => "device offline") : "device offline";
+			throw new TRPCError({ code: "BAD_REQUEST", message: message || "device offline" });
+		}
+
+		return { ok: true };
+	}),
+
+	/** Stop the calibration stream */
+	stopCalibration: protectedProcedure.input(z.object({ regulatorInputId: z.string() })).mutation(async ({ ctx, input }) => {
+		const ri = await ctx.db.regulatorInput.findFirst({
+			where: { id: input.regulatorInputId, device: { apiKey: { userId: ctx.session.user.id } } },
+		});
+		if (!ri) throw new TRPCError({ code: "FORBIDDEN" });
+
+		await callWs("/stop-reg-input-calibration", {
+			deviceId: ri.deviceId,
+			regInputId: ri.id,
+		}).catch(() => null);
+
+		return { ok: true };
+	}),
 });

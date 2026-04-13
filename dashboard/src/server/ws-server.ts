@@ -44,6 +44,16 @@ const PING_INTERVAL_MS = 30_000;
 
 // Map: deviceId → ESP32 WebSocket
 const deviceSockets = new Map<string, WebSocket>();
+
+// Active reg-input calibration sessions per device. Only one input may calibrate
+// at a time per device. Stale sessions are auto-stopped after CAL_TIMEOUT_MS.
+interface CalibrationSession {
+	regInputId: string;
+	startedAt: number;
+	timer: NodeJS.Timeout;
+}
+const calibrationSessions = new Map<string, CalibrationSession>();
+const CAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 // Map: userId   → Set of browser WebSocket connections
 const browserSockets = new Map<string, Set<WebSocket>>();
 // Map: deviceId → pending on-demand ping resolve/timer
@@ -95,7 +105,13 @@ interface RegulatorInputTriggerMsg {
 	linkedRegulatorId: string;
 	speed: number;
 }
-type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg | OtaProgressMsg | OtaResultMsg | RegulatorAckMsg | RegulatorInputTriggerMsg;
+interface RegInputCalibrationSampleMsg {
+	type: "reg_input_calibration_sample";
+	id: string;
+	pin: number;
+	raw: number;
+}
+type EspMessage = AuthMsg | RelayAckMsg | PingAckMsg | SwitchTriggerMsg | OtaProgressMsg | OtaResultMsg | RegulatorAckMsg | RegulatorInputTriggerMsg | RegInputCalibrationSampleMsg;
 interface BrowserSubscribeMsg {
 	type: "subscribe";
 	userId: string;
@@ -161,6 +177,20 @@ function pushRelayCommand(deviceId: string, relayId: string, pin: number, state:
 	if (!ws || ws.readyState !== WebSocket.OPEN) return false;
 	ws.send(JSON.stringify({ type: "relay_cmd", relayId, pin, state }));
 	return true;
+}
+
+function stopCalibrationSession(deviceId: string, notifyDevice: boolean) {
+	const session = calibrationSessions.get(deviceId);
+	if (!session) return;
+	clearTimeout(session.timer);
+	calibrationSessions.delete(deviceId);
+	if (notifyDevice) {
+		const ws = deviceSockets.get(deviceId);
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({ type: "reg_input_calibration_stop", id: session.regInputId }));
+		}
+	}
+	console.log(`[WS] reg-input calibration stopped: device=${deviceId} id=${session.regInputId}`);
 }
 
 function pushToDevice(deviceId: string, payload: object): boolean {
@@ -303,6 +333,35 @@ export async function wsRequestHandler(req: IncomingMessage, res: ServerResponse
 				const pushed = pushToDevice(deviceId, { type: riTypeMap[req.url!], ...body });
 				jsonOk(res, { ok: true, pushed });
 				console.log(`[HTTP] ${req.url} → device=${deviceId} pushed=${pushed}`);
+				break;
+			}
+			case "/start-reg-input-calibration": {
+				const { deviceId, regInputId } = body as { deviceId: string; regInputId: string };
+				const ws = deviceSockets.get(deviceId);
+				if (!ws || ws.readyState !== WebSocket.OPEN) {
+					res.statusCode = 503;
+					res.end(JSON.stringify({ ok: false, error: "device offline" }));
+					break;
+				}
+				const existing = calibrationSessions.get(deviceId);
+				if (existing && existing.regInputId !== regInputId) {
+					res.statusCode = 409;
+					res.end(JSON.stringify({ ok: false, error: "another calibration is already running on this device" }));
+					break;
+				}
+				if (existing) clearTimeout(existing.timer);
+				const timer = setTimeout(() => stopCalibrationSession(deviceId, true), CAL_TIMEOUT_MS);
+				calibrationSessions.set(deviceId, { regInputId, startedAt: Date.now(), timer });
+				ws.send(JSON.stringify({ type: "reg_input_calibration_start", id: regInputId }));
+				jsonOk(res, { ok: true });
+				console.log(`[HTTP] /start-reg-input-calibration → device=${deviceId} id=${regInputId}`);
+				break;
+			}
+			case "/stop-reg-input-calibration": {
+				const { deviceId } = body as { deviceId: string };
+				stopCalibrationSession(deviceId, true);
+				jsonOk(res, { ok: true });
+				console.log(`[HTTP] /stop-reg-input-calibration → device=${deviceId}`);
 				break;
 			}
 			case "/ping-device": {
@@ -658,6 +717,22 @@ function handleDeviceConnection(ws: WebSocket) {
 				broadcastToDeviceSubscribers(regulator.deviceId, { type: "regulator_update", deviceId: regulator.deviceId, regulatorId: regulator.id, speed });
 			}
 
+			// ── REG INPUT CALIBRATION SAMPLE ─────────────────────
+			// Live ADC stream while a calibration session is active. Authorize by
+			// confirming the session matches; drop stale samples silently.
+			if (msg.type === "reg_input_calibration_sample" && authenticatedDeviceId) {
+				const session = calibrationSessions.get(authenticatedDeviceId);
+				if (!session || session.regInputId !== msg.id) return;
+				broadcastToDeviceSubscribers(authenticatedDeviceId, {
+					type: "reg_input_calibration_sample",
+					deviceId: authenticatedDeviceId,
+					regInputId: msg.id,
+					pin: msg.pin,
+					raw: msg.raw,
+					ts: Date.now(),
+				});
+			}
+
 			// ── OTA PROGRESS ─────────────────────────────────────
 			if (msg.type === "ota_progress" && authenticatedDeviceId) {
 				broadcastToDeviceSubscribers(authenticatedDeviceId, {
@@ -694,6 +769,7 @@ function handleDeviceConnection(ws: WebSocket) {
 				console.log(`[WS] Stale close for ${authenticatedDeviceId} - ignoring`);
 			}
 			settlePendingPing(authenticatedDeviceId, false);
+			stopCalibrationSession(authenticatedDeviceId, false);
 		}
 	});
 
