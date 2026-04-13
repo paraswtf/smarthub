@@ -86,3 +86,58 @@ export async function getRelayAccess(db: PrismaClient, relayId: string, userId: 
 
 	return "none";
 }
+
+/** Check what access a user has to a regulator (owner, regulator-shared, room-shared, or home-shared) */
+export async function getRegulatorAccess(db: PrismaClient, regulatorId: string, userId: string): Promise<AccessLevel> {
+	const reg = await db.regulator.findFirst({
+		where: { id: regulatorId },
+		select: {
+			id: true,
+			roomId: true,
+			device: {
+				select: {
+					homeId: true,
+					apiKey: { select: { userId: true } },
+				},
+			},
+		},
+	});
+	if (!reg) return "none";
+	if (reg.device.apiKey.userId === userId) return "owner";
+
+	const regShare = await db.regulatorShare.findFirst({
+		where: { regulatorId, userId },
+		select: { id: true },
+	});
+	if (regShare) return "shared";
+
+	if (reg.roomId) {
+		const roomShare = await db.roomShare.findFirst({
+			where: { roomId: reg.roomId, userId },
+			select: { id: true },
+		});
+		if (roomShare) return "shared";
+
+		const room = await db.room.findFirst({
+			where: { id: reg.roomId },
+			select: { homeId: true },
+		});
+		if (room) {
+			const homeShare = await db.homeShare.findFirst({
+				where: { homeId: room.homeId, userId },
+				select: { id: true },
+			});
+			if (homeShare) return "shared";
+		}
+	}
+
+	if (reg.device.homeId) {
+		const homeShare = await db.homeShare.findFirst({
+			where: { homeId: reg.device.homeId, userId },
+			select: { id: true },
+		});
+		if (homeShare) return "shared";
+	}
+
+	return "none";
+}

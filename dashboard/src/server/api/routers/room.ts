@@ -24,7 +24,11 @@ export const roomRouter = createTRPCRouter({
 					orderBy: { order: "asc" },
 					include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
 				},
-				_count: { select: { relays: true, shares: true } },
+				regulators: {
+					orderBy: { order: "asc" },
+					include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
+				},
+				_count: { select: { relays: true, regulators: true, shares: true } },
 			},
 			orderBy: { order: "asc" },
 		});
@@ -41,6 +45,12 @@ export const roomRouter = createTRPCRouter({
 					include: {
 						device: { select: { id: true, name: true, lastSeenAt: true } },
 						_count: { select: { schedules: { where: { enabled: true } } } },
+					},
+				},
+				regulators: {
+					orderBy: { order: "asc" },
+					include: {
+						device: { select: { id: true, name: true, lastSeenAt: true } },
 					},
 				},
 				shares: {
@@ -118,6 +128,12 @@ export const roomRouter = createTRPCRouter({
 			data: { roomId: null },
 		});
 
+		// Unassign regulators from this room
+		await ctx.db.regulator.updateMany({
+			where: { roomId: input.id },
+			data: { roomId: null },
+		});
+
 		return ctx.db.room.delete({ where: { id: input.id } });
 	}),
 
@@ -177,6 +193,69 @@ export const roomRouter = createTRPCRouter({
 		if (!home) throw new TRPCError({ code: "FORBIDDEN" });
 
 		return ctx.db.relay.findMany({
+			where: {
+				device: { homeId: input.homeId },
+				OR: [{ roomId: null }, { roomId: { isSet: false } }],
+			},
+			include: { device: { select: { id: true, name: true } } },
+			orderBy: { order: "asc" },
+		});
+	}),
+
+	/** Assign a regulator to a room */
+	assignRegulator: protectedProcedure.input(z.object({ regulatorId: z.string(), roomId: z.string() })).mutation(async ({ ctx, input }) => {
+		const reg = await ctx.db.regulator.findFirst({
+			where: { id: input.regulatorId },
+			include: { device: { select: { id: true, homeId: true, apiKey: { select: { userId: true } } } } },
+		});
+		if (!reg || reg.device.apiKey.userId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+
+		const room = await ctx.db.room.findFirst({
+			where: { id: input.roomId },
+			include: { home: { select: { id: true, ownerId: true } } },
+		});
+		if (!room || room.home.ownerId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+		if (reg.device.homeId !== room.homeId) {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message: "The regulator's device must be assigned to the same home as the room",
+			});
+		}
+
+		return ctx.db.regulator.update({
+			where: { id: input.regulatorId },
+			data: { roomId: input.roomId },
+		});
+	}),
+
+	/** Remove a regulator from its room */
+	unassignRegulator: protectedProcedure.input(z.object({ regulatorId: z.string() })).mutation(async ({ ctx, input }) => {
+		const reg = await ctx.db.regulator.findFirst({
+			where: { id: input.regulatorId },
+			include: { device: { select: { apiKey: { select: { userId: true } } } } },
+		});
+		if (!reg || reg.device.apiKey.userId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+
+		return ctx.db.regulator.update({
+			where: { id: input.regulatorId },
+			data: { roomId: null },
+		});
+	}),
+
+	/** List regulators not assigned to any room (for a given home) */
+	unassignedRegulators: protectedProcedure.input(z.object({ homeId: z.string() })).query(async ({ ctx, input }) => {
+		const home = await ctx.db.home.findFirst({
+			where: { id: input.homeId, ownerId: ctx.session.user.id },
+		});
+		if (!home) throw new TRPCError({ code: "FORBIDDEN" });
+
+		return ctx.db.regulator.findMany({
 			where: {
 				device: { homeId: input.homeId },
 				OR: [{ roomId: null }, { roomId: { isSet: false } }],

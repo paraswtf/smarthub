@@ -211,11 +211,69 @@ export const sharingRouter = createTRPCRouter({
 		});
 	}),
 
+	// ─── Regulator Sharing ────────────────────────────────────
+
+	/** Share a regulator with another user by email */
+	shareRegulator: protectedProcedure.input(z.object({ regulatorId: z.string(), email: z.string().email() })).mutation(async ({ ctx, input }) => {
+		const reg = await ctx.db.regulator.findFirst({
+			where: { id: input.regulatorId },
+			include: { device: { select: { apiKey: { select: { userId: true } } } } },
+		});
+		if (!reg || reg.device.apiKey.userId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+
+		const target = await findShareTarget(ctx.db, input.email, ctx.session.user.id);
+
+		const share = await ctx.db.regulatorShare.upsert({
+			where: { regulatorId_userId: { regulatorId: input.regulatorId, userId: target.id } },
+			create: { regulatorId: input.regulatorId, userId: target.id },
+			update: {},
+		});
+
+		await refreshDeviceSubscribers(reg.deviceId);
+		return share;
+	}),
+
+	/** Remove a regulator share */
+	unshareRegulator: protectedProcedure.input(z.object({ regulatorId: z.string(), userId: z.string() })).mutation(async ({ ctx, input }) => {
+		const reg = await ctx.db.regulator.findFirst({
+			where: { id: input.regulatorId },
+			include: { device: { select: { apiKey: { select: { userId: true } } } } },
+		});
+		if (!reg || reg.device.apiKey.userId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+
+		const deleted = await ctx.db.regulatorShare.delete({
+			where: { regulatorId_userId: { regulatorId: input.regulatorId, userId: input.userId } },
+		});
+
+		await refreshDeviceSubscribers(reg.deviceId);
+		return deleted;
+	}),
+
+	/** List users a regulator is shared with */
+	listRegulatorShares: protectedProcedure.input(z.object({ regulatorId: z.string() })).query(async ({ ctx, input }) => {
+		const reg = await ctx.db.regulator.findFirst({
+			where: { id: input.regulatorId },
+			include: { device: { select: { apiKey: { select: { userId: true } } } } },
+		});
+		if (!reg || reg.device.apiKey.userId !== ctx.session.user.id) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+
+		return ctx.db.regulatorShare.findMany({
+			where: { regulatorId: input.regulatorId },
+			include: { user: { select: { id: true, name: true, email: true } } },
+		});
+	}),
+
 	// ─── Shared With Me ───────────────────────────────────────
 
 	/** List everything shared with the current user */
 	listSharedWithMe: protectedProcedure.query(async ({ ctx }) => {
-		const [homeShares, roomShares, relayShares] = await Promise.all([
+		const [homeShares, roomShares, relayShares, regulatorShares] = await Promise.all([
 			ctx.db.homeShare.findMany({
 				where: { userId: ctx.session.user.id },
 				include: {
@@ -225,6 +283,10 @@ export const sharingRouter = createTRPCRouter({
 							rooms: {
 								include: {
 									relays: {
+										orderBy: { order: "asc" },
+										include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
+									},
+									regulators: {
 										orderBy: { order: "asc" },
 										include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
 									},
@@ -246,6 +308,10 @@ export const sharingRouter = createTRPCRouter({
 								orderBy: { order: "asc" },
 								include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
 							},
+							regulators: {
+								orderBy: { order: "asc" },
+								include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
+							},
 						},
 					},
 				},
@@ -254,6 +320,23 @@ export const sharingRouter = createTRPCRouter({
 				where: { userId: ctx.session.user.id },
 				include: {
 					relay: {
+						include: {
+							device: {
+								select: {
+									id: true,
+									name: true,
+									lastSeenAt: true,
+									apiKey: { select: { user: { select: { id: true, name: true, email: true } } } },
+								},
+							},
+						},
+					},
+				},
+			}),
+			ctx.db.regulatorShare.findMany({
+				where: { userId: ctx.session.user.id },
+				include: {
+					regulator: {
 						include: {
 							device: {
 								select: {
@@ -282,6 +365,11 @@ export const sharingRouter = createTRPCRouter({
 			relays: relayShares.map((s) => ({
 				...s.relay,
 				owner: s.relay.device.apiKey.user,
+				sharedAt: s.createdAt,
+			})),
+			regulators: regulatorShares.map((s) => ({
+				...s.regulator,
+				owner: s.regulator.device.apiKey.user,
 				sharedAt: s.createdAt,
 			})),
 		};

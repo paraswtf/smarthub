@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDeviceAccess } from "~/server/api/lib/permissions";
+import { getDeviceAccess, getRegulatorAccess } from "~/server/api/lib/permissions";
 import { appConfig } from "~/../globals.config";
 
 const INPUT_ONLY_PINS = [34, 35, 36, 37, 38, 39];
@@ -173,7 +173,7 @@ export const regulatorRouter = createTRPCRouter({
 		});
 		if (!reg) throw new TRPCError({ code: "NOT_FOUND" });
 
-		const access = await getDeviceAccess(ctx.db, reg.deviceId, ctx.session.user.id);
+		const access = await getRegulatorAccess(ctx.db, input.regulatorId, ctx.session.user.id);
 		if (access === "none") throw new TRPCError({ code: "FORBIDDEN" });
 
 		// Validate speed is within configured range
@@ -181,6 +181,10 @@ export const regulatorRouter = createTRPCRouter({
 		if (input.speed > maxSpeed) {
 			throw new TRPCError({ code: "BAD_REQUEST", message: `Speed ${input.speed} exceeds max configured speed ${maxSpeed}` });
 		}
+
+		// Track lastSpeed: when transitioning 0 → non-zero, persist the new speed as lastSpeed.
+		// Used by switch→regulator toggle to restore the previous fan speed.
+		const lastSpeedUpdate = input.speed > 0 ? { lastSpeed: input.speed } : {};
 
 		let pushed = false;
 		try {
@@ -196,11 +200,14 @@ export const regulatorRouter = createTRPCRouter({
 		}
 
 		if (pushed) {
-			// ESP32 received the command - regulator_ack will confirm in DB
+			// ESP32 received the command — persist lastSpeed but rely on regulator_ack to confirm speed
+			if (input.speed > 0) {
+				await ctx.db.regulator.update({ where: { id: input.regulatorId }, data: lastSpeedUpdate });
+			}
 			return { ...reg, speed: reg.speed };
 		}
 
 		// Not connected - write DB so it syncs on next ping
-		return ctx.db.regulator.update({ where: { id: input.regulatorId }, data: { speed: input.speed, updatedAt: new Date() } });
+		return ctx.db.regulator.update({ where: { id: input.regulatorId }, data: { speed: input.speed, ...lastSpeedUpdate, updatedAt: new Date() } });
 	}),
 });

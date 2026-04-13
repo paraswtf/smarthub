@@ -106,11 +106,12 @@ void handleSerial()
 // Called by SwitchManager when an input pin changes state.
 // Sends switch_trigger to the server - which finds the linked relay
 // (potentially on a different device) and issues relay_cmd to it.
-void onSwitchTriggered(const String &relayId, bool newState, bool isToggle)
+void onSwitchTriggered(const String &relayId, const String &regulatorId, bool newState, bool isToggle)
 {
-    DBG_RELAY("Switch triggered: relay=%s → %s (%s)",
-              relayId.c_str(), newState ? "ON" : "OFF", isToggle ? "toggle" : "follow");
-    hub.sendSwitchTrigger(relayId, newState, isToggle);
+    DBG_RELAY("Switch triggered: relay=%s reg=%s → %s (%s)",
+              relayId.c_str(), regulatorId.c_str(),
+              newState ? "ON" : "OFF", isToggle ? "toggle" : "follow");
+    hub.sendSwitchTrigger(relayId, regulatorId, newState, isToggle);
 }
 
 // Regulator input callback - physical rotary switch changed speed

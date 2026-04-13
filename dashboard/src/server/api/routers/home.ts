@@ -25,12 +25,16 @@ export const homeRouter = createTRPCRouter({
 							orderBy: { order: "asc" },
 							include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
 						},
-						_count: { select: { relays: true, shares: true } },
+						regulators: {
+							orderBy: { order: "asc" },
+							include: { device: { select: { id: true, name: true, lastSeenAt: true } } },
+						},
+						_count: { select: { relays: true, regulators: true, shares: true } },
 					},
 					orderBy: { order: "asc" },
 				},
 				devices: {
-					include: { relays: { orderBy: { order: "asc" } } },
+					include: { relays: { orderBy: { order: "asc" } }, regulators: { orderBy: { order: "asc" } } },
 					orderBy: { updatedAt: "desc" },
 				},
 				shares: {
@@ -87,9 +91,13 @@ export const homeRouter = createTRPCRouter({
 			if (!home) throw new TRPCError({ code: "FORBIDDEN" });
 		}
 
-		// If unassigning from home, also unassign all relays from rooms
+		// If unassigning from home, also unassign all relays + regulators from rooms
 		if (!input.homeId) {
 			await ctx.db.relay.updateMany({
+				where: { deviceId: input.deviceId, roomId: { not: null } },
+				data: { roomId: null },
+			});
+			await ctx.db.regulator.updateMany({
 				where: { deviceId: input.deviceId, roomId: { not: null } },
 				data: { roomId: null },
 			});

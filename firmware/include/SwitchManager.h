@@ -5,8 +5,11 @@
 #include "Storage.h"
 #include "SwitchTypes.h"
 
-// Callback type - called when a switch triggers with (relayId, newState)
-using SwitchCallback = void (*)(const String &relayId, bool newState, bool isToggle);
+// Callback type - called when a switch triggers.
+// For relay-linked switches: relayId set, regulatorId empty, newState/isToggle meaningful.
+// For regulator-linked switches: relayId empty, regulatorId set, newState/isToggle ignored
+// (the server toggles between OFF and the regulator's lastSpeed).
+using SwitchCallback = void (*)(const String &relayId, const String &regulatorId, bool newState, bool isToggle);
 
 // ── ISR state (file-scope, not inside a class) ────────────────────
 // Xtensa IRAM literal-pool relocations fail for C++ static class
@@ -277,7 +280,14 @@ public:
             if (!_callback)
                 continue;
 
-            // Always toggle
+            // Regulator-linked: server decides ON/OFF based on lastSpeed
+            if (switches[i].linkedRegulatorId.length() > 0)
+            {
+                _callback("", switches[i].linkedRegulatorId, false, true);
+                continue;
+            }
+
+            // Relay-linked: toggle based on current state
             bool currentState = false;
             for (uint8_t j = 0; j < relayCount; j++)
             {
@@ -287,7 +297,7 @@ public:
                     break;
                 }
             }
-            _callback(switches[i].linkedRelayId, !currentState, true);
+            _callback(switches[i].linkedRelayId, "", !currentState, true);
         }
     }
 
@@ -329,7 +339,14 @@ private:
         if (!_callback)
             return;
 
-        // Always toggle
+        // Regulator-linked: server decides ON/OFF based on lastSpeed
+        if (switches[i].linkedRegulatorId.length() > 0)
+        {
+            _callback("", switches[i].linkedRegulatorId, false, true);
+            return;
+        }
+
+        // Relay-linked: toggle based on current state
         bool currentState = false;
         for (uint8_t j = 0; j < relayCount; j++)
         {
@@ -339,7 +356,7 @@ private:
                 break;
             }
         }
-        _callback(switches[i].linkedRelayId, !currentState, true);
+        _callback(switches[i].linkedRelayId, "", !currentState, true);
     }
 
     void _initPin(uint8_t i)

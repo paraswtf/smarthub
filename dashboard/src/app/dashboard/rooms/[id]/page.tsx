@@ -3,7 +3,29 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, DoorOpen, Pencil, Trash2, Plus, Share2, Users, Loader2, X, ToggleRight, CheckCircle2, AlertCircle, Lightbulb, Fan, Plug, Wind, Tv, Coffee, Thermometer, Radio } from "lucide-react";
+import {
+	ArrowLeft,
+	DoorOpen,
+	Pencil,
+	Trash2,
+	Plus,
+	Share2,
+	Users,
+	Loader2,
+	X,
+	ToggleRight,
+	CheckCircle2,
+	AlertCircle,
+	Lightbulb,
+	Fan,
+	Plug,
+	Wind,
+	Tv,
+	Coffee,
+	Thermometer,
+	Radio,
+	Power,
+} from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -38,7 +60,8 @@ export default function RoomDetailPage() {
 
 	const { data: room, isLoading } = api.room.get.useQuery({ id });
 	const { data: unassignedRelays } = api.room.unassignedRelays.useQuery({ homeId: room?.homeId ?? "" }, { enabled: !!room && room.accessLevel === "owner" });
-	const { onDeviceUpdate, onRelayUpdate } = useDeviceSocket();
+	const { data: unassignedRegulators } = api.room.unassignedRegulators.useQuery({ homeId: room?.homeId ?? "" }, { enabled: !!room && room.accessLevel === "owner" });
+	const { onDeviceUpdate, onRelayUpdate, onRegulatorUpdate } = useDeviceSocket();
 
 	// ── Live relay states ──────────────────────────────────────
 	const [liveRelayStates, setLiveRelayStates] = useState<Record<string, boolean>>({});
@@ -72,11 +95,20 @@ export default function RoomDetailPage() {
 		});
 	}, [onRelayUpdate]);
 
-	// Ping devices with relays in this room
+	// ── Live regulator speeds ──────────────────────────────────
+	const [liveRegSpeeds, setLiveRegSpeeds] = useState<Record<string, number>>({});
+
+	useEffect(() => {
+		return onRegulatorUpdate((msg) => {
+			setLiveRegSpeeds((p) => ({ ...p, [msg.regulatorId]: msg.speed }));
+		});
+	}, [onRegulatorUpdate]);
+
+	// Ping devices with relays or regulators in this room
 	const pingMutation = api.device.pingDevice.useMutation();
 	useEffect(() => {
 		if (!room) return;
-		const deviceIds = [...new Set(room.relays.map((r) => r.device.id))];
+		const deviceIds = [...new Set([...room.relays.map((r) => r.device.id), ...room.regulators.map((r) => r.device.id)])];
 		deviceIds.forEach((deviceId) => {
 			pingMutation.mutateAsync({ deviceId }).then(
 				(r) => setOnlineDevices((p) => ({ ...p, [deviceId]: r.online })),
@@ -165,6 +197,30 @@ export default function RoomDetailPage() {
 			void utils.room.get.invalidate({ id });
 			void utils.room.unassignedRelays.invalidate({ homeId: room?.homeId ?? "" });
 		},
+	});
+
+	// ── Assign regulator ───────────────────────────────────────
+	const [assignRegOpen, setAssignRegOpen] = useState(false);
+
+	const assignRegulator = api.room.assignRegulator.useMutation({
+		onSuccess: () => {
+			void utils.room.get.invalidate({ id });
+			void utils.room.unassignedRegulators.invalidate({ homeId: room?.homeId ?? "" });
+		},
+	});
+
+	const unassignRegulator = api.room.unassignRegulator.useMutation({
+		onSuccess: () => {
+			void utils.room.get.invalidate({ id });
+			void utils.room.unassignedRegulators.invalidate({ homeId: room?.homeId ?? "" });
+		},
+	});
+
+	const setRegSpeed = api.regulator.setSpeed.useMutation({
+		onMutate: ({ regulatorId, speed }) => {
+			setLiveRegSpeeds((p) => ({ ...p, [regulatorId]: speed }));
+		},
+		onError: () => void utils.room.get.invalidate({ id }),
 	});
 
 	if (isLoading) {
@@ -305,6 +361,42 @@ export default function RoomDetailPage() {
 							</DialogContent>
 						</Dialog>
 
+						{/* Add regulator */}
+						<Dialog open={assignRegOpen} onOpenChange={setAssignRegOpen}>
+							<DialogTrigger asChild>
+								<Button variant="outline">
+									<Fan className="w-4 h-4" /> Add Regulator
+								</Button>
+							</DialogTrigger>
+							<DialogContent>
+								<DialogHeader>
+									<DialogTitle>Add regulator to "{room.name}"</DialogTitle>
+								</DialogHeader>
+								{(unassignedRegulators?.length ?? 0) === 0 ? (
+									<p className="text-sm text-muted-foreground">No unassigned regulators available. Add regulators to devices in this home first.</p>
+								) : (
+									<div className="space-y-2 max-h-80 overflow-y-auto">
+										{unassignedRegulators!.map((reg) => (
+											<button
+												key={reg.id}
+												onClick={() => {
+													assignRegulator.mutate({ regulatorId: reg.id, roomId: id });
+													setAssignRegOpen(false);
+												}}
+												className="w-full flex items-center gap-3 p-3 rounded-lg border hover:border-primary/40 hover:bg-accent transition-colors text-left"
+											>
+												<Fan className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+												<div className="min-w-0">
+													<p className="text-sm font-medium truncate">{reg.label}</p>
+													<p className="text-xs text-muted-foreground">{reg.device.name}</p>
+												</div>
+											</button>
+										))}
+									</div>
+								)}
+							</DialogContent>
+						</Dialog>
+
 						{/* Add relay */}
 						<Dialog open={assignRelayOpen} onOpenChange={setAssignRelayOpen}>
 							<DialogTrigger asChild>
@@ -366,6 +458,11 @@ export default function RoomDetailPage() {
 				<Badge variant="outline" className="gap-1.5 px-3 py-1">
 					<ToggleRight className="w-3.5 h-3.5" /> {room.relays.length} {room.relays.length === 1 ? "relay" : "relays"}
 				</Badge>
+				{room.regulators.length > 0 && (
+					<Badge variant="outline" className="gap-1.5 px-3 py-1">
+						<Fan className="w-3.5 h-3.5" /> {room.regulators.length} {room.regulators.length === 1 ? "regulator" : "regulators"}
+					</Badge>
+				)}
 				{room.shares.length > 0 && (
 					<Badge variant="outline" className="gap-1.5 px-3 py-1">
 						<Users className="w-3.5 h-3.5" /> Shared with {room.shares.length}
@@ -380,15 +477,15 @@ export default function RoomDetailPage() {
 			</div>
 
 			{/* Relays */}
-			{room.relays.length === 0 ? (
+			{room.relays.length === 0 && room.regulators.length === 0 ? (
 				<Card className="border-dashed">
 					<CardContent className="p-12 text-center">
 						<ToggleRight className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-						<h3 className="font-semibold text-foreground mb-1">No relays in this room</h3>
-						<p className="text-sm text-muted-foreground">Add relays from devices assigned to this home.</p>
+						<h3 className="font-semibold text-foreground mb-1">No relays or regulators in this room</h3>
+						<p className="text-sm text-muted-foreground">Add relays or fan regulators from devices assigned to this home.</p>
 					</CardContent>
 				</Card>
-			) : (
+			) : room.relays.length === 0 ? null : (
 				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 					{room.relays.map((relay) => {
 						const state = liveRelayStates[relay.id] ?? relay.state;
@@ -451,6 +548,73 @@ export default function RoomDetailPage() {
 							</Card>
 						);
 					})}
+				</div>
+			)}
+
+			{/* Regulators */}
+			{room.regulators.length > 0 && (
+				<div className="space-y-3">
+					<h2 className="font-sora font-semibold text-lg text-foreground">Regulators</h2>
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+						{room.regulators.map((reg) => {
+							const speed = liveRegSpeeds[reg.id] ?? reg.speed;
+							const maxSpeed = reg.speeds.length > 0 ? Math.max(...reg.speeds.map((s) => s.speed)) : 0;
+							const deviceOnline = onlineDevices[reg.device.id] ?? false;
+
+							return (
+								<Card key={reg.id} className={`transition-all duration-200 ${speed > 0 ? "border-primary/30 shadow-sm" : ""}`}>
+									<CardContent className="p-5">
+										<div className="flex items-center justify-between mb-3">
+											<div className="flex items-center gap-3">
+												<div className={`w-10 h-10 rounded-xl flex items-center justify-center ${speed > 0 ? "bg-primary/15" : "bg-muted"}`}>
+													<Fan className={`w-5 h-5 ${speed > 0 ? "text-primary" : "text-muted-foreground"}`} />
+												</div>
+												<div>
+													<p className="font-semibold text-foreground">{reg.label}</p>
+													<p className="text-xs text-muted-foreground">{reg.device.name}</p>
+												</div>
+											</div>
+											{isOwner && (
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-7 w-7 text-muted-foreground hover:text-destructive"
+													onClick={() => unassignRegulator.mutate({ regulatorId: reg.id })}
+													title="Remove from room"
+												>
+													<X className="w-3.5 h-3.5" />
+												</Button>
+											)}
+										</div>
+										<div className="flex items-center gap-1.5 flex-wrap">
+											<Button
+												size="sm"
+												variant={speed === 0 ? "default" : "outline"}
+												className="h-8 px-2.5"
+												disabled={!deviceOnline}
+												onClick={() => setRegSpeed.mutate({ regulatorId: reg.id, speed: 0 })}
+											>
+												<Power className="w-3.5 h-3.5" />
+											</Button>
+											{Array.from({ length: maxSpeed }, (_, i) => i + 1).map((s) => (
+												<Button
+													key={s}
+													size="sm"
+													variant={speed === s ? "default" : "outline"}
+													className="h-8 w-8 p-0"
+													disabled={!deviceOnline}
+													onClick={() => setRegSpeed.mutate({ regulatorId: reg.id, speed: s })}
+												>
+													{s}
+												</Button>
+											))}
+										</div>
+										{!deviceOnline && <p className="text-xs text-muted-foreground mt-2">Device offline</p>}
+									</CardContent>
+								</Card>
+							);
+						})}
+					</div>
 				</div>
 			)}
 		</div>

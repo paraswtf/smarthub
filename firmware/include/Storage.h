@@ -195,6 +195,7 @@ public:
             prefs.putString((p + "lbl").c_str(), sw[i].label);
             prefs.putUChar((p + "swt").c_str(), (uint8_t)sw[i].switchType);
             prefs.putString((p + "rid").c_str(), sw[i].linkedRelayId);
+            prefs.putString((p + "gid").c_str(), sw[i].linkedRegulatorId);
         }
         prefs.end();
         DBG_STORAGE("saveSwitches() - %d switch(es)", count);
@@ -213,6 +214,7 @@ public:
             sw[i].label = prefs.getString((p + "lbl").c_str(), "Switch");
             sw[i].switchType = (SwitchType)prefs.getUChar((p + "swt").c_str(), 0);
             sw[i].linkedRelayId = prefs.getString((p + "rid").c_str(), "");
+            sw[i].linkedRegulatorId = prefs.getString((p + "gid").c_str(), "");
             DBG_STORAGE("  sw[%d] pin=%d type=%d label=%s", i, sw[i].pin, sw[i].switchType, sw[i].label.c_str());
         }
         prefs.end();

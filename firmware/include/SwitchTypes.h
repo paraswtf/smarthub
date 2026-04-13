@@ -16,5 +16,6 @@ struct SwitchConfig
     uint8_t pin;
     String label;
     SwitchType switchType;
-    String linkedRelayId;
+    String linkedRelayId;     // empty if linked to a regulator
+    String linkedRegulatorId; // empty if linked to a relay
 };

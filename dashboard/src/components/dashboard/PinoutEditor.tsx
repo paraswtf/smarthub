@@ -262,7 +262,7 @@ export function PinoutEditor({ deviceId, relays, switches, allRelays, isOwner }:
 		} else if (a?.sw) {
 			setSwLabel(a.sw.label);
 			setSwType(a.sw.switchType as "two_way" | "three_way" | "momentary");
-			setSwLinkedId(a.sw.linkedRelayId);
+			setSwLinkedId(a.sw.linkedRelayId ?? "");
 			setActiveAction({ mode: "edit-switch", sw: a.sw });
 		} else if (isOwner && pin.type !== "power" && pin.type !== "gnd" && pin.type !== "special") {
 			setActiveAction({ mode: "choose", gpio: pin.gpio, pinType: pin.type });

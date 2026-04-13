@@ -417,16 +417,30 @@ export default function DeviceDetailPage() {
 	const { data: switchList = [] } = api.switch.list.useQuery({ deviceId: id });
 	const { data: allRelays = [] } = api.switch.listAllRelays.useQuery();
 	const [addingSwitch, setAddingSwitch] = useState(false);
-	const [newSwitch, setNewSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as SwitchTypeValue, linkedRelayId: "" });
+	const [newSwitch, setNewSwitch] = useState({
+		pin: 36,
+		label: "Switch",
+		switchType: "two_way" as SwitchTypeValue,
+		targetType: "relay" as "relay" | "regulator",
+		linkedRelayId: "",
+		linkedRegulatorId: "",
+	});
 	const [editingSwitchId, setEditingSwitchId] = useState<string | null>(null);
-	const [editSwitch, setEditSwitch] = useState({ pin: 36, label: "Switch", switchType: "two_way" as SwitchTypeValue, linkedRelayId: "" });
+	const [editSwitch, setEditSwitch] = useState({
+		pin: 36,
+		label: "Switch",
+		switchType: "two_way" as SwitchTypeValue,
+		targetType: "relay" as "relay" | "regulator",
+		linkedRelayId: "",
+		linkedRegulatorId: "",
+	});
 
 	const addSwitch = api.switch.add.useMutation({
 		onSuccess: () => {
 			void utils.device.get.invalidate({ id });
 			void utils.switch.list.invalidate({ deviceId: id });
 			setAddingSwitch(false);
-			setNewSwitch({ pin: 36, label: "Switch", switchType: "two_way", linkedRelayId: "" });
+			setNewSwitch({ pin: 36, label: "Switch", switchType: "two_way", targetType: "relay", linkedRelayId: "", linkedRegulatorId: "" });
 		},
 	});
 	const updateSwitch = api.switch.update.useMutation({
@@ -1057,8 +1071,12 @@ export default function DeviceDetailPage() {
 										<p className="text-xs text-muted-foreground mono mt-0.5">
 											{`GPIO ${det.pin} · ${SWITCH_TYPES.find((s) => s.value === (det.switchType ?? "two_way"))?.label ?? det.switchType}`} · →{" "}
 											{(() => {
+												if (det.linkedRegulatorId) {
+													const g = allRegulators.find((x: AllRegulatorItem) => x.id === det.linkedRegulatorId);
+													return g ? `Regulator: ${g.deviceName} - ${g.label}` : "unknown regulator";
+												}
 												const r = allRelays.find((x: AllRelayItem) => x.id === det.linkedRelayId);
-												return r ? `${r.deviceName} - ${r.label}` : "unknown";
+												return r ? `Relay: ${r.deviceName} - ${r.label}` : "unknown";
 											})()}
 										</p>
 									</div>
@@ -1066,7 +1084,14 @@ export default function DeviceDetailPage() {
 										<button
 											onClick={() => {
 												setEditingSwitchId(det.id);
-												setEditSwitch({ pin: det.pin, label: det.label, switchType: (det.switchType ?? "two_way") as SwitchTypeValue, linkedRelayId: det.linkedRelayId });
+												setEditSwitch({
+													pin: det.pin,
+													label: det.label,
+													switchType: (det.switchType ?? "two_way") as SwitchTypeValue,
+													targetType: det.linkedRegulatorId ? "regulator" : "relay",
+													linkedRelayId: det.linkedRelayId ?? "",
+													linkedRegulatorId: det.linkedRegulatorId ?? "",
+												});
 											}}
 											className="text-muted-foreground hover:text-foreground"
 										>

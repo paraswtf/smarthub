@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Home, ArrowLeft, Cpu, Users, Plus, Trash2, Pencil, Share2, DoorOpen, ToggleRight, ChevronRight, Loader2, X } from "lucide-react";
+import { Home, ArrowLeft, Cpu, Users, Plus, Trash2, Pencil, Share2, DoorOpen, ToggleRight, ChevronRight, Loader2, X, Fan } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -379,6 +379,7 @@ export default function HomeDetailPage() {
 								state: liveRelayStates[r.id] ?? r.state,
 							}));
 							const activeRelays = relays.filter((r) => r.state).length;
+							const regulators = room.regulators ?? [];
 
 							return (
 								<Link key={room.id} href={`/dashboard/rooms/${room.id}`} className="no-underline group">
@@ -401,6 +402,14 @@ export default function HomeDetailPage() {
 												<ToggleRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
 												<span className="text-xs text-muted-foreground">{relays.length === 0 ? "No relays" : `${activeRelays} / ${relays.length} relays active`}</span>
 											</div>
+											{regulators.length > 0 && (
+												<div className="flex items-center gap-2">
+													<Fan className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+													<span className="text-xs text-muted-foreground">
+														{regulators.length} {regulators.length === 1 ? "regulator" : "regulators"}
+													</span>
+												</div>
+											)}
 											{relays.length > 0 && (
 												<div className="flex flex-wrap gap-1.5">
 													{relays.slice(0, 4).map((relay) => (

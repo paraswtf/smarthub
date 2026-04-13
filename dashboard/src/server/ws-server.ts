@@ -71,7 +71,8 @@ interface PingAckMsg {
 }
 interface SwitchTriggerMsg {
 	type: "switch_trigger";
-	linkedRelayId: string;
+	linkedRelayId?: string;
+	linkedRegulatorId?: string;
 	desiredState: boolean;
 	isToggle: boolean;
 }
@@ -474,7 +475,14 @@ function handleDeviceConnection(ws: WebSocket) {
 						type: "auth_ok",
 						deviceId: device.id,
 						relays: device.relays.map((r) => ({ id: r.id, pin: r.pin, label: r.label, state: r.state, icon: r.icon })),
-						switches: device.switches.map((d) => ({ id: d.id, pin: d.pin, label: d.label, switchType: d.switchType ?? "two_way", linkedRelayId: d.linkedRelayId })),
+						switches: device.switches.map((d) => ({
+							id: d.id,
+							pin: d.pin,
+							label: d.label,
+							switchType: d.switchType ?? "two_way",
+							linkedRelayId: d.linkedRelayId ?? "",
+							linkedRegulatorId: d.linkedRegulatorId ?? "",
+						})),
 						regulators: device.regulators.map((g) => ({ id: g.id, label: g.label, outputPins: g.outputPins, speeds: g.speeds, speed: g.speed })),
 						regulatorInputs: device.regulatorInputs.map((ri) => ({ id: ri.id, label: ri.label, pins: ri.pins, linkedRegulatorId: ri.linkedRegulatorId })),
 						wifiNetworks: device.wifiNetworks, // server-managed extra networks (wn1–wn4)
@@ -502,8 +510,58 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			// ── SWITCH TRIGGER ──────────────────────────────────
 			if (msg.type === "switch_trigger" && authenticatedDeviceId) {
-				const { linkedRelayId, desiredState, isToggle } = msg;
+				const { linkedRelayId, linkedRegulatorId, desiredState, isToggle } = msg;
 
+				const triggeringDevice = await db.device.findUnique({
+					where: { id: authenticatedDeviceId },
+					include: { apiKey: true },
+				});
+				if (!triggeringDevice) return;
+
+				// Switch linked to a regulator → toggle between OFF and lastSpeed
+				if (linkedRegulatorId) {
+					const regulator = await db.regulator.findFirst({
+						where: { id: linkedRegulatorId },
+						include: { device: { include: { apiKey: true } } },
+					});
+					if (!regulator) {
+						console.log(`[WS] switch_trigger: regulator ${linkedRegulatorId} not found`);
+						return;
+					}
+					if (regulator.device.apiKey.userId !== triggeringDevice.apiKey.userId) {
+						console.log(`[WS] switch_trigger: cross-user regulator access denied`);
+						return;
+					}
+
+					const goingOff = regulator.speed > 0;
+					const newSpeed = goingOff ? 0 : regulator.lastSpeed > 0 ? regulator.lastSpeed : 1;
+					// Persist new speed and, when turning OFF, snapshot the just-departed speed as lastSpeed.
+					await db.regulator.update({
+						where: { id: regulator.id },
+						data: {
+							speed: newSpeed,
+							...(goingOff ? { lastSpeed: regulator.speed } : {}),
+							updatedAt: new Date(),
+						},
+					});
+					await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
+
+					const targetWs = deviceSockets.get(regulator.deviceId);
+					if (targetWs?.readyState === WebSocket.OPEN) {
+						targetWs.send(JSON.stringify({ type: "regulator_cmd", regulatorId: regulator.id, speed: newSpeed }));
+						console.log(`[WS] switch_trigger: regulator_cmd → device ${regulator.deviceId} regulator ${regulator.id} → speed ${newSpeed}`);
+					}
+					broadcastToDeviceSubscribers(regulator.deviceId, {
+						type: "regulator_update",
+						deviceId: regulator.deviceId,
+						regulatorId: regulator.id,
+						speed: newSpeed,
+					});
+					return;
+				}
+
+				// Switch linked to a relay → existing toggle / setState path
+				if (!linkedRelayId) return;
 				const relay = await db.relay.findFirst({
 					where: { id: linkedRelayId },
 					include: { device: { include: { apiKey: true } } },
@@ -512,12 +570,7 @@ function handleDeviceConnection(ws: WebSocket) {
 					console.log(`[WS] switch_trigger: relay ${linkedRelayId} not found`);
 					return;
 				}
-
-				const triggeringDevice = await db.device.findUnique({
-					where: { id: authenticatedDeviceId },
-					include: { apiKey: true },
-				});
-				if (relay.device.apiKey.userId !== triggeringDevice?.apiKey.userId) {
+				if (relay.device.apiKey.userId !== triggeringDevice.apiKey.userId) {
 					console.log(`[WS] switch_trigger: cross-user relay access denied`);
 					return;
 				}
@@ -553,9 +606,10 @@ function handleDeviceConnection(ws: WebSocket) {
 
 			// ── REGULATOR ACK ────────────────────────────────────
 			if (msg.type === "regulator_ack" && authenticatedDeviceId) {
+				// Mirror non-zero speeds into lastSpeed so switch→regulator toggles can restore them later.
 				await db.regulator.updateMany({
 					where: { id: msg.regulatorId, deviceId: authenticatedDeviceId },
-					data: { speed: msg.speed, updatedAt: new Date() },
+					data: { speed: msg.speed, ...(msg.speed > 0 ? { lastSpeed: msg.speed } : {}), updatedAt: new Date() },
 				});
 				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 				broadcastToDeviceSubscribers(authenticatedDeviceId, {
@@ -590,7 +644,10 @@ function handleDeviceConnection(ws: WebSocket) {
 					return;
 				}
 
-				await db.regulator.update({ where: { id: linkedRegulatorId }, data: { speed, updatedAt: new Date() } });
+				await db.regulator.update({
+					where: { id: linkedRegulatorId },
+					data: { speed, ...(speed > 0 ? { lastSpeed: speed } : {}), updatedAt: new Date() },
+				});
 				await db.device.update({ where: { id: authenticatedDeviceId }, data: { lastSeenAt: new Date() } });
 
 				const targetWs = deviceSockets.get(regulator.deviceId);

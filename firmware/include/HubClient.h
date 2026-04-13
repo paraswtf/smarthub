@@ -198,7 +198,7 @@ public:
     }
 
     // Send switch trigger to server - server resolves cross-device relay
-    void sendSwitchTrigger(const String &linkedRelayId, bool desiredState, bool isToggle)
+    void sendSwitchTrigger(const String &linkedRelayId, const String &linkedRegulatorId, bool desiredState, bool isToggle)
     {
         if (!authenticated)
         {
@@ -208,14 +208,16 @@ public:
         JsonDocument doc;
         doc["type"] = "switch_trigger";
         doc["linkedRelayId"] = linkedRelayId;
+        doc["linkedRegulatorId"] = linkedRegulatorId;
         doc["desiredState"] = desiredState;
         doc["isToggle"] = isToggle;
-        DBG_WS("→ switch_trigger relay=%s toggle=%d", linkedRelayId.c_str(), isToggle);
+        DBG_WS("→ switch_trigger relay=%s reg=%s toggle=%d",
+               linkedRelayId.c_str(), linkedRegulatorId.c_str(), isToggle);
         _send(doc);
     }
 
 private:
-    static constexpr const char *FIRMWARE_VERSION = "1.5.3";
+    static constexpr const char *FIRMWARE_VERSION = "1.6.0";
     static constexpr uint32_t AUTH_TIMEOUT_MS = 10000; // 10s to get auth_ok after connect
 
     WebSocketsClient _ws;
@@ -387,6 +389,7 @@ private:
                     return SWITCH_TWO_WAY;
                 }();
                 swBuf[swCount].linkedRelayId = d["linkedRelayId"].as<String>();
+                swBuf[swCount].linkedRegulatorId = d["linkedRegulatorId"].as<String>();
                 swCount++;
             }
             _switches->applyServerConfig(swBuf, swCount);
@@ -663,6 +666,7 @@ private:
                 return SWITCH_TWO_WAY;
             }();
             nd.linkedRelayId = d["linkedRelayId"].as<String>();
+            nd.linkedRegulatorId = d["linkedRegulatorId"].as<String>();
             _switches->add(nd);
             DBG_WS("switch_add: id=%s pin=%d", nd.id.c_str(), nd.pin);
         }
@@ -689,6 +693,7 @@ private:
                 return SWITCH_TWO_WAY;
             }();
             updated.linkedRelayId = d["linkedRelayId"].as<String>();
+            updated.linkedRegulatorId = d["linkedRegulatorId"].as<String>();
             _switches->updateById(updated.id, updated);
             DBG_WS("switch_update_config: id=%s pin=%d", updated.id.c_str(), updated.pin);
         }
